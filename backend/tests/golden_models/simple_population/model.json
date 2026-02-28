@@ -1,0 +1,16 @@
+{
+  "id": "simple_population",
+  "name": "Simple Population",
+  "version": 1,
+  "nodes": [
+    {"id": "s1", "type": "stock", "name": "population", "label": "Population", "equation": "births", "initial_value": 100, "position": {"x": 400, "y": 220}},
+    {"id": "a1", "type": "aux", "name": "growth_rate", "label": "Growth Rate", "equation": "0.1", "position": {"x": 180, "y": 120}},
+    {"id": "a2", "type": "aux", "name": "births", "label": "Births", "equation": "population * growth_rate", "position": {"x": 620, "y": 120}}
+  ],
+  "edges": [
+    {"id": "e1", "type": "influence", "source": "s1", "target": "a2"},
+    {"id": "e2", "type": "influence", "source": "a1", "target": "a2"},
+    {"id": "e3", "type": "influence", "source": "a2", "target": "s1"}
+  ],
+  "outputs": ["population", "births", "growth_rate"]
+}

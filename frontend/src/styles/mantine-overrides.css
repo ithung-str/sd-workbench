@@ -1,0 +1,160 @@
+/* Mantine overrides for System Dynamics Workbench */
+
+/* Make React Flow controls match Mantine style */
+.react-flow__controls {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+.react-flow__controls button {
+  border-radius: 0;
+  border-bottom: 1px solid #dee2e6;
+  background: #fff;
+}
+
+.react-flow__controls button:hover {
+  background: #f8f9fa;
+}
+
+.react-flow__controls button:last-child {
+  border-bottom: none;
+}
+
+/* React Flow minimap styling */
+.react-flow__minimap {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Ensure canvas has clean background */
+.react-flow__pane {
+  cursor: default;
+}
+
+.react-flow__renderer {
+  background-color: #f7f8fb !important;
+}
+
+.react-flow__background {
+  background-color: transparent !important;
+}
+
+.reactflow-wrapper {
+  background-color: #f7f8fb !important;
+}
+
+/* Ensure canvas takes full height in Mantine AppShell */
+.mantine-AppShell-main .canvas-shell {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-shell .react-flow {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  background-color: #f7f8fb;
+}
+
+.canvas-shell > div {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+}
+
+/* Node styling improvements */
+.rf-node-shape-stock {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Mantine AppShell adjustments */
+.mantine-AppShell-header {
+  border-bottom: 1px solid #dee2e6;
+  z-index: 100;
+}
+
+.mantine-AppShell-navbar {
+  border-right: 1px solid #dee2e6;
+  background-color: #ffffff;
+}
+
+.mantine-AppShell-aside {
+  border-left: 1px solid #dee2e6;
+  background-color: #ffffff;
+}
+
+.mantine-AppShell-footer {
+  background-color: #ffffff;
+}
+
+.mantine-AppShell-main {
+  background-color: #ffffff;
+}
+
+/* Ensure proper z-indexing and layout */
+.mantine-AppShell-main {
+  z-index: 1;
+  overflow: hidden;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  height: 100% !important;
+}
+
+/* Remove any top padding/margin that might cause white space */
+.mantine-AppShell-main > div:first-child {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Equation editor styling to match Mantine */
+.equation-editor textarea {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.equation-editor textarea:focus {
+  border-color: #7950f2;
+  outline: none;
+}
+
+/* Lookup editor styling */
+.lookup-editor {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* Validation list improvements */
+.validation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure chart and table fit well */
+.chart-wrap {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+.chart-canvas {
+  width: 100%;
+  height: 220px;
+}
+
+.table-wrap {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}

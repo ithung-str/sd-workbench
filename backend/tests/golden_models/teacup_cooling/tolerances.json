@@ -1,0 +1,1 @@
+{"default": {"rtol": 0.0001, "atol": 0.000001}, "variables": {"temperature": {"rtol": 0.00001, "atol": 0.000001}, "temperature_change": {"rtol": 0.0001, "atol": 0.00001}}}

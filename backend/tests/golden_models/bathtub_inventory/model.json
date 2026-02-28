@@ -1,0 +1,15 @@
+{
+  "id": "bathtub_inventory",
+  "name": "Bathtub Inventory",
+  "version": 1,
+  "nodes": [
+    {"id": "s1", "type": "stock", "name": "inventory", "label": "Inventory", "equation": "inflow - outflow", "initial_value": 10, "position": {"x": 400, "y": 220}},
+    {"id": "a1", "type": "aux", "name": "inflow", "label": "Inflow", "equation": "3", "position": {"x": 180, "y": 160}},
+    {"id": "a2", "type": "aux", "name": "outflow", "label": "Outflow", "equation": "1", "position": {"x": 620, "y": 160}}
+  ],
+  "edges": [
+    {"id": "e1", "type": "influence", "source": "a1", "target": "s1"},
+    {"id": "e2", "type": "influence", "source": "a2", "target": "s1"}
+  ],
+  "outputs": ["inventory", "inflow", "outflow"]
+}

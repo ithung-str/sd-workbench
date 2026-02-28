@@ -1,0 +1,8 @@
+{UTF-8}
+INITIAL TIME = 0 ~~|
+FINAL TIME = 30 ~~|
+TIME STEP = 0.25 ~~|
+SAVEPER = TIME STEP ~~|
+input = STEP(10,5) ~~|
+out_delay1 = DELAY1(input,3) ~~|
+out_smooth = SMOOTH(input,3) ~~|

@@ -1,0 +1,6 @@
+{UTF-8}
+INITIAL TIME = 0 ~~| 
+FINAL TIME = 20 ~~| 
+TIME STEP = 1 ~~| 
+SAVEPER = TIME STEP ~~| 
+x = STEP(5,10) ~~| 

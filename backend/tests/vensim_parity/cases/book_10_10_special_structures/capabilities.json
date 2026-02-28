@@ -1,0 +1,11 @@
+{
+  "supported_contains": [
+    "STEP"
+  ],
+  "partial_contains": [
+    "GET TIME VALUE"
+  ],
+  "unsupported_contains": [
+    "SHIFT IF TRUE"
+  ]
+}

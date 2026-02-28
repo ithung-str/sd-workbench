@@ -1,0 +1,8 @@
+{
+  "supported_contains": [
+    "PULSE",
+    "PULSE TRAIN"
+  ],
+  "partial_contains": [],
+  "unsupported_contains": []
+}

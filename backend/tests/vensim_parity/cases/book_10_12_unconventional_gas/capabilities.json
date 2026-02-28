@@ -1,0 +1,8 @@
+{
+  "supported_contains": [
+    "STEP",
+    "SMOOTH3"
+  ],
+  "partial_contains": [],
+  "unsupported_contains": []
+}

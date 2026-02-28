@@ -1,0 +1,9 @@
+{UTF-8}
+INITIAL TIME = 0 ~~|
+FINAL TIME = 20 ~~|
+TIME STEP = 1 ~~|
+SAVEPER = TIME STEP ~~|
+step_sig = STEP(5,10) ~~|
+ramp_sig = RAMP(2,5) ~~|
+time_echo = TIME ~~|
+sin_sig = SIN(TIME) ~~|

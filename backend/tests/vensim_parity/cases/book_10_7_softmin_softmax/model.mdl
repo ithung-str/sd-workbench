@@ -1,0 +1,7 @@
+{UTF-8}
+INITIAL TIME = 0 ~~|
+FINAL TIME = 5 ~~|
+TIME STEP = 1 ~~|
+SAVEPER = TIME STEP ~~|
+a = SOFT MIN(3,5,0.1) ~~|
+b = SOFT MAX(3,5,0.1) ~~|

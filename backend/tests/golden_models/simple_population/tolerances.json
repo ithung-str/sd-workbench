@@ -1,0 +1,1 @@
+{"default": {"rtol": 0.000001, "atol": 0.000001}, "variables": {"population": {"rtol": 0.000001, "atol": 0.000001}}}

@@ -1,0 +1,7 @@
+{UTF-8}
+INITIAL TIME = 0 ~~|
+FINAL TIME = 30 ~~|
+TIME STEP = 1 ~~|
+SAVEPER = TIME STEP ~~|
+p = PULSE(10,1) ~~|
+pt = PULSE TRAIN(5,1,5,25) ~~|

@@ -1,0 +1,10 @@
+{
+  "supported_contains": [
+    "STEP",
+    "DELAY3",
+    "SMOOTH3",
+    "DELAYN"
+  ],
+  "partial_contains": [],
+  "unsupported_contains": []
+}
