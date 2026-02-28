@@ -132,12 +132,15 @@ export function rankSuggestions(
     const isPrefix = lower.startsWith(q);
     const isConnected = connectedSet.has(name);
     const isContains = !isPrefix && lower.includes(q);
+    let searchIdx = 0;
     const isSubsequence =
       !isPrefix &&
       !isContains &&
-      q.split('').every((char, idx) => {
-        const prevIdx = idx === 0 ? -1 : lower.indexOf(q[idx - 1], 0);
-        return lower.indexOf(char, prevIdx + 1) >= 0;
+      q.split('').every((char) => {
+        const found = lower.indexOf(char, searchIdx);
+        if (found < 0) return false;
+        searchIdx = found + 1;
+        return true;
       });
 
     const bucket = isPrefix ? 0 : isConnected ? 1 : isContains ? 2 : isSubsequence ? 3 : 4;

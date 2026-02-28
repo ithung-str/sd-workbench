@@ -1,13 +1,41 @@
+import { useMemo, useState } from 'react';
+import { collectGlobalVariableUsage } from '../../lib/globalVariableUsage';
 import { useEditorStore } from '../../state/editorStore';
 
-export function PalettePanel() {
+type PalettePanelProps = {
+  onSelectOutlineNode?: () => void;
+};
+
+export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
   const addNode = useEditorStore((s) => s.addNode);
   const addGlobalVariable = useEditorStore((s) => s.addGlobalVariable);
   const updateGlobalVariable = useEditorStore((s) => s.updateGlobalVariable);
   const deleteGlobalVariable = useEditorStore((s) => s.deleteGlobalVariable);
   const model = useEditorStore((s) => s.model);
+  const selected = useEditorStore((s) => s.selected);
+  const setSelected = useEditorStore((s) => s.setSelected);
   const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
   const importedVensim = useEditorStore((s) => s.importedVensim);
+  const [editingGlobalId, setEditingGlobalId] = useState<string | null>(null);
+  const [editingGlobalValue, setEditingGlobalValue] = useState('');
+  const globalUsage = useMemo(() => collectGlobalVariableUsage(model), [model]);
+
+  const startEdit = (id: string, value: string) => {
+    setEditingGlobalId(id);
+    setEditingGlobalValue(value);
+  };
+
+  const commitEdit = (id: string) => {
+    updateGlobalVariable(id, { equation: editingGlobalValue });
+    setEditingGlobalId(null);
+  };
+
+  const nodeOutlineLabel = (node: (typeof model.nodes)[number]): string => {
+    if (node.type === 'text') return node.text;
+    if (node.type === 'cloud') return 'Cloud';
+    if (node.type === 'cld_symbol') return node.name?.trim() || `CLD ${node.symbol}`;
+    return node.label;
+  };
 
   return (
     <section className="panel palette-panel">
@@ -27,8 +55,17 @@ export function PalettePanel() {
       <ul className="model-outline">
         {model.nodes.map((node) => (
           <li key={node.id}>
-            <span className={`tag tag-${node.type}`}>{node.type}</span>{' '}
-            {node.type === 'text' ? node.text : node.type === 'cloud' ? 'Cloud' : node.label}
+            <button
+              type="button"
+              className={`outline-row ${selected?.kind === 'node' && selected.id === node.id ? 'is-selected' : ''}`}
+              onClick={() => {
+                setSelected({ kind: 'node', id: node.id });
+                onSelectOutlineNode?.();
+              }}
+            >
+              <span className={`tag tag-${node.type}`}>{node.type}</span>{' '}
+              {nodeOutlineLabel(node)}
+            </button>
           </li>
         ))}
       </ul>
@@ -40,25 +77,55 @@ export function PalettePanel() {
           </div>
           <ul className="model-outline global-variable-list">
             {(model.global_variables ?? []).map((variable) => (
-              <li key={variable.id}>
-                <div className="global-variable-head">
+              <li key={variable.id} className={selected?.kind === 'global_variable' && selected.id === variable.id ? 'is-selected' : ''}>
+                <button
+                  type="button"
+                  className="global-variable-row"
+                  onClick={() => {
+                    setSelected({ kind: 'global_variable', id: variable.id });
+                    onSelectOutlineNode?.();
+                  }}
+                >
                   <span className="tag tag-global">global</span>
-                  <button type="button" className="danger" onClick={() => deleteGlobalVariable(variable.id)}>Delete</button>
+                  <span className="global-variable-name">{variable.name}</span>
+                  <span className="global-variable-uses">{globalUsage[variable.id]?.total ?? 0} uses</span>
+                </button>
+                <div className="global-variable-value-wrap">
+                  {editingGlobalId === variable.id ? (
+                    <input
+                      className="global-variable-value-input"
+                      value={editingGlobalValue}
+                      onChange={(e) => setEditingGlobalValue(e.target.value)}
+                      autoFocus
+                      onBlur={() => commitEdit(variable.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          commitEdit(variable.id);
+                        }
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setEditingGlobalId(null);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="global-variable-value"
+                      onClick={() => startEdit(variable.id, variable.equation)}
+                      title="Edit value"
+                    >
+                      {variable.equation}
+                    </button>
+                  )}
+                  <button type="button" className="ghost-icon-button" onClick={() => startEdit(variable.id, variable.equation)}>
+                    Edit
+                  </button>
+                  <button type="button" className="danger" onClick={() => deleteGlobalVariable(variable.id)}>
+                    Delete
+                  </button>
                 </div>
-                <label>
-                  Name
-                  <input
-                    value={variable.name}
-                    onChange={(e) => updateGlobalVariable(variable.id, { name: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Equation
-                  <input
-                    value={variable.equation}
-                    onChange={(e) => updateGlobalVariable(variable.id, { equation: e.target.value })}
-                  />
-                </label>
               </li>
             ))}
           </ul>

@@ -1,5 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { simulateModel, validateModel } from './api';
+import {
+  getVensimDiagnostics,
+  getVensimParityReadiness,
+  importVensimFile,
+  runMonteCarlo,
+  runOATSensitivity,
+  simulateModel,
+  simulateScenarioBatch,
+  validateModel,
+} from './api';
 import { teacupModel } from './sampleModels';
 
 beforeEach(() => {
@@ -16,5 +25,105 @@ describe('api client', () => {
   it('surfaces 422 detail for simulate', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 422, json: async () => ({ detail: { errors: [{ code: 'UNKNOWN_SYMBOL' }], warnings: [] } }) }));
     await expect(simulateModel({ model: teacupModel, sim_config: { start: 0, stop: 1, dt: 1, method: 'euler' } })).rejects.toEqual({ errors: [{ code: 'UNKNOWN_SYMBOL' }], warnings: [] });
+  });
+
+  it('parses scenario batch response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, runs: [], errors: [] }) }));
+    const res = await simulateScenarioBatch({
+      model: teacupModel,
+      sim_config: { start: 0, stop: 10, dt: 1, method: 'euler' },
+      scenarios: [],
+      include_baseline: true,
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it('parses oat and monte-carlo responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ ok: true, scenario_id: 'baseline', output: 'temperature', metric: 'final', baseline_metric: 1, items: [] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            ok: true,
+            scenario_id: 'baseline',
+            output: 'temperature',
+            metric: 'final',
+            runs: 2,
+            seed: 42,
+            quantiles: { p05: 1, p25: 1, p50: 1, p75: 1, p95: 1, mean: 1, stddev: 0, min: 1, max: 1 },
+            samples: [],
+          }),
+        }),
+    );
+    const oat = await runOATSensitivity({
+      model: teacupModel,
+      sim_config: { start: 0, stop: 10, dt: 1, method: 'euler' },
+      scenarios: [],
+      output: 'temperature',
+      metric: 'final',
+      parameters: [],
+    });
+    const mc = await runMonteCarlo({
+      model: teacupModel,
+      sim_config: { start: 0, stop: 10, dt: 1, method: 'euler' },
+      scenarios: [],
+      output: 'temperature',
+      metric: 'final',
+      runs: 2,
+      seed: 42,
+      parameters: [],
+    });
+    expect(oat.ok).toBe(true);
+    expect(mc.ok).toBe(true);
+  });
+
+  it('parses vensim diagnostics endpoints', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ ok: true, import_id: 'abc', capabilities: { tier: 'T2', supported: [], partial: [], unsupported: [], detected_functions: [], detected_time_settings: [] }, warnings: [], errors: [] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ ok: true, import_id: 'abc', readiness: 'yellow', reasons: ['fallback'] }),
+        }),
+    );
+    const diag = await getVensimDiagnostics('abc');
+    const ready = await getVensimParityReadiness('abc');
+    expect(diag.ok).toBe(true);
+    expect(ready.readiness).toBe('yellow');
+  });
+
+  it('times out vensim import requests with a clear message', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          const signal = init?.signal;
+          signal?.addEventListener('abort', () => {
+            const error = new Error('Aborted');
+            (error as Error & { name: string }).name = 'AbortError';
+            reject(error);
+          });
+        }),
+      ),
+    );
+
+    const pending = importVensimFile(new File(['{UTF-8}\n'], 'test.mdl', { type: 'text/plain' }));
+    const assertion = expect(pending).rejects.toMatchObject({
+      errors: [{ message: 'Vensim import timed out after 30s' }],
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await assertion;
   });
 });

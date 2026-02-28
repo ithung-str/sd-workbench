@@ -1,23 +1,51 @@
 import type { ModelDocument, SimulateResponse } from '../types/model';
 
+export type MfaTimeUnit = 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+export type MfaMissingValueRule = 'carry_forward' | 'fallback_scalar' | 'exact';
+
+export type MfaExportOptions = {
+  requestedTime?: number;
+  anchorDate?: string;
+  timeUnit?: MfaTimeUnit;
+  missingValueRule?: MfaMissingValueRule;
+  mode?: 'full_series' | 'time_slice';
+};
+
 type MfaNode = {
   id: string;
   title: string;
-  name: string;
   stock?: number;
+  stockUnit?: string;
+  stockSeries?: Record<string, number>;
 };
 
 type MfaLink = {
   source: string;
   target: string;
-  value: number;
-  id: string;
+  value?: number;
+  id?: string;
+  flowUnit?: string;
+  valueSeries?: Record<string, number>;
 };
 
-type MfaYamlDocument = {
+type MfaDiagramStyle = {
+  timeSeriesEnabled: boolean;
+  selectedTimePoint?: string;
+  timeSeriesMissingValueRule: MfaMissingValueRule;
+};
+
+export type MfaYamlDocument = {
   title: string;
   nodes: MfaNode[];
   links: MfaLink[];
+  groups: [];
+  diagramStyle: MfaDiagramStyle;
+};
+
+type TimeAxisMapping = {
+  dateKeys: string[];
+  selectedDate?: string;
+  anchorDate: string;
 };
 
 function quoteYamlString(value: string): string {
@@ -25,53 +53,46 @@ function quoteYamlString(value: string): string {
   return JSON.stringify(value);
 }
 
-function flowEndpoints(model: ModelDocument): Map<string, { source?: string; target?: string }> {
-  const byId = new Map(model.nodes.map((n) => [n.id, n]));
-  const map = new Map<string, { source?: string; target?: string }>();
-
-  console.log('[flowEndpoints] Starting analysis');
-
-  for (const node of model.nodes) {
-    if (node.type !== 'flow') continue;
-    console.log('[flowEndpoints] Flow node:', node.id, 'source_stock_id:', node.source_stock_id, 'target_stock_id:', node.target_stock_id);
-    map.set(node.id, {
-      source: node.source_stock_id,
-      target: node.target_stock_id,
-    });
-  }
-
-  console.log('[flowEndpoints] After node processing:', Array.from(map.entries()));
-
-  for (const edge of model.edges) {
-    if (edge.type !== 'flow_link') continue;
-    console.log('[flowEndpoints] Processing flow_link edge:', edge);
-    const source = byId.get(edge.source);
-    const target = byId.get(edge.target);
-    if (!source || !target) {
-      console.log('[flowEndpoints] Missing node for edge:', edge);
-      continue;
-    }
-
-    if (source.type === 'flow') {
-      console.log('[flowEndpoints] Flow is source, target is:', target.id, target.type);
-      const endpoints = map.get(source.id) ?? {};
-      endpoints.target = target.id;
-      map.set(source.id, endpoints);
-      continue;
-    }
-    if (target.type === 'flow') {
-      console.log('[flowEndpoints] Flow is target, source is:', source.id, source.type);
-      const endpoints = map.get(target.id) ?? {};
-      endpoints.source = source.id;
-      map.set(target.id, endpoints);
-    }
-  }
-
-  console.log('[flowEndpoints] Final result:', Array.from(map.entries()));
-  return map;
+function normalizedUnit(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed;
 }
 
-function nearestTimeIndex(time: number[], requestedTime?: number): number {
+function toUtcDate(dateString: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return null;
+  const date = new Date(`${dateString}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function formatIsoDay(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addUtcMonths(anchor: Date, months: number): Date {
+  const year = anchor.getUTCFullYear();
+  const month = anchor.getUTCMonth();
+  const day = anchor.getUTCDate();
+
+  const first = new Date(Date.UTC(year, month + months, 1));
+  const endOfMonth = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  const clampedDay = Math.min(day, endOfMonth);
+  return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), clampedDay));
+}
+
+function defaultAnchorDateForTime(time: number[]): string {
+  const first = time[0];
+  if (Number.isFinite(first) && Number.isInteger(first) && first >= 1900 && first <= 2100) {
+    return `${first}-01-01`;
+  }
+  return '2000-01-01';
+}
+
+function timeIndexForRequested(time: number[], requestedTime?: number): number {
   if (time.length === 0) return 0;
   if (requestedTime == null || Number.isNaN(requestedTime)) return time.length - 1;
   let best = 0;
@@ -86,123 +107,217 @@ function nearestTimeIndex(time: number[], requestedTime?: number): number {
   return best;
 }
 
-function flowValueAtIndex(series: Record<string, number[]>, flowName: string, equation: string, index: number): number {
-  const values = series[flowName];
-  if (values && Number.isFinite(values[index])) return values[index];
-  const numeric = Number(equation);
-  if (Number.isFinite(numeric)) return numeric;
-  return 0;
+function mapTimeToDate(anchor: Date, offset: number, unit: MfaTimeUnit): Date {
+  const hourMs = 60 * 60 * 1000;
+  const dayMs = 24 * hourMs;
+
+  if (unit === 'hour') {
+    return new Date(anchor.getTime() + Math.round(offset * hourMs));
+  }
+  if (unit === 'day') {
+    return new Date(anchor.getTime() + Math.round(offset * dayMs));
+  }
+  if (unit === 'week') {
+    return new Date(anchor.getTime() + Math.round(offset * 7 * dayMs));
+  }
+
+  const isNearlyInteger = Math.abs(offset - Math.round(offset)) < 1e-9;
+  if (unit === 'month') {
+    if (isNearlyInteger) return addUtcMonths(anchor, Math.round(offset));
+    return new Date(anchor.getTime() + Math.round(offset * 30.4375 * dayMs));
+  }
+  if (unit === 'quarter') {
+    if (isNearlyInteger) return addUtcMonths(anchor, Math.round(offset) * 3);
+    return new Date(anchor.getTime() + Math.round(offset * 91.3125 * dayMs));
+  }
+  if (isNearlyInteger) {
+    return addUtcMonths(anchor, Math.round(offset) * 12);
+  }
+  return new Date(anchor.getTime() + Math.round(offset * 365.25 * dayMs));
 }
 
-function stockValueAtIndex(
-  series: Record<string, number[]>,
-  nodeName: string,
-  initialValue: number | string,
-  index: number,
+function buildTimeAxisMapping(time: number[], options: MfaExportOptions): TimeAxisMapping {
+  const unit = options.timeUnit ?? 'day';
+  const resolvedAnchor = options.anchorDate?.trim() || defaultAnchorDateForTime(time);
+  const parsedAnchor = toUtcDate(resolvedAnchor) ?? toUtcDate(defaultAnchorDateForTime(time)) ?? new Date('2000-01-01T00:00:00.000Z');
+
+  if (time.length === 0) {
+    return { dateKeys: [], anchorDate: formatIsoDay(parsedAnchor) };
+  }
+
+  const start = time[0];
+  const dateKeys = time.map((value) => {
+    const offset = Number.isFinite(value) && Number.isFinite(start) ? value - start : 0;
+    return formatIsoDay(mapTimeToDate(parsedAnchor, offset, unit));
+  });
+
+  const selectedIndex = timeIndexForRequested(time, options.requestedTime);
+  return {
+    dateKeys,
+    selectedDate: dateKeys[selectedIndex],
+    anchorDate: formatIsoDay(parsedAnchor),
+  };
+}
+
+function flowEndpoints(model: ModelDocument): Map<string, { source?: string; target?: string }> {
+  const byId = new Map(model.nodes.map((n) => [n.id, n]));
+  const map = new Map<string, { source?: string; target?: string }>();
+
+  for (const node of model.nodes) {
+    if (node.type !== 'flow') continue;
+    map.set(node.id, {
+      source: node.source_stock_id,
+      target: node.target_stock_id,
+    });
+  }
+
+  for (const edge of model.edges) {
+    if (edge.type !== 'flow_link') continue;
+    const source = byId.get(edge.source);
+    const target = byId.get(edge.target);
+    if (!source || !target) continue;
+
+    if (source.type === 'flow') {
+      const endpoints = map.get(source.id) ?? {};
+      endpoints.target = target.id;
+      map.set(source.id, endpoints);
+      continue;
+    }
+    if (target.type === 'flow') {
+      const endpoints = map.get(target.id) ?? {};
+      endpoints.source = source.id;
+      map.set(target.id, endpoints);
+    }
+  }
+
+  return map;
+}
+
+function withMissingRule(
+  dateKeys: string[],
+  values: number[] | undefined,
+  fallback: number | undefined,
+  rule: MfaMissingValueRule,
+): Record<string, number> {
+  const output: Record<string, number> = {};
+  let previousValue: number | undefined;
+
+  for (let i = 0; i < dateKeys.length; i += 1) {
+    const raw = values?.[i];
+    const hasRaw = Number.isFinite(raw);
+
+    if (hasRaw) {
+      previousValue = raw;
+      output[dateKeys[i]] = raw as number;
+      continue;
+    }
+
+    if (rule === 'exact') {
+      continue;
+    }
+
+    if (rule === 'carry_forward') {
+      const next = previousValue ?? fallback;
+      if (Number.isFinite(next)) {
+        previousValue = next;
+        output[dateKeys[i]] = next as number;
+      }
+      continue;
+    }
+
+    if (Number.isFinite(fallback)) {
+      output[dateKeys[i]] = fallback as number;
+    }
+  }
+
+  return output;
+}
+
+function stockFallback(initialValue: number | string): number | undefined {
+  const value = Number(initialValue);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function flowFallback(equation: string): number | undefined {
+  const value = Number(equation);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function pickScalar(
+  atDate: string | undefined,
+  series: Record<string, number>,
+  fallback: number | undefined,
 ): number | undefined {
-  const values = series[nodeName];
-  if (values && Number.isFinite(values[index])) return values[index];
-  const numericInitial = Number(initialValue);
-  if (Number.isFinite(numericInitial)) return numericInitial;
+  if (atDate && Number.isFinite(series[atDate])) return series[atDate];
+  if (Number.isFinite(fallback)) return fallback;
   return undefined;
 }
 
 export function buildMfaYamlDocument(
   model: ModelDocument,
   results: SimulateResponse,
-  requestedTime?: number,
+  options: MfaExportOptions = {},
 ): MfaYamlDocument {
-  console.log('[buildMfaYamlDocument] Starting with model:', model.name);
+  const rule = options.missingValueRule ?? 'carry_forward';
+  const mode = options.mode ?? 'full_series';
+  const time = results.series.time ?? [];
+  const timeAxis = buildTimeAxisMapping(time, options);
+
   const nodeById = new Map(model.nodes.map((node) => [node.id, node]));
   const endpoints = flowEndpoints(model);
-  const time = results.series.time ?? [];
-  const idx = nearestTimeIndex(time, requestedTime);
 
   const links: MfaLink[] = [];
   const usedNodeIds = new Set<string>();
-  const implicitCloudNodes = new Map<string, { id: string; title: string; name: string }>();
+  const implicitCloudNodes = new Map<string, { id: string; title: string }>();
 
-  console.log('[buildMfaYamlDocument] Processing flows...');
   for (const node of model.nodes) {
     if (node.type !== 'flow') continue;
-    console.log('[buildMfaYamlDocument] Flow node:', node.id);
     const edge = endpoints.get(node.id);
-    console.log('[buildMfaYamlDocument] Endpoints for flow:', edge);
-    if (!edge?.source && !edge?.target) {
-      console.log('[buildMfaYamlDocument] Skipping - both source and target missing');
-      continue;
-    }
+    if (!edge?.source && !edge?.target) continue;
 
-    // Handle source: use existing node or create implicit cloud
-    let sourceLabel: string;
     let sourceId: string;
     if (edge?.source) {
       const sourceNode = nodeById.get(edge.source);
-      console.log('[buildMfaYamlDocument] Source node:', sourceNode?.id, sourceNode?.type);
-      if (!sourceNode) {
-        console.log('[buildMfaYamlDocument] Skipping - source node not found');
-        continue;
-      }
-      if (sourceNode.type === 'text') {
-        console.log('[buildMfaYamlDocument] Skipping - source is text node');
-        continue;
-      }
-      sourceLabel = sourceNode.type === 'cloud' ? sourceNode.id : sourceNode.label;
+      if (!sourceNode) continue;
+      if (sourceNode.type === 'text' || sourceNode.type === 'cld_symbol') continue;
       sourceId = sourceNode.id;
-      usedNodeIds.add(sourceId);
+      usedNodeIds.add(sourceNode.id);
     } else {
-      // Create implicit cloud for missing source
-      const cloudId = `cloud_source_${node.id}`;
-      const flowLabel = node.label || node.name;
-      const boundaryLabel = `${flowLabel} Source`;
-      sourceLabel = boundaryLabel;
-      sourceId = cloudId;
-      if (!implicitCloudNodes.has(cloudId)) {
-        implicitCloudNodes.set(cloudId, { id: boundaryLabel, title: boundaryLabel, name: cloudId });
+      sourceId = `cloud_source_${node.id}`;
+      if (!implicitCloudNodes.has(sourceId)) {
+        const flowLabel = node.label || node.name;
+        implicitCloudNodes.set(sourceId, { id: sourceId, title: `${flowLabel} Source` });
       }
-      console.log('[buildMfaYamlDocument] Created implicit cloud for source:', cloudId, 'with label:', boundaryLabel);
     }
 
-    // Handle target: use existing node or create implicit cloud
-    let targetLabel: string;
     let targetId: string;
     if (edge?.target) {
       const targetNode = nodeById.get(edge.target);
-      console.log('[buildMfaYamlDocument] Target node:', targetNode?.id, targetNode?.type);
-      if (!targetNode) {
-        console.log('[buildMfaYamlDocument] Skipping - target node not found');
-        continue;
-      }
-      if (targetNode.type === 'text') {
-        console.log('[buildMfaYamlDocument] Skipping - target is text node');
-        continue;
-      }
-      targetLabel = targetNode.type === 'cloud' ? targetNode.id : targetNode.label;
+      if (!targetNode) continue;
+      if (targetNode.type === 'text' || targetNode.type === 'cld_symbol') continue;
       targetId = targetNode.id;
-      usedNodeIds.add(targetId);
+      usedNodeIds.add(targetNode.id);
     } else {
-      // Create implicit cloud for missing target
-      const cloudId = `cloud_target_${node.id}`;
-      const flowLabel = node.label || node.name;
-      const boundaryLabel = `${flowLabel} Target`;
-      targetLabel = boundaryLabel;
-      targetId = cloudId;
-      if (!implicitCloudNodes.has(cloudId)) {
-        implicitCloudNodes.set(cloudId, { id: boundaryLabel, title: boundaryLabel, name: cloudId });
+      targetId = `cloud_target_${node.id}`;
+      if (!implicitCloudNodes.has(targetId)) {
+        const flowLabel = node.label || node.name;
+        implicitCloudNodes.set(targetId, { id: targetId, title: `${flowLabel} Target` });
       }
-      console.log('[buildMfaYamlDocument] Created implicit cloud for target:', cloudId, 'with label:', boundaryLabel);
     }
 
-    const link = {
-      source: sourceLabel,
-      target: targetLabel,
-      value: flowValueAtIndex(results.series, node.name, node.equation, idx),
-      id: `${sourceLabel}-${targetLabel}`,
-    };
-    console.log('[buildMfaYamlDocument] Created link:', link);
-    links.push(link);
+    const fallback = flowFallback(node.equation);
+    const valueSeries = withMissingRule(timeAxis.dateKeys, results.series[node.name], fallback, rule);
+    const scalarValue = pickScalar(timeAxis.selectedDate, valueSeries, fallback);
+
+    links.push({
+      id: `${sourceId}_to_${targetId}`,
+      source: sourceId,
+      target: targetId,
+      value: scalarValue,
+      flowUnit: normalizedUnit(node.units),
+      valueSeries: mode === 'full_series' && Object.keys(valueSeries).length > 0 ? valueSeries : undefined,
+    });
   }
-  console.log('[buildMfaYamlDocument] Total links created:', links.length);
 
   const nodes: MfaNode[] = [
     ...Array.from(usedNodeIds)
@@ -210,35 +325,48 @@ export function buildMfaYamlDocument(
       .filter((node): node is NonNullable<typeof node> => Boolean(node))
       .map((node) => {
         if (node.type === 'cloud') {
-          return { id: node.id, title: node.id, name: node.id };
+          return { id: node.id, title: node.id };
         }
-        if (node.type === 'text') {
-          return { id: node.id, title: node.text, name: node.text };
-        }
+
         if (node.type === 'stock') {
+          const fallback = stockFallback(node.initial_value);
+          const stockSeries = withMissingRule(timeAxis.dateKeys, results.series[node.name], fallback, rule);
+          const scalarStock = pickScalar(timeAxis.selectedDate, stockSeries, fallback);
           return {
-            id: node.label,
+            id: node.id,
             title: node.label,
-            name: node.name,
-            stock: stockValueAtIndex(results.series, node.name, node.initial_value, idx),
+            stock: scalarStock,
+            stockUnit: normalizedUnit(node.units),
+            stockSeries: mode === 'full_series' && Object.keys(stockSeries).length > 0 ? stockSeries : undefined,
           };
         }
-        return {
-          id: node.label,
-          title: node.label,
-          name: node.name,
-        };
+
+        if (node.type === 'text') {
+          return { id: node.id, title: node.text };
+        }
+
+        if (node.type === 'cld_symbol') {
+          return { id: node.id, title: node.name?.trim() || `CLD ${node.symbol}` };
+        }
+
+        return { id: node.id, title: node.label };
       }),
     ...Array.from(implicitCloudNodes.values()),
   ];
 
-  const sampledTime = time[idx];
-  const title =
-    Number.isFinite(sampledTime) && sampledTime !== undefined
-      ? `Material Flow Analysis (t=${sampledTime})`
-      : 'Material Flow Analysis';
+  const title = model.name?.trim() || 'Model';
 
-  return { title, nodes, links };
+  return {
+    title,
+    nodes,
+    links,
+    groups: [],
+    diagramStyle: {
+      timeSeriesEnabled: mode === 'full_series',
+      selectedTimePoint: timeAxis.selectedDate,
+      timeSeriesMissingValueRule: rule,
+    },
+  };
 }
 
 export function mfaYamlString(doc: MfaYamlDocument): string {
@@ -248,17 +376,48 @@ export function mfaYamlString(doc: MfaYamlDocument): string {
   for (const node of doc.nodes) {
     lines.push(`  - id: ${quoteYamlString(node.id)}`);
     lines.push(`    title: ${quoteYamlString(node.title)}`);
-    lines.push(`    name: ${quoteYamlString(node.name)}`);
     if (Number.isFinite(node.stock)) {
       lines.push(`    stock: ${node.stock}`);
     }
+    if (node.stockUnit) {
+      lines.push(`    stockUnit: ${quoteYamlString(node.stockUnit)}`);
+    }
+    if (node.stockSeries && Object.keys(node.stockSeries).length > 0) {
+      lines.push('    stockSeries:');
+      for (const [timeKey, value] of Object.entries(node.stockSeries)) {
+        lines.push(`      ${JSON.stringify(timeKey)}: ${Number.isFinite(value) ? value : 0}`);
+      }
+    }
   }
+
   lines.push('links:');
   for (const link of doc.links) {
     lines.push(`  - source: ${quoteYamlString(link.source)}`);
     lines.push(`    target: ${quoteYamlString(link.target)}`);
-    lines.push(`    value: ${Number.isFinite(link.value) ? link.value : 0}`);
-    lines.push(`    id: ${quoteYamlString(link.id)}`);
+    if (Number.isFinite(link.value)) {
+      lines.push(`    value: ${link.value}`);
+    }
+    if (link.id) {
+      lines.push(`    id: ${quoteYamlString(link.id)}`);
+    }
+    if (link.flowUnit) {
+      lines.push(`    flowUnit: ${quoteYamlString(link.flowUnit)}`);
+    }
+    if (link.valueSeries && Object.keys(link.valueSeries).length > 0) {
+      lines.push('    valueSeries:');
+      for (const [timeKey, value] of Object.entries(link.valueSeries)) {
+        lines.push(`      ${JSON.stringify(timeKey)}: ${Number.isFinite(value) ? value : 0}`);
+      }
+    }
   }
+
+  lines.push('groups: []');
+  lines.push('diagramStyle:');
+  lines.push(`  timeSeriesEnabled: ${doc.diagramStyle.timeSeriesEnabled ? 'true' : 'false'}`);
+  if (doc.diagramStyle.selectedTimePoint) {
+    lines.push(`  selectedTimePoint: ${JSON.stringify(doc.diagramStyle.selectedTimePoint)}`);
+  }
+  lines.push(`  timeSeriesMissingValueRule: ${doc.diagramStyle.timeSeriesMissingValueRule}`);
+
   return `${lines.join('\n')}\n`;
 }

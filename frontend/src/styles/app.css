@@ -422,6 +422,20 @@ button.danger {
   font-size: 0.86rem;
 }
 
+.outline-row {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.outline-row.is-selected {
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
 .global-variable-actions {
   margin-bottom: 8px;
 }
@@ -432,7 +446,66 @@ button.danger {
 
 .global-variable-list li {
   display: grid;
+  gap: 4px;
+  padding: 6px;
+}
+
+.global-variable-list li.is-selected {
+  border-color: #8ab4f8;
+  background: #eef4ff;
+}
+
+.global-variable-row {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  display: flex;
+  align-items: baseline;
   gap: 6px;
+  padding: 0;
+  text-align: left;
+}
+
+.global-variable-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #24222e;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.global-variable-uses {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: #6b6777;
+}
+
+.global-variable-value-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.global-variable-value {
+  border: 1px solid var(--line);
+  background: #fafafd;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 0.73rem;
+  color: #4f4b5c;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-variable-value-input {
+  width: 160px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-size: 0.76rem;
 }
 
 .global-variable-head {
@@ -497,6 +570,25 @@ button.danger {
   line-height: 1.3;
 }
 
+.global-usage-list {
+  display: grid;
+  gap: 6px;
+}
+
+.global-usage-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 0.82rem;
+}
+
+.global-usage-row:hover {
+  border-color: #93b5f8;
+  background: #f3f7ff;
+}
+
 .tag {
   display: inline-block;
   border-radius: 999px;
@@ -511,6 +603,7 @@ button.danger {
 .tag-lookup { background: #fff4de; color: #9a5a06; border-color: #f3e0b4; }
 .tag-text { background: #f2f3f7; color: #575a68; border-color: #e1e4ec; }
 .tag-cloud { background: #f0f4f8; color: #5a6c7d; border-color: #d4dce4; }
+.tag-cld_symbol { background: #eaf0ff; color: #2f4f92; border-color: #d8e3ff; }
 .tag-global { background: #edf6ff; color: #2f5f95; border-color: #d7e8fa; }
 
 .canvas-column {
@@ -583,9 +676,27 @@ button.danger {
 .react-flow__node.selected .rf-node-shape-flow,
 .react-flow__node.selected .rf-node-shape-lookup,
 .react-flow__node.selected .rf-node-cloud,
-.react-flow__node.selected .rf-node-text {
+.react-flow__node.selected .rf-node-text,
+.react-flow__node.selected .rf-node-cld-symbol {
   outline: 2px solid #2f6bff;
   outline-offset: 2px;
+}
+
+.rf-node-cld-symbol-name {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  color: #2c3447;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0 3px;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 140px;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
@@ -768,7 +879,47 @@ button.danger {
 }
 
 .equation-editor {
-  margin-top: 4px;
+  margin-top: 6px;
+  display: grid;
+  gap: 6px;
+}
+
+.equation-editor-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.equation-function-picker-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.equation-function-picker {
+  min-width: 210px;
+  border: 1px solid #d6d6e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #3d3847;
+  font-size: 0.76rem;
+  padding: 4px 6px;
+}
+
+.equation-function-picker-help {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #d6d6e1;
+  color: #645d74;
+  background: #fbfbff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: help;
 }
 
 .connected-units-panel {
@@ -826,15 +977,27 @@ button.danger {
   font-weight: 500;
 }
 
-.equation-editor textarea {
-  resize: vertical;
-  min-height: 84px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.82rem;
-}
-
 .equation-editor-input-wrap {
   position: relative;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  background: #fff;
+  min-height: 92px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.equation-editor-input-wrap.is-focused {
+  border-color: #6f5ad3;
+  box-shadow: 0 0 0 2px rgba(111, 90, 211, 0.14);
+}
+
+.equation-editor-input-wrap.has-warning {
+  border-color: #d9a73f;
+}
+
+.equation-editor-input-wrap.has-error {
+  border-color: #cc4e4e;
+  box-shadow: 0 0 0 2px rgba(204, 78, 78, 0.12);
 }
 
 .equation-editor-overlay {
@@ -843,11 +1006,11 @@ button.danger {
   z-index: 1;
   pointer-events: none;
   overflow: hidden;
-  padding: 7px 8px;
+  padding: 8px 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.82rem;
-  line-height: 1.4;
-  color: #2f2a38;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: #352f45;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -856,50 +1019,60 @@ button.danger {
   min-height: 100%;
 }
 
-.equation-editor-input-wrap textarea {
+.equation-editor-input-wrap .equation-editor-input {
   position: relative;
   z-index: 2;
+  width: 100%;
+  resize: vertical;
+  min-height: 92px;
+  border: 0;
+  outline: none;
+  padding: 8px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.84rem;
+  line-height: 1.45;
   background: transparent;
   color: transparent;
   caret-color: #2f2a38;
-  line-height: 1.4;
 }
 
 .equation-inline-chip {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid #dddbe8;
+  display: inline;
+  border: 0;
   border-radius: 999px;
-  background: #fbfbfe;
-  color: #4a4657;
-  font-size: 0.72rem;
+  background: #f8f6ff;
+  color: #4c4366;
+  font-size: 0.73rem;
   line-height: 1.2;
-  padding: 1px 7px;
+  padding: 0 3px;
+  margin: 0 -1px;
+  box-shadow: inset 0 0 0 1px #dad5ea;
 }
 
 .equation-inline-chip.connected {
-  border-color: #d8c8f9;
+  box-shadow: inset 0 0 0 1px #d8c8f9;
   background: #f7f1ff;
   color: var(--accent);
   font-weight: 600;
 }
 
-.equation-suggestions {
-  position: absolute;
-  z-index: 5;
-  left: 0;
-  right: 0;
-  top: calc(100% + 4px);
+.equation-inline-chip.unknown {
+  box-shadow: inset 0 0 0 1px #efb9b9;
+  background: #fff4f4;
+  color: #9e3434;
+}
+
+.equation-smart-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
-  box-shadow: 0 6px 20px rgba(17, 17, 20, 0.06);
-  padding: 4px;
+  box-shadow: 0 4px 14px rgba(17, 17, 20, 0.04);
+  padding: 6px;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
-.equation-suggestions button {
+.equation-suggestions-panel button {
   width: 100%;
   text-align: left;
   border: 0;
@@ -908,8 +1081,8 @@ button.danger {
   border-radius: 6px;
 }
 
-.equation-suggestions button.active,
-.equation-suggestions button:hover {
+.equation-suggestions-panel button.active,
+.equation-suggestions-panel button:hover {
   background: #f6f2ff;
 }
 
@@ -930,16 +1103,35 @@ button.danger {
   color: var(--accent);
 }
 
-.equation-recognized {
-  margin-top: 8px;
-  display: grid;
-  gap: 5px;
-}
-
 .equation-recognized-label {
   color: #6a6776;
   font-size: 0.72rem;
   font-weight: 600;
+}
+
+.equation-smart-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.equation-status {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.equation-status.warning {
+  color: #946e16;
+}
+
+.equation-status.error {
+  color: #b23c3c;
+}
+
+.equation-smart-panel-empty {
+  color: #69667a;
+  font-size: 0.76rem;
 }
 
 .equation-chip-list {
@@ -964,6 +1156,12 @@ button.danger {
   background: #f7f1ff;
   color: var(--accent);
   font-weight: 600;
+}
+
+.equation-chip.unknown {
+  border-color: #efb9b9;
+  background: #fff4f4;
+  color: #9e3434;
 }
 
 .lookup-editor {

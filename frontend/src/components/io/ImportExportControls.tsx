@@ -11,9 +11,7 @@ export function ImportExportControls({
 }) {
   const model = useEditorStore((s) => s.model);
   const loadModel = useEditorStore((s) => s.loadModel);
-  const importVensim = useEditorStore((s) => s.importVensim);
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
-  const vensimInputRef = useRef<HTMLInputElement | null>(null);
 
   const onExport = () => {
     const blob = new Blob([JSON.stringify(model, null, 2)], { type: 'application/json' });
@@ -36,22 +34,12 @@ export function ImportExportControls({
     onActionComplete?.();
   };
 
-  const onImportVensim = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await importVensim(file);
-    e.target.value = '';
-    onActionComplete?.();
-  };
-
   if (mode === 'menu') {
     return (
       <div className="hamburger-menu-actions">
         <button type="button" onClick={onExport}>Export JSON</button>
         <button type="button" onClick={() => jsonInputRef.current?.click()}>Import JSON</button>
-        <button type="button" onClick={() => vensimInputRef.current?.click()}>Import Vensim</button>
         <input ref={jsonInputRef} type="file" accept="application/json" onChange={onImport} hidden />
-        <input ref={vensimInputRef} type="file" accept=".mdl" onChange={onImportVensim} hidden />
       </div>
     );
   }
@@ -62,10 +50,6 @@ export function ImportExportControls({
       <label className="import-button">
         Import JSON
         <input type="file" accept="application/json" onChange={onImport} />
-      </label>
-      <label className="import-button">
-        Import Vensim
-        <input type="file" accept=".mdl" onChange={onImportVensim} />
       </label>
     </div>
   );

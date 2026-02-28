@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import ReactFlow, { Background, BackgroundVariant, Controls, MarkerType, MiniMap, ReactFlowProvider, type Connection, type Edge, type EdgeTypes, type Node, type NodeTypes, type ReactFlowInstance } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, Controls, MarkerType, MiniMap, Panel, ReactFlowProvider, type Connection, type Edge, type EdgeTypes, type Node, type NodeTypes, type ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
 
 import { useEditorStore } from '../../state/editorStore';
@@ -11,7 +11,9 @@ import { LookupNodeView } from './nodes/LookupNode';
 import { StockNodeView } from './nodes/StockNode';
 import { TextNodeView } from './nodes/TextNode';
 import { CloudNodeView } from './nodes/CloudNode';
+import { CldSymbolNodeView } from './nodes/CldSymbolNode';
 import { FlowPipeEdge } from './edges/FlowPipeEdge';
+import { CanvasComponentsBar } from '../workbench/CanvasComponentsBar';
 
 const nodeTypes: NodeTypes = {
   stockNode: StockNodeView,
@@ -20,6 +22,7 @@ const nodeTypes: NodeTypes = {
   lookupNode: LookupNodeView,
   textNode: TextNodeView,
   cloudNode: CloudNodeView,
+  cldSymbolNode: CldSymbolNodeView,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -27,6 +30,105 @@ const edgeTypes: EdgeTypes = {
 };
 
 const FUNCTION_NAMES = ['PULSE TRAIN', 'STEP', 'RAMP', 'PULSE', 'DELAY1', 'DELAY3', 'DELAYN', 'DELAY', 'SMOOTH', 'SMOOTH3', 'SMOOTHN'];
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+function xmlEscape(value: unknown): string {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function attrsXml(attrs: Record<string, unknown>): string {
+  const parts = Object.entries(attrs)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => `${key}="${xmlEscape(value)}"`);
+  return parts.length ? ` ${parts.join(' ')}` : '';
+}
+
+function modelToXml(model: { id: string; name: string; nodes: NodeModel[]; edges: Array<Record<string, unknown>> }): string {
+  const lines: string[] = [];
+  lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+  lines.push(`<model${attrsXml({ id: model.id, name: model.name })}>`);
+  lines.push('  <nodes>');
+  for (const node of model.nodes) {
+    const base = { id: node.id, type: node.type, x: node.position.x, y: node.position.y };
+    if (node.type === 'text') {
+      lines.push(`    <node${attrsXml({ ...base, text: node.text })} />`);
+      continue;
+    }
+    if (node.type === 'cloud') {
+      lines.push(`    <node${attrsXml(base)} />`);
+      continue;
+    }
+    if (node.type === 'cld_symbol') {
+      lines.push(`    <node${attrsXml({ ...base, symbol: node.symbol, loop_direction: node.loop_direction, name: node.name })} />`);
+      continue;
+    }
+    if (node.type === 'stock') {
+      lines.push(
+        `    <node${attrsXml({
+          ...base,
+          name: node.name,
+          label: node.label,
+          equation: node.equation,
+          units: node.units,
+          initial_value: node.initial_value,
+        })} />`,
+      );
+      continue;
+    }
+    if (node.type === 'lookup') {
+      const points = node.points.map((point) => `${point.x}:${point.y}`).join(';');
+      lines.push(
+        `    <node${attrsXml({
+          ...base,
+          name: node.name,
+          label: node.label,
+          equation: node.equation,
+          units: node.units,
+          interpolation: node.interpolation,
+          points,
+        })} />`,
+      );
+      continue;
+    }
+    lines.push(
+      `    <node${attrsXml({
+        ...base,
+        name: node.name,
+        label: node.label,
+        equation: node.equation,
+        units: node.units,
+      })} />`,
+    );
+  }
+  lines.push('  </nodes>');
+  lines.push('  <edges>');
+  for (const edge of model.edges) {
+    lines.push(
+      `    <edge${attrsXml({
+        id: edge.id,
+        type: edge.type,
+        source: edge.source,
+        target: edge.target,
+        source_handle: edge.source_handle,
+        target_handle: edge.target_handle,
+      })} />`,
+    );
+  }
+  lines.push('  </edges>');
+  lines.push('</model>');
+  return lines.join('\n');
+}
 
 function maskFunctionInternals(equation: string): string {
   const source = equation ?? '';
@@ -78,6 +180,9 @@ function nodeData(node: NodeModel, showFunctionInternals: boolean, flowDirection
   if (node.type === 'cloud') {
     return {};
   }
+  if (node.type === 'cld_symbol') {
+    return { symbol: node.symbol, loopDirection: node.loop_direction, name: node.name };
+  }
   return {
     label: node.label,
     subtitle: showFunctionInternals ? subtitleForNode(node.name, String(node.equation), true) : '',
@@ -89,11 +194,18 @@ function ModelCanvasInner() {
   const model = useEditorStore((s) => s.model);
   const selected = useEditorStore((s) => s.selected);
   const setSelected = useEditorStore((s) => s.setSelected);
+  const deleteSelected = useEditorStore((s) => s.deleteSelected);
   const addModelEdge = useEditorStore((s) => s.addEdge);
   const updateNodePosition = useEditorStore((s) => s.updateNodePosition);
+  const commitNodePosition = useEditorStore((s) => s.commitNodePosition);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+  const isCanvasLocked = useEditorStore((s) => s.isCanvasLocked);
   const showFunctionInternals = useUIStore((s) => s.showFunctionInternals);
   const showMinimap = useUIStore((s) => s.showMinimap);
+  const showXmlModel = useUIStore((s) => s.showXmlModel);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const xmlModel = useMemo(() => modelToXml(model), [model]);
 
   const rfNodes = useMemo<Node[]>(() => {
     const byId = new Map(model.nodes.map((n) => [n.id, n]));
@@ -127,13 +239,14 @@ function ModelCanvasInner() {
                 ? 'textNode'
               : node.type === 'cloud'
                 ? 'cloudNode'
+              : node.type === 'cld_symbol'
+                ? 'cldSymbolNode'
               : 'auxNode',
       position: node.position,
       selected: selected?.kind === 'node' && selected.id === node.id,
       data: nodeData(node, showFunctionInternals, flowDirectionById),
     }));
 
-    console.log('ReactFlow nodes:', nodes);
     return nodes;
   }, [model.nodes, model.edges, selected, showFunctionInternals]);
 
@@ -180,11 +293,19 @@ function ModelCanvasInner() {
   );
 
   const onConnect = (connection: Connection) => {
+    if (isCanvasLocked) return;
     if (!connection.source || !connection.target) return;
     const source = model.nodes.find((n) => n.id === connection.source);
     const target = model.nodes.find((n) => n.id === connection.target);
     if (!source || !target) return;
-    if (source.type === 'text' || target.type === 'text') return;
+    if (
+      source.type === 'text' ||
+      source.type === 'cld_symbol' ||
+      target.type === 'text' ||
+      target.type === 'cld_symbol'
+    ) {
+      return;
+    }
     addModelEdge({
       id: `e_${Date.now()}`,
       type: 'influence',
@@ -198,15 +319,6 @@ function ModelCanvasInner() {
   useEffect(() => {
     if (!flowInstance) return;
 
-    console.log('ReactFlow instance initialized:', {
-      nodeCount: model.nodes.length,
-      edgeCount: model.edges.length,
-      rfNodeCount: rfNodes.length,
-      rfEdgeCount: rfEdges.length,
-      nodes: rfNodes,
-      edges: rfEdges
-    });
-
     // Wait for layout to settle before fitting; avoids blank/off-screen content on initial mount.
     // Only fit view once on initialization
     const first = requestAnimationFrame(() => {
@@ -219,6 +331,37 @@ function ModelCanvasInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flowInstance]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const hasModifier = event.metaKey || event.ctrlKey;
+      const isUndoShortcut = hasModifier && !event.shiftKey && key === 'z';
+      const isRedoShortcut = (hasModifier && event.shiftKey && key === 'z') || (event.ctrlKey && !event.metaKey && key === 'y');
+
+      if ((isUndoShortcut || isRedoShortcut) && isEditableTarget(event.target)) {
+        return;
+      }
+      if (isUndoShortcut) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+      if (isRedoShortcut) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (event.key !== 'Backspace') return;
+      if (isCanvasLocked) return;
+      if (!selected || (selected.kind !== 'node' && selected.kind !== 'edge')) return;
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+      deleteSelected();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deleteSelected, isCanvasLocked, selected, undo, redo]);
+
   return (
     <ReactFlow
       nodes={rfNodes}
@@ -228,14 +371,32 @@ function ModelCanvasInner() {
       fitView
       fitViewOptions={{ padding: 0.16 }}
       onInit={setFlowInstance}
+      nodesDraggable={!isCanvasLocked}
+      nodesConnectable={!isCanvasLocked}
+      elementsSelectable
       onNodeClick={(_, node) => setSelected({ kind: 'node', id: node.id })}
       onEdgeClick={(_, edge) => setSelected({ kind: 'edge', id: edge.id })}
       onPaneClick={() => setSelected(null)}
       onConnect={onConnect}
-      onNodeDrag={(_, node) => updateNodePosition(node.id, node.position.x, node.position.y)}
-      onNodeDragStop={(_, node) => updateNodePosition(node.id, node.position.x, node.position.y)}
+      onNodeDrag={(_, node) => {
+        if (isCanvasLocked) return;
+        updateNodePosition(node.id, node.position.x, node.position.y);
+      }}
+      onNodeDragStop={(_, node) => {
+        if (isCanvasLocked) return;
+        commitNodePosition(node.id, node.position.x, node.position.y);
+      }}
       style={{ width: '100%', height: '100%', background: '#f7f8fb' }}
     >
+      <Panel position="top-center" className="canvas-components-panel">
+        <CanvasComponentsBar />
+      </Panel>
+      {showXmlModel && (
+        <Panel position="top-right" className="canvas-xml-panel">
+          <div className="canvas-xml-panel-title">XML Model</div>
+          <pre className="canvas-xml-content">{xmlModel}</pre>
+        </Panel>
+      )}
       {showMinimap && <MiniMap pannable zoomable />}
       <Controls />
       <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="#b9c1cf" />
@@ -245,7 +406,7 @@ function ModelCanvasInner() {
 
 export function ModelCanvas() {
   return (
-    <div className="canvas-shell" data-testid="model-canvas" style={{ position: 'absolute', inset: 0 }}>
+    <div className="canvas-shell" data-testid="model-canvas" style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ReactFlowProvider>
         <ModelCanvasInner />
       </ReactFlowProvider>

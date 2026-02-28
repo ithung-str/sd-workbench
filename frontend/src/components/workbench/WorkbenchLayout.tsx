@@ -16,6 +16,7 @@ export function WorkbenchLayout() {
     showMinimap,
     toggleLeftRail,
     toggleRightRail,
+    openRightRail,
     toggleFunctionInternals,
     toggleMinimap,
   } = useUIStore();
@@ -159,7 +160,7 @@ export function WorkbenchLayout() {
               <span className={`chevron ${leftRailCollapsed ? 'right' : 'left'}`} />
             </button>
           </div>
-          {!leftRailCollapsed && <PalettePanel />}
+          {!leftRailCollapsed && <PalettePanel onSelectOutlineNode={openRightRail} />}
         </aside>
 
         <main className="canvas-column">

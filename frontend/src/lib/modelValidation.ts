@@ -35,7 +35,7 @@ export function localValidate(model: ModelDocument): ValidationIssue[] {
     }
   }
   for (const node of model.nodes) {
-    if (node.type === 'text' || node.type === 'cloud') {
+    if (node.type === 'text' || node.type === 'cloud' || node.type === 'cld_symbol') {
       continue;
     }
     if (!node.name.trim()) {

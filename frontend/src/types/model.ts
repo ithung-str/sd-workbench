@@ -59,7 +59,19 @@ export type CloudNode = {
   position: Position;
 };
 
-export type NodeModel = StockNode | AuxNode | FlowNode | LookupNode | TextNode | CloudNode;
+export type CldSymbol = '+' | '-' | '||' | 'R' | 'B';
+export type CldLoopDirection = 'clockwise' | 'counterclockwise';
+
+export type CldSymbolNode = {
+  id: string;
+  type: 'cld_symbol';
+  symbol: CldSymbol;
+  loop_direction?: CldLoopDirection;
+  name?: string;
+  position: Position;
+};
+
+export type NodeModel = StockNode | AuxNode | FlowNode | LookupNode | TextNode | CloudNode | CldSymbolNode;
 
 export type GlobalVariable = {
   id: string;
@@ -81,11 +93,21 @@ export type ModelDocument = {
     author?: string;
     created_at?: string;
     updated_at?: string;
+    analysis?: AnalysisConfig;
   };
   nodes: NodeModel[];
   edges: EdgeModel[];
   outputs: string[];
   global_variables?: GlobalVariable[];
+};
+
+export type FunctionCatalogEntry = {
+  key: string;
+  displayName: string;
+  template: string;
+  category: 'Math' | 'Time Inputs' | 'Delays/Smoothing' | 'Stochastic' | 'Lookups' | 'Other Detected';
+  description: string;
+  source: 'core' | 'vensim';
 };
 
 export type SimConfig = {
@@ -127,7 +149,184 @@ export type SimulateResponse = {
     source_format?: 'vensim-mdl';
     import_id?: string;
     time?: ImportedTimeSettings;
+    execution_mode?: 'pysd' | 'mixed' | 'blocked';
+    fallback_activations?: string[];
   };
+};
+
+export type SimConfigOverride = {
+  start?: number;
+  stop?: number;
+  dt?: number;
+  return_step?: number;
+};
+
+export type ScenarioOverrides = {
+  sim_config?: SimConfigOverride;
+  outputs?: string[];
+  params?: Record<string, number | string>;
+};
+
+export type ScenarioDefinition = {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  tags?: string[];
+  status?: 'baseline' | 'policy' | 'draft' | 'archived';
+  overrides?: ScenarioOverrides;
+};
+
+export type DashboardCardType = 'kpi' | 'line' | 'table';
+
+export type DashboardCard = {
+  id: string;
+  type: DashboardCardType;
+  title: string;
+  variable: string;
+  order: number;
+  table_rows?: number;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+};
+
+export type DashboardDefinition = {
+  id: string;
+  name: string;
+  description?: string;
+  cards: DashboardCard[];
+};
+
+export type AnalysisConfig = {
+  scenarios: ScenarioDefinition[];
+  defaults?: {
+    baseline_scenario_id?: string;
+    active_dashboard_id?: string;
+  };
+  dashboards?: DashboardDefinition[];
+};
+
+export type ScenarioRunResult = {
+  scenario_id: string;
+  scenario_name: string;
+  series: Record<string, number[]>;
+  warnings: ValidationIssue[];
+  metadata: SimulateResponse['metadata'];
+};
+
+export type ScenarioRunError = {
+  scenario_id: string;
+  scenario_name: string;
+  code: string;
+  message: string;
+};
+
+export type BatchSimulateRequest = {
+  model: ModelDocument;
+  sim_config: SimConfig;
+  scenarios: ScenarioDefinition[];
+  include_baseline?: boolean;
+};
+
+export type BatchSimulateResponse = {
+  ok: boolean;
+  runs: ScenarioRunResult[];
+  errors: ScenarioRunError[];
+};
+
+export type SensitivityParameterRange = {
+  name: string;
+  low: number;
+  high: number;
+  steps: number;
+};
+
+export type OATSensitivityPoint = {
+  parameter: string;
+  value: number;
+  metric_value: number;
+};
+
+export type OATSensitivityItem = {
+  parameter: string;
+  baseline_metric: number;
+  min_metric: number;
+  max_metric: number;
+  swing: number;
+  normalized_swing: number;
+  points: OATSensitivityPoint[];
+};
+
+export type OATSensitivityRequest = {
+  model: ModelDocument;
+  sim_config: SimConfig;
+  scenarios: ScenarioDefinition[];
+  scenario_id?: string;
+  output: string;
+  metric: 'final' | 'max' | 'min' | 'mean';
+  parameters: SensitivityParameterRange[];
+};
+
+export type OATSensitivityResponse = {
+  ok: boolean;
+  scenario_id: string;
+  output: string;
+  metric: 'final' | 'max' | 'min' | 'mean';
+  baseline_metric: number;
+  items: OATSensitivityItem[];
+};
+
+export type MonteCarloParameter = {
+  name: string;
+  distribution: 'uniform' | 'normal' | 'triangular';
+  min?: number;
+  max?: number;
+  mean?: number;
+  stddev?: number;
+  mode?: number;
+};
+
+export type MonteCarloSample = {
+  run_index: number;
+  metric_value: number;
+  params: Record<string, number>;
+};
+
+export type MonteCarloQuantiles = {
+  p05: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p95: number;
+  mean: number;
+  stddev: number;
+  min: number;
+  max: number;
+};
+
+export type MonteCarloRequest = {
+  model: ModelDocument;
+  sim_config: SimConfig;
+  scenarios: ScenarioDefinition[];
+  scenario_id?: string;
+  output: string;
+  metric: 'final' | 'max' | 'min' | 'mean';
+  runs: number;
+  seed: number;
+  parameters: MonteCarloParameter[];
+};
+
+export type MonteCarloResponse = {
+  ok: boolean;
+  scenario_id: string;
+  output: string;
+  metric: 'final' | 'max' | 'min' | 'mean';
+  runs: number;
+  seed: number;
+  quantiles: MonteCarloQuantiles;
+  samples: MonteCarloSample[];
 };
 
 export type ImportedVariableSummary = {
@@ -153,6 +352,21 @@ export type ImportedTimeSettings = {
   saveper?: number;
 };
 
+export type VensimImportGapItem = {
+  kind: 'variable' | 'edge' | 'equation' | 'construct' | 'layout';
+  symbol: string;
+  reason: string;
+  severity: 'info' | 'warning' | 'error';
+};
+
+export type VensimImportGapSummary = {
+  dropped_variables: number;
+  dropped_edges: number;
+  unparsed_equations: number;
+  unsupported_constructs: string[];
+  samples: VensimImportGapItem[];
+};
+
 export type VensimCapabilityReport = {
   tier: 'T0' | 'T1' | 'T2' | 'T3' | 'T4';
   supported: string[];
@@ -160,6 +374,27 @@ export type VensimCapabilityReport = {
   unsupported: string[];
   detected_functions: string[];
   detected_time_settings: string[];
+  details?: VensimFunctionCapabilityDetail[];
+  families?: VensimFamilyCapabilitySummary[];
+};
+
+export type VensimFunctionCapabilityDetail = {
+  function: string;
+  family: string;
+  support_mode: 'pysd' | 'native_fallback' | 'unsupported';
+  pysd_support: 'yes' | 'partial' | 'no';
+  deterministic: boolean;
+  dimensional: boolean;
+  count: number;
+  severity: 'info' | 'warning' | 'error';
+  notes: string;
+};
+
+export type VensimFamilyCapabilitySummary = {
+  family: string;
+  functions: string[];
+  highest_severity: 'info' | 'warning' | 'error';
+  support_mode: 'pysd' | 'native_fallback' | 'unsupported';
 };
 
 export type VensimImportResponse = {
@@ -175,6 +410,7 @@ export type VensimImportResponse = {
     dimensions?: ImportedDimensionSummary[];
     time_settings?: ImportedTimeSettings;
     dependency_graph?: { edges: [string, string][] };
+    import_gaps?: VensimImportGapSummary;
   };
 };
 
@@ -193,3 +429,51 @@ export type VensimSimulateRequest = {
 };
 
 export type VensimSimulateResponse = SimulateResponse;
+
+export type VensimDiagnosticsResponse = {
+  ok: boolean;
+  import_id: string;
+  capabilities: VensimCapabilityReport;
+  warnings: ValidationIssue[];
+  errors: ValidationIssue[];
+  import_gaps?: VensimImportGapSummary;
+};
+
+export type VensimPresetLoadStatus = 'ok' | 'partial' | 'failed';
+
+export type VensimParityReadinessResponse = {
+  ok: boolean;
+  import_id: string;
+  readiness: 'green' | 'yellow' | 'red';
+  reasons: string[];
+};
+
+export type VensimBatchSimulateRequest = {
+  import_id: string;
+  sim_config?: VensimSimConfigOverride;
+  scenarios: ScenarioDefinition[];
+  include_baseline?: boolean;
+  outputs?: string[];
+};
+
+export type VensimOATSensitivityRequest = {
+  import_id: string;
+  sim_config?: VensimSimConfigOverride;
+  scenarios: ScenarioDefinition[];
+  scenario_id?: string;
+  output: string;
+  metric: 'final' | 'max' | 'min' | 'mean';
+  parameters: SensitivityParameterRange[];
+};
+
+export type VensimMonteCarloRequest = {
+  import_id: string;
+  sim_config?: VensimSimConfigOverride;
+  scenarios: ScenarioDefinition[];
+  scenario_id?: string;
+  output: string;
+  metric: 'final' | 'max' | 'min' | 'mean';
+  runs: number;
+  seed: number;
+  parameters: MonteCarloParameter[];
+};

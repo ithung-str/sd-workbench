@@ -69,6 +69,38 @@ export const supplyChainModel: ModelDocument = {
   id: 'supply_chain',
   name: 'Supply Chain',
   version: 1,
+  metadata: {
+    analysis: {
+      scenarios: [
+        {
+          id: 'baseline',
+          name: 'Baseline',
+          status: 'baseline',
+          color: '#1b6ca8',
+          overrides: { params: {}, outputs: [], sim_config: {} },
+        },
+      ],
+      dashboards: [
+        {
+          id: 'dashboard_supply_chain_ops',
+          name: 'Supply Chain Ops',
+          description: 'Operational snapshot for inventory and throughput',
+          cards: [
+            { id: 'card_raw_materials_kpi', type: 'kpi', title: 'Raw Materials', variable: 'raw_materials', order: 1, x: 24, y: 24, w: 264, h: 156 },
+            { id: 'card_wip_kpi', type: 'kpi', title: 'Work in Progress', variable: 'work_in_progress', order: 2, x: 312, y: 24, w: 264, h: 156 },
+            { id: 'card_finished_goods_kpi', type: 'kpi', title: 'Finished Goods', variable: 'finished_goods', order: 3, x: 600, y: 24, w: 264, h: 156 },
+            { id: 'card_production_line', type: 'line', title: 'Production Trend', variable: 'production', order: 4, x: 24, y: 204, w: 576, h: 336 },
+            { id: 'card_shipments_line', type: 'line', title: 'Shipments Trend', variable: 'shipments', order: 5, x: 624, y: 204, w: 576, h: 336 },
+            { id: 'card_completion_table', type: 'table', title: 'Completion (Recent)', variable: 'completion', order: 6, table_rows: 10, x: 24, y: 564, w: 576, h: 372 },
+          ],
+        },
+      ],
+      defaults: {
+        baseline_scenario_id: 'baseline',
+        active_dashboard_id: 'dashboard_supply_chain_ops',
+      },
+    },
+  },
   nodes: [
     // Stocks
     { id: 'stock_raw_materials', type: 'stock', name: 'raw_materials', label: 'Raw Materials', equation: 'purchasing - production', initial_value: 50, position: { x: 250, y: 180 } },

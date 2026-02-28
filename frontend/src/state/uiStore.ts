@@ -1,20 +1,30 @@
 import { create } from 'zustand';
+import type { MfaMissingValueRule, MfaTimeUnit } from '../lib/mfaExport';
 
 type UIState = {
   leftRailCollapsed: boolean;
   rightRailCollapsed: boolean;
   showFunctionInternals: boolean;
   showMinimap: boolean;
+  showXmlModel: boolean;
   bottomTrayExpanded: boolean;
   bottomTrayHeight: number;
   selectedMfaTimestamp: number | null;
+  mfaTimeAnchorDate: string;
+  mfaTimeUnit: MfaTimeUnit;
+  mfaMissingValueRule: MfaMissingValueRule;
   toggleLeftRail: () => void;
   toggleRightRail: () => void;
+  openRightRail: () => void;
   toggleFunctionInternals: () => void;
   toggleMinimap: () => void;
+  toggleXmlModel: () => void;
   toggleBottomTray: () => void;
   setBottomTrayHeight: (height: number) => void;
   setSelectedMfaTimestamp: (timestamp: number | null) => void;
+  setMfaTimeAnchorDate: (anchorDate: string) => void;
+  setMfaTimeUnit: (timeUnit: MfaTimeUnit) => void;
+  setMfaMissingValueRule: (rule: MfaMissingValueRule) => void;
 };
 
 export const useUIStore = create<UIState>((set) => ({
@@ -22,15 +32,24 @@ export const useUIStore = create<UIState>((set) => ({
   rightRailCollapsed: false,
   showFunctionInternals: false,
   showMinimap: false,
+  showXmlModel: false,
   bottomTrayExpanded: true,
   bottomTrayHeight: 230,
   selectedMfaTimestamp: null,
+  mfaTimeAnchorDate: '',
+  mfaTimeUnit: 'day',
+  mfaMissingValueRule: 'carry_forward',
   toggleLeftRail: () => set((s) => ({ leftRailCollapsed: !s.leftRailCollapsed })),
   toggleRightRail: () => set((s) => ({ rightRailCollapsed: !s.rightRailCollapsed })),
+  openRightRail: () => set(() => ({ rightRailCollapsed: false })),
   toggleFunctionInternals: () => set((s) => ({ showFunctionInternals: !s.showFunctionInternals })),
   toggleMinimap: () => set((s) => ({ showMinimap: !s.showMinimap })),
+  toggleXmlModel: () => set((s) => ({ showXmlModel: !s.showXmlModel })),
   toggleBottomTray: () => set((s) => ({ bottomTrayExpanded: !s.bottomTrayExpanded })),
   setBottomTrayHeight: (height) =>
     set(() => ({ bottomTrayHeight: Math.max(160, Math.min(560, Math.round(height))) })),
   setSelectedMfaTimestamp: (timestamp) => set(() => ({ selectedMfaTimestamp: timestamp })),
+  setMfaTimeAnchorDate: (anchorDate) => set(() => ({ mfaTimeAnchorDate: anchorDate })),
+  setMfaTimeUnit: (timeUnit) => set(() => ({ mfaTimeUnit: timeUnit })),
+  setMfaMissingValueRule: (rule) => set(() => ({ mfaMissingValueRule: rule })),
 }));

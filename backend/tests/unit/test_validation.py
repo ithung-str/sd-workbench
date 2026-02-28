@@ -124,3 +124,59 @@ def test_rejects_unsupported_ast_nodes():
     model = _model(data)
     errors, _ = validate_semantics(model)
     assert any(e.code == "UNSUPPORTED_EXPRESSION_FEATURE" for e in errors)
+
+
+def test_accepts_cloud_nodes_in_schema():
+    data = dict(BASE_MODEL)
+    data["nodes"] = [
+        {
+            "id": "c1",
+            "type": "cloud",
+            "position": {"x": 0, "y": 0},
+        },
+        dict(BASE_MODEL["nodes"][0]),
+        dict(BASE_MODEL["nodes"][1]),
+    ]
+    model = _model(data)
+    errors, _ = validate_structure(model)
+    assert all(e.code != "UNKNOWN_EDGE_SOURCE" for e in errors)
+
+
+def test_accepts_dashboard_metadata_in_analysis_schema():
+    data = dict(BASE_MODEL)
+    data["metadata"] = {
+        "analysis": {
+            "scenarios": [
+                {
+                    "id": "baseline",
+                    "name": "Baseline",
+                    "status": "baseline",
+                    "color": "#1b6ca8",
+                    "overrides": {"params": {}, "outputs": [], "sim_config": {}},
+                }
+            ],
+            "dashboards": [
+                {
+                    "id": "dashboard_supply_chain_ops",
+                    "name": "Supply Chain Ops",
+                    "cards": [
+                        {
+                            "id": "card_inventory_kpi",
+                            "type": "kpi",
+                            "title": "Inventory",
+                            "variable": "stock",
+                            "order": 1,
+                        }
+                    ],
+                }
+            ],
+            "defaults": {
+                "baseline_scenario_id": "baseline",
+                "active_dashboard_id": "dashboard_supply_chain_ops",
+            },
+        }
+    }
+    model = _model(data)
+    assert model.metadata is not None
+    assert model.metadata.analysis is not None
+    assert model.metadata.analysis.dashboards[0].id == "dashboard_supply_chain_ops"

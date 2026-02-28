@@ -1,4 +1,10 @@
 import type {
+  BatchSimulateRequest,
+  BatchSimulateResponse,
+  MonteCarloRequest,
+  MonteCarloResponse,
+  OATSensitivityRequest,
+  OATSensitivityResponse,
   AuxNode,
   ModelDocument,
   SimulateRequest,
@@ -6,11 +12,17 @@ import type {
   ValidateResponse,
   ValidationIssue,
   VensimImportResponse,
+  VensimBatchSimulateRequest,
+  VensimDiagnosticsResponse,
+  VensimParityReadinessResponse,
+  VensimOATSensitivityRequest,
+  VensimMonteCarloRequest,
   VensimSimulateRequest,
   VensimSimulateResponse,
 } from '../types/model';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const VENSIM_IMPORT_TIMEOUT_MS = 30_000;
 
 async function parseJson<T>(res: Response): Promise<T> {
   const body = await res.json();
@@ -25,8 +37,17 @@ async function parseJson<T>(res: Response): Promise<T> {
 
 function modelForBackend(model: ModelDocument): ModelDocument {
   const { global_variables: _globals, ...base } = model;
+  const semanticNodes = base.nodes.filter((node) => node.type !== 'cld_symbol');
+  const semanticIds = new Set(semanticNodes.map((node) => node.id));
+  const semanticEdges = base.edges.filter((edge) => semanticIds.has(edge.source) && semanticIds.has(edge.target));
   const globals = model.global_variables ?? [];
-  if (globals.length === 0) return base;
+  if (globals.length === 0) {
+    return {
+      ...base,
+      nodes: semanticNodes,
+      edges: semanticEdges,
+    };
+  }
   const globalNodes: AuxNode[] = globals.map((variable, idx) => ({
     id: `global_${variable.id || idx}`,
     type: 'aux',
@@ -38,7 +59,8 @@ function modelForBackend(model: ModelDocument): ModelDocument {
   }));
   return {
     ...base,
-    nodes: [...base.nodes, ...globalNodes],
+    nodes: [...semanticNodes, ...globalNodes],
+    edges: semanticEdges,
   };
 }
 
@@ -67,14 +89,58 @@ export async function simulateModel(req: SimulateRequest): Promise<SimulateRespo
   return parseJson(res);
 }
 
+export async function simulateScenarioBatch(req: BatchSimulateRequest): Promise<BatchSimulateResponse> {
+  const normalized = modelForBackend(req.model);
+  const res = await fetch(`${API_BASE}/api/models/scenarios/simulate-batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...req, model: normalized }),
+  });
+  return parseJson(res);
+}
+
+export async function runOATSensitivity(req: OATSensitivityRequest): Promise<OATSensitivityResponse> {
+  const normalized = modelForBackend(req.model);
+  const res = await fetch(`${API_BASE}/api/models/sensitivity/oat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...req, model: normalized }),
+  });
+  return parseJson(res);
+}
+
+export async function runMonteCarlo(req: MonteCarloRequest): Promise<MonteCarloResponse> {
+  const normalized = modelForBackend(req.model);
+  const res = await fetch(`${API_BASE}/api/models/sensitivity/monte-carlo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...req, model: normalized }),
+  });
+  return parseJson(res);
+}
+
 export async function importVensimFile(file: File): Promise<VensimImportResponse> {
   const form = new FormData();
   form.append('file', file);
-  const res = await fetch(`${API_BASE}/api/vensim/import`, {
-    method: 'POST',
-    body: form,
-  });
-  return parseJson(res);
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), VENSIM_IMPORT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE}/api/vensim/import`, {
+      method: 'POST',
+      body: form,
+      signal: controller.signal,
+    });
+    return parseJson(res);
+  } catch (error: unknown) {
+    const name = typeof error === 'object' && error !== null && 'name' in error ? String((error as { name?: string }).name) : '';
+    if (name === 'AbortError') {
+      throw { errors: [{ message: `Vensim import timed out after ${Math.floor(VENSIM_IMPORT_TIMEOUT_MS / 1000)}s` }] };
+    }
+    const message = error instanceof Error ? error.message : 'Failed to reach backend';
+    throw { errors: [{ message: `Vensim import request failed: ${message}` }] };
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export async function simulateImportedVensim(req: VensimSimulateRequest): Promise<VensimSimulateResponse> {
@@ -83,6 +149,43 @@ export async function simulateImportedVensim(req: VensimSimulateRequest): Promis
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
   });
+  return parseJson(res);
+}
+
+export async function simulateImportedVensimBatch(req: VensimBatchSimulateRequest): Promise<BatchSimulateResponse> {
+  const res = await fetch(`${API_BASE}/api/vensim/scenarios/simulate-batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  return parseJson(res);
+}
+
+export async function runVensimOATSensitivity(req: VensimOATSensitivityRequest): Promise<OATSensitivityResponse> {
+  const res = await fetch(`${API_BASE}/api/vensim/sensitivity/oat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  return parseJson(res);
+}
+
+export async function runVensimMonteCarlo(req: VensimMonteCarloRequest): Promise<MonteCarloResponse> {
+  const res = await fetch(`${API_BASE}/api/vensim/sensitivity/monte-carlo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  return parseJson(res);
+}
+
+export async function getVensimDiagnostics(importId: string): Promise<VensimDiagnosticsResponse> {
+  const res = await fetch(`${API_BASE}/api/vensim/import/${importId}/diagnostics`);
+  return parseJson(res);
+}
+
+export async function getVensimParityReadiness(importId: string): Promise<VensimParityReadinessResponse> {
+  const res = await fetch(`${API_BASE}/api/vensim/import/${importId}/parity-readiness`);
   return parseJson(res);
 }
 

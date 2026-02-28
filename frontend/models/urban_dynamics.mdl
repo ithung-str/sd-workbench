@@ -1,0 +1,832 @@
+assessed value=(housing assessed value+business assessed value)
+
+attract migr factor=1
+
+attract migr mult=underemp arr mob mult*
+        underemp housing mult*
+        public expenditure mult*
+        underemp job mult*
+        underemp hous prog mult*
+        attract migr factor
+
+Attract Migr Mult Perc=INTEG((attract migr mult-Attract Migr Mult Perc)/
+            attract migr mult perc table,1)
+
+attract migr mult perc table=20
+
+business assessed value=
+      new enterprise assessed value*New Enterprise+
+      maturre business assessed value*Mature Business+
+      declining industry assessed value*Declining Industry
+
+business decline mult=business decline mult tab(
+             1.44*LN(enterprise multiplier))
+
+business decline mult tab(-3,-2,-1,0,1,2,3,
+2,1.8,1.5,1,0.7,0.5,0.4)
+
+Declining Industry=INTEG((mature business decline-
+        declining industry demise),100)
+
+declining industry assessed value=100
+
+declining industry construction factor=0.3
+
+declining industry decline factor=1
+
+declining industry demise=(declining industry demise norm*
+       Declining Industry*declining industry demise mult)+
+       declining industry demolition program
+
+declining industry demise mult=
+        declining industry from enterprise mult*
+        declining industry from land mult*
+        declining industry decline factor
+
+declining industry demise norm=0.03
+
+declining industry demolition program=
+       declining industry demolition rate*Declining Industry*
+       IF THEN ELSE(Time >= SWITCH TIME 7,1,0)
+
+declining industry demolition rate=GAME(0)
+
+declining industry from enterprise mult=
+       declining industry from enterprise mult tab(
+             1.44*LN(enterprise multiplier))
+
+declining industry from enterprise mult tab(-3,-2,-1,0,1,2,3,
+0.4,0.5,0.7,1,1.6,2.4,4)
+
+declining industry from land mult=declining industry from land mult tab(
+            land fraction occupied)
+
+declining industry from land mult tab(0.8,0.85,0.9,0.95,1,
+1,1.2,1.6,2.2,6)
+
+declining industry labor=10
+
+declining industry management=1
+
+enterprise decline mult=enterprise decline mult tab(
+           1.44*LN(enterprise multiplier))
+
+enterprise decline mult tab(-3,-2,-1,0,1,2,3,
+2,1.8,1.5,1,0.7,0.5,0.5)
+
+enterprise factor=1
+
+enterprise growth mult=enterprise growth mult tab(
+            new enterprise growth rate)
+
+enterprise growth mult tab(-0.1,-0.05,0,0.05,0.1,0.15,
+0.2,0.6,1,1.4,1.8,2.2)
+
+enterprise labor job mult=enterprise labor job mult tab(Labor Ratio Perc)
+
+enterprise labor job mult tab(0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,
+0,0.05,0.15,0.4,1,1.5,1.7,1.8,1.8)
+
+enterprise land mult=enterprise land mult tab(land fraction occupied)
+
+enterprise land mult tab(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,
+1,1.15,1.3,1.4,1.45,1.4,1.3,1,0.7,0.4,0)
+
+enterprise manager prof job mult=enterprise manager prof job mult tab(
+            manager job ratio)
+
+enterprise manager prof job mult tab(0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,
+0.1,0.15,0.3,0.5,1,1.4,1.7,1.9,2)
+
+enterprise multiplier=enterprise manager prof job mult*
+        enterprise land mult*
+        enterprise labor job mult*
+        enterprise tax mult*
+        enterprise growth mult*
+        enterprise factor
+
+enterprise tax mult=enterprise tax mult tab(1.44*LN(tax ratio))
+
+enterprise tax mult tab(-2,-1,0,1,2,3,4,
+1.3,1.2,1,0.8,0.5,0.25,0.1)
+
+FINAL TIME=250
+
+housing assessed value=
+       premium housing assessed value*Premium Housing+
+       worker housing assessed value*Worker Housing+
+       underemp housing assessed value*Underemp Housing
+
+housing units total=Premium Housing+Worker Housing+Underemp Housing
+
+INITIAL TIME = 0
+
+Labor=INTEG((underemp to labor+labor birth-labor to manager+
+           labor arrival-labor departure-labor to underemp),14000)
+
+labor arrival=labor arrival normal*Labor*
+        Labor Arrival Mult Perc
+
+labor arrival factor=1
+
+labor arrival housing mult=labor arrival housing mult tab(
+         labor housing ratio)
+
+labor arrival housing mult tab(0,0.5,1,1.5,2,2.5,3,
+1.3,1.2,1,0.5,0.2,0.1,0.05)
+
+labor arrival jobs mult=labor arrival jobs mult tab(labor ratio)
+
+labor arrival jobs mult tab(0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,
+2.6,2.6,2.4,1.8,1,0.4,0.2,0.1,0.05)
+
+labor arrival mult=labor arrival jobs mult*labor arrival underemp mult*
+             labor arrival tax mult*labor arrival housing mult*
+             labor arrival factor
+
+Labor Arrival Mult Perc=INTEG((labor arrival mult-Labor Arrival Mult Perc)
+           /labor arrival mult perc tab,1)
+
+labor arrival mult perc tab=15
+
+labor arrival normal=0.03
+
+labor arrival tax mult=labor arrival tax mult tab(1.44*LN(tax ratio))
+
+labor arrival tax mult tab(-2,0,2,4,
+1.2,1,0.7,0.3)
+
+labor arrival underemp mult=labor arrival underemp mult Tab(labor underemp ratio)
+
+labor arrival underemp mult Tab(0,1,2,3,4,5,
+0.4,0.8,1,1.2,1.3,1.3)
+
+labor birth=Labor*labor birth rate
+
+labor birth rate=0.01
+
+labor construction ratio=labor construction ratio tab(labor ratio)
+
+labor construction ratio tab(0,0.5,1,1.5,2,
+0,0.5,0.9,1.1,1.15)
+
+labor daparture mult=labor daparture mult tab(1.44*LN(labor arrival mult))
+
+labor daparture mult tab(-3,-2,-1,0,1,2,3,
+8,4,2,1,0.5,0.25,0.125)
+
+labor daparture normal=0.02
+
+labor departure=labor daparture normal*Labor*labor daparture mult
+
+labor desired construct=premium housing construct desired*
+             premium housing constr lab+
+             worker housing const des*
+             worker housing constr lab+
+               new enterprise construction desired*
+               new enterprise constr lab+
+            low cost housing constr des*
+             low cost housing constr lab
+
+labor desired industry=New Enterprise*new enterprise labor+
+    Mature Business*mature business labor+
+    Declining Industry*declining industry labor
+
+labor edu mult=labor edu mult tab(tax per cap ratio)
+
+labor edu mult tab(0,0.5,1,1.5,2,2.5,3,
+0.2,0.7,1,1.3,1.5,1.6,1.7)
+
+labor family size=6
+
+labor housing ratio=(Labor*labor family size)/(Worker Housing*
+            worker housing pop density)
+
+labor jobs=labor desired construct+labor desired industry
+
+labor layoff frac=labor layoff frac Tab(labor ratio)
+
+labor layoff frac Tab(0,0.5,1,1.5,2,
+0,0.01,0.03,0.1,0.3)
+
+labor mob fact=1
+
+labor mob mult=manage supply mult*manage labor mult*
+            labor edu mult*labor mob fact
+
+Labor Mob Mult Perc=INTEG((labor mob mult-Labor Mob Mult Perc)/
+        labor mob mult perc time,1)
+
+labor mob mult perc time=15
+
+labor ratio=Labor/labor jobs
+
+Labor Ratio Perc=INTEG((labor ratio-Labor Ratio Perc)/
+              labor ratio perception time,1)
+
+labor ratio perception time=5
+
+labor supply mult=labor supply mult tab(labor ratio)
+
+labor supply mult tab(0,0.5,1,1.5,2,
+2.4,2,1,0.4,0.2)
+
+labor to manager=labor to manager norm*Labor*
+         Labor Mob Mult Perc+labor training prog
+
+labor to manager norm=0.02
+
+labor to underemp=Labor*labor layoff frac
+
+labor training prog=LABOR TRAINING RATE*Labor*
+         IF THEN ELSE(Time >= SWITCH TIME 2,1,0)
+
+LABOR TRAINING RATE=0
+
+labor underemp mult tab(0,1,2,3,4,5,
+0.2,0.7,1,1.2,1.3,1.4)
+
+labor underemp ratio=Labor/Underemployed
+
+labor unedermp mult=labor underemp mult tab(labor underemp ratio)
+
+land fraction occupied=(housing units total*land per house+
+          production units total*land per production unit)/
+           TOTAL LAND AREA
+
+land per house=0.1
+
+land per production unit=0.2
+
+low cost hous prog=low cost housing constr des*labor construction ratio
+
+low cost housing constr des=
+      low cost housing prog coeff*Underemployed*worker housing land mult*
+      IF THEN ELSE(Time >= SWITCH TIME 10,1,0)
+
+low cost housing constr lab=0.6
+
+low cost housing prog coeff=GAME(0)
+
+manage labor mult=manage labor mult tab(manager labor ratio)
+
+manage labor mult tab(0,0.05,0.1,0.15,0.2,
+0.2,0.7,1,1.2,1.3)
+
+manage supply mult=manage supply mult tab(manager job ratio)
+
+manage supply mult tab(0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,
+2.3,2.2,2,1.6,1,0.5,0.2,0.1,0.05)
+
+manager job ratio=Manager Professional/Manager Prof Jobs
+
+manager labor ratio=Manager Professional/Labor
+
+manager prof arriv factor=1
+
+manager prof arriv hous mult=manager prof arriv housing mult tab
+          (manager prof hous ratio)
+
+manager prof arriv housing mult tab(0,0.5,1,1.5,2,2.5,3,
+1.3,1.2,1,0.5,0.2,0.1,0.05)
+
+manager prof arriv job mult=manager prof arriv job mult tab(manager job ratio)
+
+manager prof arriv job mult tab(0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,
+2.7,2.6,2.4,2,1,0.4,0.2,0.1,0.05)
+
+manager prof arriv mult=manager prof arriv job mult*
+        manager prof arriv pop mult*
+        manager prof arriv tax mult*
+        manager prof arriv hous mult*
+        manager prof arriv factor
+
+Manager Prof Arriv Mult Perc=
+    INTEG((manager prof arriv mult-Manager Prof Arriv Mult Perc)/
+        manager prof arriv mult perc time,1)
+
+manager prof arriv mult perc time=10
+
+manager prof arriv pop mult=manager prof arriv pop mult tab(
+               manager prof ratio)
+
+manager prof arriv pop mult tab(0,0.02,0.04,0.06,0.08,0.1,
+0.3,0.7,1,1.2,1.3,1.3)
+
+manager prof arriv tax mult=manager prof arriv tax mult tab(
+             1.44*LN(tax ratio))
+
+manager prof arriv tax mult tab(-2,0,2,4,
+1.4,1,0.7,0.3)
+
+manager prof arrival norm=0.03
+
+manager prof arrivals=manager prof arrival norm*Manager Professional*
+        Manager Prof Arriv Mult Perc
+
+manager prof birth=Manager Professional*manager prof birth rate
+
+manager prof birth rate=0.0075
+
+manager prof depart=manager prof depart norm*Manager Professional*
+            manager prof depart mult
+
+manager prof depart mult=manager prof depart mult tab(1.44*LN(manager prof arriv mult))
+
+manager prof depart mult tab(-3,-2,-1,0,1,2,3,
+8,4,2,1,0.5,0.25,0.125)
+
+manager prof depart norm=0.02
+
+manager prof family size=5
+
+manager prof hous ratio=(Manager Professional*manager prof family size)/
+        (Premium Housing*premium housing pop dens)
+
+Manager Prof Jobs=(New Enterprise*new enterprise management)+
+            (Mature Business*mature business management)+
+            (Declining Industry*declining industry management)
+
+manager prof ratio=Manager Professional/(Labor+Underemployed)
+
+Manager Professional=INTEG((labor to manager+manager prof birth+
+        manager prof arrivals-manager prof depart),3900)
+
+Mature Business=INTEG((new enterprise decline-mature business decline),1000)
+
+mature business construction factor=0.5
+
+mature business decline=mature business decline norm*Mature Business*
+              business decline mult
+
+mature business decline norm=0.05
+
+mature business labor=15
+
+mature business management=2
+
+maturre business assessed value=300
+
+New Enterprise=INTEG((new enterprise Construction-
+       new enterprise decline),200)
+
+new enterprise assessed value=500
+
+New Enterprise Average=INTEG((New Enterprise-New Enterprise Average)/
+        new enterprise average time,New Enterprise*
+               (1-new enterprise growth rate initial*
+              new enterprise average time))
+
+new enterprise average time=10
+
+new enterprise constr lab=20
+
+NEW ENTERPRISE CONSTR RATE=GAME(0)
+
+new enterprise Construction=new enterprise construction desired*
+             labor construction ratio
+
+new enterprise construction desired=new enterprise construction norm*
+       (new enterprise construction factor*New Enterprise+
+        mature business construction factor*Mature Business+
+        declining industry construction factor*Declining Industry)*
+        enterprise multiplier+new enterprise construction program
+
+new enterprise construction factor=1
+
+new enterprise construction norm=0.05
+
+new enterprise construction program=
+    NEW ENTERPRISE CONSTR RATE*production units total*
+    enterprise land mult*
+    IF THEN ELSE(Time >= SWITCH TIME 6,1,0)
+
+new enterprise decline=new enterprise decline normal*New Enterprise*
+       enterprise decline mult
+
+new enterprise decline normal=0.08
+
+new enterprise growth rate=(New Enterprise-New Enterprise Average)/
+      (New Enterprise Average*new enterprise average time)
+
+new enterprise growth rate initial=0.03
+
+new enterprise labor=20
+
+new enterprise management=4
+
+percent underemp = 100 * Underemployed*underemp family size/population
+
+population=Manager Professional*manager prof family size+
+          Labor*labor family size+
+          Underemployed*underemp family size
+
+Premium Housing=INTEG((premium housing contruction-
+                  premium housing obsolescence),5000)
+
+premium housing adeq mult=premium housing adeq mult tab(manager prof hous ratio)
+
+premium housing adeq mult tab(0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,
+0,0.001,0.01,0.2,1,3,4.6,5.6,6)
+
+premium housing assessed value=30
+
+Premium Housing Average=INTEG((Premium Housing-Premium Housing Average)/
+              premium housing averate time,
+                 Premium Housing*(1-premium housing growth rate init*
+                  premium housing averate time))
+
+premium housing averate time=10
+
+premium housing const prog=
+     premium housing construction ratio*
+        Premium Housing*premium housing land mult*
+     IF THEN ELSE(Time >= SWITCH TIME 3,1,0)
+
+premium housing constr lab=2
+
+premium housing construct desired=(premium housing construction norm*
+            Premium Housing*premium housing mult)+
+            premium housing const prog
+
+premium housing construction norm=0.03
+
+premium housing construction ratio=0
+
+premium housing contruction=premium housing construct desired*
+          labor construction ratio
+
+premium housing enterprise mult=premium housing enterprise mult tab(
+           new enterprise growth rate)
+
+premium housing enterprise mult tab(-0.1,-0.05,0,0.05,0.1,0.15,
+0.2,0.6,1,1.4,1.8,2.2)
+
+premium housing factor=1
+
+premium housing growth mult=premium housing growth mult tab(
+           premium housing growth rate)
+
+premium housing growth mult tab(-0.1,-0.05,0,0.05,0.1,0.15,
+0.2,0.6,1,1.4,1.8,2.2)
+
+premium housing growth rate=(Premium Housing-Premium Housing Average)/
+            (Premium Housing Average*premium housing averate time)
+
+premium housing growth rate init=0.03
+
+premium housing land mult=premium housing land mult tab(land fraction occupied)
+
+premium housing land mult tab(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,
+0.4,0.9,1.3,1.6,1.8,1.9,1.8,1.4,0.7,0.2,0)
+
+premium housing mult=premium housing adeq mult*
+          premium housing land mult*
+          premium housing pop mult*
+          premium housing tax mult*
+          premium housing enterprise mult*
+          premium housing growth mult*
+          premium housing factor
+
+premium housing obsolescence=premium housing obsolescense normal*
+             Premium Housing*premium housing obsolescense mult
+
+premium housing obsolescense mult=premium housing obsolescense mult tab(
+                     1.44*LN(premium housing mult))
+
+premium housing obsolescense mult tab(-3,-2,-1,0,1,2,3,
+2.8,2.6,2,1,0.5,0.3,0.2)
+
+premium housing obsolescense normal=0.03
+
+premium housing pop dens=3
+
+premium housing pop mult=premium housing pop mult tab(manager prof ratio)
+
+premium housing pop mult tab(0,0.02,0.04,0.06,0.08,0.1,
+0.3,0.7,1,1.2,1.3,1.3)
+
+premium housing tax mult=premium housing tax mult tab(1.44*LN(tax ratio))
+
+premium housing tax mult tab(-2,0,2,4,
+1.2,1,0.7,0.3)
+
+production units total=New Enterprise+Mature Business+Declining Industry
+
+public exp mult tab(0,0.5,1,1.5,2,2.5,3,
+0.2,0.6,1,1.6,2.4,3.2,4)
+
+public expenditure mult=public exp mult tab(underemp ratio)
+
+SAVEPER=5
+
+slum housing abandomed mult tab(0,0.5,1,1.5,2,
+3.6,2,1,0.6,0.4)
+
+slum housing abandoned mult=slum housing abandomed mult tab(
+               underemp housing ratio)
+
+slum housing demolitin factor=1
+
+slum housing demolition=(slum housing demolition norm*
+         Underemp Housing*slum housing demolition mult)+
+          slum housing demolition program
+
+slum housing demolition mult=slum housing abandoned mult*
+          slum housing land mult*
+          slum housing demolitin factor
+
+slum housing demolition norm=0.02
+
+slum housing demolition program=
+        SLUM HOUSING DEMOLITION RATE*Underemp Housing*
+        IF THEN ELSE(Time >= SWITCH TIME 5,1,0)
+
+SLUM HOUSING DEMOLITION RATE=GAME(0)
+
+slum housing land mult=slum housing land mult tab(land fraction occupied)
+
+slum housing land mult tab(0.8,0.85,0.9,0.95,1,
+1,1.2,1.6,2.2,6)
+
+SWITCH TIME 1=0
+
+SWITCH TIME 10=0
+
+SWITCH TIME 2=0
+
+SWITCH TIME 3=0
+
+SWITCH TIME 4=0
+
+SWITCH TIME 5=0
+
+SWITCH TIME 6=0
+
+SWITCH TIME 7=0
+
+SWITCH TIME 8=0
+
+SWITCH TIME 9=0
+
+tax assessment indicated=tax needed/assessed value
+
+tax assessment norm=50
+
+tax collection mult=tax collection mult tab(labor underemp ratio)
+
+tax collection mult tab(0,0.5,1,1.5,2,2.5,3,
+2,1.6,1.3,1.1,1,0.9,0.8)
+
+tax collections=assessed value*tax assessment norm*tax ratio
+
+tax needed=(tax spending per manager*manager prof family size*
+            Manager Professional+
+           tax spending per labor*labor family size*Labor+
+            tax spending per underemp*underemp family size*Underemployed)*
+            tax collection mult
+
+tax per cap norm=250
+
+tax per cap ratio=((tax collections/population)+tax per cap subsidy)/
+           tax per cap norm
+
+tax per cap subsidy=tax per cap subsidy size*
+        IF THEN ELSE(Time >= SWITCH TIME 8,1,0)
+
+tax per cap subsidy size=0
+
+tax ratio=tax ratio table(1.44*LN(Tax Ratio Needed Perc))
+
+tax ratio needed=tax assessment indicated/tax assessment norm
+
+Tax Ratio Needed Perc=INTEG((tax ratio needed-Tax Ratio Needed Perc)/
+           tax ratio needed perception time,tax ratio needed)
+
+tax ratio needed perception time=30
+
+tax ratio table(-2,-1,0,1,2,3,4,
+0.3,0.5,1,1.8,2.8,3.6,4)
+
+tax spending per labor=200
+
+tax spending per manager=150
+
+tax spending per underemp=300
+
+TIME STEP=1
+
+TOTAL LAND AREA=100000
+
+underemp arr mob mult=underemp arr mob mult tab(underemp mobility)
+
+underemp arr mob mult tab(0,0.025,0.05,0.075,0.1,0.125,0.15,
+0.3,0.7,1,1.2,1.3,1.4,1.5)
+
+UNDEREMP ARRIVALS NORMAL=0.05
+
+underemp birth rate=0.015
+
+underemp births=Underemployed*underemp birth rate
+
+underemp depart mult tab(-3,-2,-1,0,1,2,3,
+8,4,2,1,0.5,0.25,0.125)
+
+underemp departures=underemp departures norm*Underemployed*
+             underemp departures mult
+
+underemp departures mult=underemp depart mult tab(1.44*LN(attract migr mult))
+
+underemp departures norm=0.02
+
+underemp edu mult=underemp edu mult tab(tax per cap ratio)
+
+underemp edu mult tab(0,0.5,1,1.5,2,2.5,3,
+0.2,0.7,1,1.3,1.5,1.6,1.7)
+
+underemp family size=8
+
+underemp fract working=underemp fract working tab(underemp ratio)
+
+underemp fract working tab(0,1,2,3,4,
+0.9,0.8,0.5,0.33,0.25)
+
+underemp hous mult table(0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,
+2.5,2.4,2.2,1.7,1,0.4,0.2,0.1,0.05)
+
+underemp hous prog mult=underemp hous prog mult tab(underemp hous prog rate)
+
+underemp hous prog mult tab(0,0.01,0.02,0.03,0.04,0.05,
+1,1.2,1.5,1.9,2.4,3)
+
+underemp hous prog rate=low cost hous prog/Underemployed
+
+Underemp Housing=INTEG(
+       (worker housing obsolescence+low cost hous prog-
+         slum housing demolition),1100)
+
+underemp housing assessed value=5
+
+underemp housing mult=underemp hous mult table(underemp housing ratio)
+
+underemp housing ratio=(Underemployed*underemp family size)/
+          (Underemp Housing*underemp pop density)
+
+underemp job mult=underemp job mult tab(underemp ratio)
+
+underemp job mult tab(0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,
+2,2,1.9,1.6,1,0.6,0.4,0.3,0.2,0.15,0.1,0.05,0.02)
+
+underemp job program coeff=GAME(0)
+
+underemp mob factor=1
+
+underemp mob mult=labor supply mult*labor unedermp mult*
+           underemp edu mult*underemp mob factor
+
+Underemp Mob Mult Perc=INTEG((underemp mob mult-Underemp Mob Mult Perc)/
+         underemp mob mult perc time,1)
+
+underemp mob mult perc time=10
+
+underemp mobility=Underemp to Labor Perc/Underemployed
+
+underemp mobility norm=0.1
+
+underemp pop density=12
+
+underemp ratio=Underemployed/underemployed jobs
+
+underemp to labor=(underemp mobility norm*
+        underemp working*Underemp Mob Mult Perc)+
+        underemp training prog
+
+underemp to labor net=underemp to labor-labor to underemp
+
+Underemp to Labor Perc=INTEG(
+            (underemp to labor-Underemp to Labor Perc)/
+              underemp to labor perc time,75)
+
+underemp to labor perc time=10
+
+underemp training prog=underemp training rate*Underemployed*
+           IF THEN ELSE(Time >= SWITCH TIME 1,1,0)
+
+underemp training rate=GAME(0)
+
+underemp working=Underemployed*underemp fract working
+
+Underemployed=INTEG((underemployed arrivals+underemp births+
+           labor to underemp-underemp departures-
+           underemp to labor),1200)
+
+underemployed arrivals=(Underemployed+Labor)*
+   UNDEREMP ARRIVALS NORMAL*Attract Migr Mult Perc
+
+underemployed crowding = 100*underemp housing ratio
+
+underemployed job program=
+        underemp job program coeff*Underemployed*
+        IF THEN ELSE(Time >= SWITCH TIME 9,1,0)
+
+underemployed jobs=labor jobs*underemployed labor job ratio+
+       underemployed job program
+
+underemployed labor job ratio=underemployed labor job ratio tab(labor ratio)
+
+underemployed labor job ratio tab(0,0.5,1,1.5,2,
+1.15,0.8,0.5,0.25,0.1)
+
+unemployment rate = 100 * (1 - (labor jobs + underemployed jobs + Manager Prof Jobs)/
+               (Labor + Manager Professional + Underemployed))
+
+Worker Housing=INTEG((premium housing obsolescence+
+         worker housing construction-worker housing obsolescence),21000)
+
+worker housing adequacy mult=worker housing adequacy mult tab(labor housing ratio)
+
+worker housing adequacy mult tab(0,0.25,0.5,0.75,1,1.25,1.5,1.75,2,
+0,0.05,0.1,0.3,1,1.8,2.4,2.8,3)
+
+worker housing assessed value=15
+
+Worker Housing Average=INTEG((Worker Housing-Worker Housing Average)/
+      worker housing average time,Worker Housing*
+           (1-worker housing growth rate initial*
+              worker housing average time))
+
+worker housing average time=10
+
+worker housing const des=(worker housing const norm*Worker Housing*
+            worker housing mult)+worker housing const prog
+
+worker housing const norm=0.03
+
+worker housing const prog=
+           WORKER HOUSING CONSTR RATIO*housing units total*
+           worker housing land mult*
+           IF THEN ELSE(Time >= SWITCH TIME 4,1,0)
+
+worker housing constr lab=1
+
+WORKER HOUSING CONSTR RATIO=0
+
+worker housing construction=worker housing const des*
+            labor construction ratio
+
+worker housing enterprise mult=worker housing enterprise mult tab(
+              new enterprise growth rate)
+
+worker housing enterprise mult tab(-0.2,-0.1,0,0.1,0.2,0.3,
+0.3,0.7,1,1.2,1.3,1.4)
+
+worker housing factor=1
+
+worker housing growth mult=worker housing growth mult tab(
+               worker housing growth rate)
+
+worker housing growth mult tab(-0.1,-0.05,0,0.05,0.1,0.15,
+0.2,0.6,1,1.4,1.8,2.2)
+
+worker housing growth rate=(Worker Housing-Worker Housing Average)/
+            (Worker Housing Average*worker housing average time)
+
+worker housing growth rate initial=0.03
+
+worker housing land mult=worker housing land mult tab(
+               land fraction occupied)
+
+worker housing land mult tab(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,
+0.4,0.9,1.3,1.6,1.8,1.9,1.8,1.4,0.7,0.2,0)
+
+worker housing mult=worker housing adequacy mult*
+        worker housing land mult*
+        worker housing underemp mult*
+        worker housing tax mult*
+        worker housing enterprise mult*
+        worker housing growth mult*
+        worker housing factor
+
+worker housing obsolescence=worker housing obsolescense norm*
+        Worker Housing*worker housing obsolescense mult
+
+worker housing obsolescense mult=worker housing obsolescense mult tab(
+          1.44*LN(worker housing mult))
+
+worker housing obsolescense mult tab(-3,-2,-1,0,1,2,3,
+2.2,2,1.6,1,0.7,0.5,0.4)
+
+worker housing obsolescense norm=0.02
+
+worker housing pop density=6
+
+worker housing tax mult=worker housing tax mult tab(1.44*LN(tax ratio))
+
+worker housing tax mult tab(-2,0,2,4,
+1.2,1,0.7,0.3)
+
+worker housing underemp mult=worker housing underemp mult tab(
+                    labor underemp ratio)
+
+worker housing underemp mult tab(0,1,2,3,4,5,
+0.5,0.8,1,1.2,1.3,1.3)

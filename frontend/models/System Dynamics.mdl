@@ -1,0 +1,104 @@
+{UTF-8}
+Budget  = A FUNCTION OF( )
+	~	
+	~		|
+
+budget allocated to A  = A FUNCTION OF( Budget,papers of A relative to papers of B)
+	~	
+	~		|
+
+budget allocated to B  = A FUNCTION OF( Budget,papers of A relative to papers of B)
+	~	
+	~		|
+
+papers of A relative to papers of B  = A FUNCTION OF( Papers of department A,Papers of department B\
+		)
+	~	
+	~		|
+
+Papers of department A  = A FUNCTION OF( budget allocated to A)
+	~	
+	~		|
+
+Papers of department B  = A FUNCTION OF( budget allocated to B)
+	~	
+	~		|
+
+********************************************************
+	.Control
+********************************************************~
+		Simulation Control Parameters
+	|
+
+FINAL TIME  = 100
+	~	Month
+	~	The final time for the simulation.
+	|
+
+INITIAL TIME  = 0
+	~	Month
+	~	The initial time for the simulation.
+	|
+
+SAVEPER  = 
+        TIME STEP 
+	~	Month [0,?]
+	~	The frequency with which output is stored.
+	|
+
+TIME STEP  = 1
+	~	Month [0,?]
+	~	The time step for the simulation.
+	|
+
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*View 1
+$192-192-192,0,Times New Roman|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|72,72,100,0
+10,1,Papers of department A,254,139,59,8,8,3,0,0,0,0,0,0
+10,2,Papers of department B,493,137,59,8,8,3,0,0,0,0,0,0
+10,3,papers of A relative to papers of B,370,231,50,14,8,3,0,0,0,0,0,0
+10,4,budget allocated to A,182,269,53,8,8,3,0,0,0,0,0,0
+10,5,budget allocated to B,570,260,53,8,8,3,0,0,0,0,0,0
+1,6,3,4,1,0,43,0,2,64,0,-1--1--1,|0||-1--1--1,1|(285,314)|
+1,7,4,1,1,0,43,0,2,65,0,-1--1--1,|0||-1--1--1,1|(187,176)|
+1,9,1,3,1,0,43,0,2,64,0,-1--1--1,|0||-1--1--1,1|(330,162)|
+12,10,2,268,224,16,16,8,7,0,16,-1,0,0,0,-1--1--1,0-0-0,|0|I|0-0-0
+Science and Money at Department A
+10,12,Budget,384,458,20,8,8,3,0,0,0,0,0,0
+1,13,12,4,1,0,43,0,2,64,0,-1--1--1,|0||-1--1--1,1|(245,386)|
+1,14,2,3,1,0,45,0,2,64,0,-1--1--1,|0||-1--1--1,1|(409,164)|
+1,15,3,5,1,0,45,0,2,64,0,-1--1--1,|0||-1--1--1,1|(435,288)|
+1,16,5,2,1,0,43,0,2,65,0,-1--1--1,|0||-1--1--1,1|(580,190)|
+12,17,2,268,224,23,23,4,7,0,16,-1,0,0,0,-1--1--1,0-0-0,|0|I|0-0-0
+Science and Money at Department A
+12,18,2,489,218,23,23,5,7,0,16,-1,0,0,0,-1--1--1,0-0-0,|0|I|0-0-0
+Science and Money at Department A
+1,19,12,5,1,0,43,0,2,64,0,-1--1--1,|0||-1--1--1,1|(539,349)|
+///---\\\
+:L<%^E!@
+9:Current
+22:$,Dollar,Dollars,$s
+22:Hour,Hours
+22:Month,Months
+22:Person,People,Persons
+22:Unit,Units
+22:Week,Weeks
+22:Year,Years
+22:Day,Days
+15:0,0,0,0,0,0
+19:100,0
+27:2,
+34:0,
+5:Budget
+35:Date
+36:YYYY-MM-DD
+37:2000
+38:1
+39:1
+40:2
+41:0
+42:1
+24:0
+25:0
+26:0

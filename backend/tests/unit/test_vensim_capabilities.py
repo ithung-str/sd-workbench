@@ -16,4 +16,14 @@ def test_detects_time_and_delay_step_features():
     assert "INITIAL TIME" in report.supported
     assert "STEP" in report.supported
     assert "DELAY3" in report.supported
-    assert report.tier in {"T0", "T1"}
+    assert report.tier in {"T2", "T3"}
+    assert len(report.details) >= 2
+    assert any(f.family == "dynamic" for f in report.families)
+    assert warnings == []
+
+
+def test_marks_unknown_functions_partial_warning():
+    text = "x = MAGIC_ADVANCED_FN(1,2)"
+    report, warnings = detect_capabilities(text)
+    assert "MAGIC_ADVANCED_FN" in report.partial
+    assert any(w.code == "VENSIM_UNKNOWN_FUNCTION" for w in warnings)
