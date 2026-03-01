@@ -14,6 +14,7 @@ import {
   validateModel,
 } from '../lib/api';
 import { firstFreeRect, resolveCardRect } from '../lib/dashboardLayout';
+import { computeAutoLayout } from '../lib/autoLayout';
 import { localValidate } from '../lib/modelValidation';
 import { blankModel, cloneModel, teacupModel } from '../lib/sampleModels';
 import type {
@@ -113,6 +114,10 @@ type EditorState = {
   commitNodePosition: (id: string, x: number, y: number) => void;
   addEdge: (edge: EdgeModel) => void;
   deleteSelected: () => void;
+  addDanglingEdge: (sourceId: string, sourceHandle: string | null, position: { x: number; y: number }) => void;
+  completeDanglingEdge: (phantomId: string, targetId: string) => void;
+  createFlowBetweenStocks: (sourceStockId: string, targetStockId: string) => void;
+  createFlowToCloud: (sourceStockId: string, dropPosition: { x: number; y: number }) => void;
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
@@ -154,6 +159,7 @@ type EditorState = {
   moveDashboardCard: (dashboardId: string, cardId: string, direction: 'up' | 'down') => void;
   deleteDashboardCard: (dashboardId: string, cardId: string) => void;
   setBackendHealthy: (value: boolean | null) => void;
+  autoOrganize: () => void;
 };
 
 function defaultValidation(): ValidateResponse {
@@ -217,7 +223,7 @@ function nextNodeDefaults(type: CanvasInsertNodeType, count: number): NodeModel 
     id: `aux_${n}`,
     type: 'aux',
     name: `aux_${n}`,
-    label: `Aux ${n}`,
+    label: `Variable ${n}`,
     equation: '0',
     position: { x: 220 + n * 40, y: 120 + n * 30 },
   };
@@ -656,6 +662,112 @@ export const useEditorStore = create<EditorState>((set, get) => {
         }
         const model = { ...state.model, edges: state.model.edges.filter((e) => e.id !== state.selected?.id) };
         return { model, selected: null };
+      });
+      const afterState = get();
+      pushHistory(before, snapshotFromState(afterState.model, afterState.selected));
+    },
+    addDanglingEdge: (sourceId, sourceHandle, position) => {
+      flushPendingCommit();
+      const before = snapshotFromState(get().model, get().selected);
+      const phantomId = `phantom_${Date.now()}`;
+      set((state) => {
+        const phantomNode: NodeModel = { id: phantomId, type: 'phantom', position };
+        const edge: EdgeModel = {
+          id: `e_${Date.now()}`,
+          type: 'influence',
+          source: sourceId,
+          target: phantomId,
+          source_handle: sourceHandle ?? undefined,
+          target_handle: undefined,
+        };
+        const model = {
+          ...state.model,
+          nodes: [...state.model.nodes, phantomNode],
+          edges: [...state.model.edges, edge],
+        };
+        return { model, localIssues: localValidate(model) };
+      });
+      const afterState = get();
+      pushHistory(before, snapshotFromState(afterState.model, afterState.selected));
+    },
+    completeDanglingEdge: (phantomId, targetId) => {
+      flushPendingCommit();
+      const before = snapshotFromState(get().model, get().selected);
+      set((state) => {
+        const edges = state.model.edges.map((e) =>
+          e.target === phantomId ? { ...e, target: targetId, target_handle: undefined } : e,
+        );
+        const nodes = state.model.nodes.filter((n) => n.id !== phantomId);
+        const model = { ...state.model, nodes, edges };
+        return { model, localIssues: localValidate(model) };
+      });
+      const afterState = get();
+      pushHistory(before, snapshotFromState(afterState.model, afterState.selected));
+    },
+    createFlowBetweenStocks: (sourceStockId, targetStockId) => {
+      flushPendingCommit();
+      const before = snapshotFromState(get().model, get().selected);
+      set((state) => {
+        const sourceStock = state.model.nodes.find((n) => n.id === sourceStockId);
+        const targetStock = state.model.nodes.find((n) => n.id === targetStockId);
+        if (!sourceStock || !targetStock) return {} as Partial<EditorState>;
+        const midX = (sourceStock.position.x + targetStock.position.x) / 2;
+        const midY = (sourceStock.position.y + targetStock.position.y) / 2;
+        const n = state.model.nodes.filter((nd) => nd.type === 'flow').length + 1;
+        const flowId = `flow_${Date.now()}`;
+        const flowNode: NodeModel = {
+          id: flowId,
+          type: 'flow',
+          name: `flow_${n}`,
+          label: `Flow ${n}`,
+          equation: '0',
+          source_stock_id: sourceStockId,
+          target_stock_id: targetStockId,
+          position: { x: midX, y: midY },
+        };
+        const edge1: EdgeModel = { id: `e_${Date.now()}_1`, type: 'flow_link', source: sourceStockId, target: flowId };
+        const edge2: EdgeModel = { id: `e_${Date.now()}_2`, type: 'flow_link', source: flowId, target: targetStockId };
+        const model = {
+          ...state.model,
+          nodes: [...state.model.nodes, flowNode],
+          edges: [...state.model.edges, edge1, edge2],
+        };
+        return { model, localIssues: localValidate(model) };
+      });
+      const afterState = get();
+      pushHistory(before, snapshotFromState(afterState.model, afterState.selected));
+    },
+    createFlowToCloud: (sourceStockId, dropPosition) => {
+      flushPendingCommit();
+      const before = snapshotFromState(get().model, get().selected);
+      set((state) => {
+        const sourceStock = state.model.nodes.find((n) => n.id === sourceStockId);
+        if (!sourceStock) return {} as Partial<EditorState>;
+        const midX = (sourceStock.position.x + dropPosition.x) / 2;
+        const midY = (sourceStock.position.y + dropPosition.y) / 2;
+        const n = state.model.nodes.filter((nd) => nd.type === 'flow').length + 1;
+        const cn = state.model.nodes.filter((nd) => nd.type === 'cloud').length + 1;
+        const flowId = `flow_${Date.now()}`;
+        const cloudId = `cloud_${Date.now()}`;
+        const cloudNode: NodeModel = { id: cloudId, type: 'cloud', position: dropPosition };
+        const flowNode: NodeModel = {
+          id: flowId,
+          type: 'flow',
+          name: `flow_${n}`,
+          label: `Flow ${n}`,
+          equation: '0',
+          source_stock_id: sourceStockId,
+          target_stock_id: cloudId,
+          position: { x: midX, y: midY },
+        };
+        const edge1: EdgeModel = { id: `e_${Date.now()}_1`, type: 'flow_link', source: sourceStockId, target: flowId };
+        const edge2: EdgeModel = { id: `e_${Date.now()}_2`, type: 'flow_link', source: flowId, target: cloudId };
+        const model = {
+          ...state.model,
+          nodes: [...state.model.nodes, cloudNode, flowNode],
+          edges: [...state.model.edges, edge1, edge2],
+        };
+        return { model, localIssues: localValidate(model) };
       });
       const afterState = get();
       pushHistory(before, snapshotFromState(afterState.model, afterState.selected));
@@ -1212,6 +1324,19 @@ export const useEditorStore = create<EditorState>((set, get) => {
           model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId),
         };
       });
+    },
+    autoOrganize: () => {
+      flushPendingCommit();
+      const before = snapshotFromState(get().model, get().selected);
+      const positions = computeAutoLayout(get().model);
+      set((state) => {
+        const nodes = state.model.nodes.map((n) => {
+          const pos = positions.find((p) => p.id === n.id);
+          return pos ? { ...n, position: { x: pos.x, y: pos.y } } : n;
+        });
+        return { model: { ...state.model, nodes }, localIssues: localValidate({ ...state.model, nodes }) };
+      });
+      pushHistory(before, snapshotFromState(get().model, get().selected));
     },
   };
 });

@@ -1,41 +1,122 @@
 import { BaseEdge, getBezierPath, type EdgeProps } from 'reactflow';
+import type { EdgeData } from '../../../lib/modelToReactFlow';
 
-export function FlowPipeEdge(props: EdgeProps) {
-  const angle = Math.atan2(props.targetY - props.sourceY, props.targetX - props.sourceX);
+function buildArrow(tipX: number, tipY: number, angle: number) {
   const arrowLength = 16;
   const arrowHalfWidth = 8.4;
-  const tipX = props.targetX;
-  const tipY = props.targetY;
-  const trimPadding = 1.5;
   const baseX = tipX - Math.cos(angle) * arrowLength;
   const baseY = tipY - Math.sin(angle) * arrowLength;
-  const trimmedTargetX = tipX - Math.cos(angle) * (arrowLength + trimPadding);
-  const trimmedTargetY = tipY - Math.sin(angle) * (arrowLength + trimPadding);
+  const leftX = baseX + Math.cos(angle + Math.PI / 2) * arrowHalfWidth;
+  const leftY = baseY + Math.sin(angle + Math.PI / 2) * arrowHalfWidth;
+  const rightX = baseX + Math.cos(angle - Math.PI / 2) * arrowHalfWidth;
+  const rightY = baseY + Math.sin(angle - Math.PI / 2) * arrowHalfWidth;
+  return { tipX, tipY, leftX, leftY, rightX, rightY };
+}
+
+function ArrowPolygon({ tipX, tipY, leftX, leftY, rightX, rightY }: ReturnType<typeof buildArrow>) {
+  return (
+    <polygon
+      points={`${tipX},${tipY} ${leftX},${leftY} ${rightX},${rightY}`}
+      fill="#ffffff"
+      stroke="#1c1c1f"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+  );
+}
+
+export function FlowPipeEdge(props: EdgeProps<EdgeData>) {
+  const waypoints = props.data?.waypoints;
+  const flowSign = props.data?.flowSign ?? 'positive';
+
+  const showTargetArrow = flowSign === 'positive' || flowSign === 'both';
+  const showSourceArrow = flowSign === 'negative' || flowSign === 'both';
+
+  if (waypoints && waypoints.length > 0) {
+    const allPoints = [
+      { x: props.sourceX, y: props.sourceY },
+      ...waypoints,
+      { x: props.targetX, y: props.targetY },
+    ];
+
+    const lastIdx = allPoints.length - 1;
+    const lastAngle = Math.atan2(
+      allPoints[lastIdx].y - allPoints[lastIdx - 1].y,
+      allPoints[lastIdx].x - allPoints[lastIdx - 1].x,
+    );
+    const firstAngle = Math.atan2(
+      allPoints[0].y - allPoints[1].y,
+      allPoints[0].x - allPoints[1].x,
+    );
+
+    const trimPadding = 17.5;
+    const trimmedTarget = showTargetArrow
+      ? {
+          x: allPoints[lastIdx].x - Math.cos(lastAngle) * trimPadding,
+          y: allPoints[lastIdx].y - Math.sin(lastAngle) * trimPadding,
+        }
+      : allPoints[lastIdx];
+
+    const trimmedSource = showSourceArrow
+      ? {
+          x: allPoints[0].x - Math.cos(firstAngle) * trimPadding,
+          y: allPoints[0].y - Math.sin(firstAngle) * trimPadding,
+        }
+      : allPoints[0];
+
+    const segments = allPoints.map((p, i) => {
+      if (i === 0) return `M ${trimmedSource.x} ${trimmedSource.y}`;
+      if (i === lastIdx) return `L ${trimmedTarget.x} ${trimmedTarget.y}`;
+      return `L ${p.x} ${p.y}`;
+    });
+    const path = segments.join(' ');
+
+    return (
+      <>
+        <BaseEdge path={path} style={{ stroke: '#1c1c1f', strokeWidth: 7, fill: 'none' }} />
+        <BaseEdge path={path} style={{ stroke: '#ffffff', strokeWidth: 4, fill: 'none' }} />
+        {showTargetArrow && <ArrowPolygon {...buildArrow(props.targetX, props.targetY, lastAngle)} />}
+        {showSourceArrow && <ArrowPolygon {...buildArrow(props.sourceX, props.sourceY, firstAngle)} />}
+      </>
+    );
+  }
+
+  // Default bezier path (no waypoints)
+  const angle = Math.atan2(props.targetY - props.sourceY, props.targetX - props.sourceX);
+  const reverseAngle = angle + Math.PI;
+  const trimPadding = 1.5;
+  const arrowLength = 16;
+
+  const trimmedTargetX = showTargetArrow
+    ? props.targetX - Math.cos(angle) * (arrowLength + trimPadding)
+    : props.targetX;
+  const trimmedTargetY = showTargetArrow
+    ? props.targetY - Math.sin(angle) * (arrowLength + trimPadding)
+    : props.targetY;
+
+  const trimmedSourceX = showSourceArrow
+    ? props.sourceX + Math.cos(angle) * (arrowLength + trimPadding)
+    : props.sourceX;
+  const trimmedSourceY = showSourceArrow
+    ? props.sourceY + Math.sin(angle) * (arrowLength + trimPadding)
+    : props.sourceY;
+
   const [path] = getBezierPath({
-    sourceX: props.sourceX,
-    sourceY: props.sourceY,
+    sourceX: trimmedSourceX,
+    sourceY: trimmedSourceY,
     sourcePosition: props.sourcePosition,
     targetX: trimmedTargetX,
     targetY: trimmedTargetY,
     targetPosition: props.targetPosition,
     curvature: 0.2,
   });
-  const leftX = baseX + Math.cos(angle + Math.PI / 2) * arrowHalfWidth;
-  const leftY = baseY + Math.sin(angle + Math.PI / 2) * arrowHalfWidth;
-  const rightX = baseX + Math.cos(angle - Math.PI / 2) * arrowHalfWidth;
-  const rightY = baseY + Math.sin(angle - Math.PI / 2) * arrowHalfWidth;
 
   return (
     <>
       <BaseEdge path={path} style={{ stroke: '#1c1c1f', strokeWidth: 7, fill: 'none' }} />
       <BaseEdge path={path} style={{ stroke: '#ffffff', strokeWidth: 4, fill: 'none' }} />
-      <polygon
-        points={`${tipX},${tipY} ${leftX},${leftY} ${rightX},${rightY}`}
-        fill="#ffffff"
-        stroke="#1c1c1f"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
+      {showTargetArrow && <ArrowPolygon {...buildArrow(props.targetX, props.targetY, angle)} />}
+      {showSourceArrow && <ArrowPolygon {...buildArrow(props.sourceX, props.sourceY, reverseAngle)} />}
     </>
   );
 }

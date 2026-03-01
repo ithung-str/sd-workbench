@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Stack, Title, Button, TextInput, Textarea, Group, Text, Paper, Alert } from '@mantine/core';
+import { Stack, Title, Button, TextInput, Textarea, Group, Text, Paper, Alert, Checkbox } from '@mantine/core';
 import { IconTrash, IconInfoCircle } from '@tabler/icons-react';
 import { collectGlobalVariableUsage } from '../../lib/globalVariableUsage';
 import { useEditorStore } from '../../state/editorStore';
@@ -12,6 +12,7 @@ function endpointLabel(node: NodeModel | undefined, fallback: string): string {
   if (!node) return fallback;
   if (node.type === 'text') return `Text (${node.id})`;
   if (node.type === 'cloud') return `Cloud (${node.id})`;
+  if (node.type === 'phantom') return `Phantom (${node.id})`;
   if (node.type === 'cld_symbol') return `${node.name?.trim() || `CLD ${node.symbol}`} (${node.id})`;
   return `${node.label} (${node.name})`;
 }
@@ -51,7 +52,7 @@ export function InspectorPanel() {
   const equationVariableNames = useMemo(
     () =>
       model.nodes
-        .flatMap((n) => (n.type === 'text' || n.type === 'cloud' || n.type === 'cld_symbol' ? [] : [n.name]))
+        .flatMap((n) => (n.type === 'text' || n.type === 'cloud' || n.type === 'cld_symbol' || n.type === 'phantom' ? [] : [n.name]))
         .concat((model.global_variables ?? []).map((v) => v.name))
         .filter(Boolean),
     [model.nodes, model.global_variables],
@@ -65,19 +66,19 @@ export function InspectorPanel() {
       if (edgeRow.target === node.id) neighborIds.add(edgeRow.source);
     }
     return model.nodes
-      .filter((n) => neighborIds.has(n.id) && n.id !== node.id && n.type !== 'text' && n.type !== 'cloud' && n.type !== 'cld_symbol')
-      .flatMap((n) => (n.type === 'text' || n.type === 'cloud' || n.type === 'cld_symbol' ? [] : [n.name]))
+      .filter((n) => neighborIds.has(n.id) && n.id !== node.id && n.type !== 'text' && n.type !== 'cloud' && n.type !== 'cld_symbol' && n.type !== 'phantom')
+      .flatMap((n) => (n.type === 'text' || n.type === 'cloud' || n.type === 'cld_symbol' || n.type === 'phantom' ? [] : [n.name]))
       .filter(Boolean);
   }, [model.edges, model.nodes, node]);
 
   const connectedUnits = useMemo(() => {
-    if (!node || node.type === 'text' || node.type === 'cloud' || node.type === 'cld_symbol') return [];
+    if (!node || node.type === 'text' || node.type === 'cloud' || node.type === 'cld_symbol' || node.type === 'phantom') return [];
     const rows: Array<{ id: string; edgeType: 'flow_link' | 'influence'; label: string; name: string; units?: string }> = [];
     for (const edgeRow of model.edges) {
       if (edgeRow.source !== node.id && edgeRow.target !== node.id) continue;
       const otherId = edgeRow.source === node.id ? edgeRow.target : edgeRow.source;
       const other = model.nodes.find((n) => n.id === otherId);
-      if (!other || other.type === 'text' || other.type === 'cloud' || other.type === 'cld_symbol') continue;
+      if (!other || other.type === 'text' || other.type === 'cloud' || other.type === 'cld_symbol' || other.type === 'phantom') continue;
       rows.push({
         id: `${edgeRow.id}-${other.id}`,
         edgeType: edgeRow.type,
@@ -213,6 +214,10 @@ export function InspectorPanel() {
     );
   }
 
+  if (node.type === 'phantom') {
+    return null;
+  }
+
   if (node.type === 'cld_symbol') {
     const cldChoices: Array<{ symbol: CldSymbol; label: string }> = [
       { symbol: '+', label: '+' },
@@ -332,24 +337,34 @@ export function InspectorPanel() {
       )}
 
       {node.type === 'stock' && (
-        <TextInput
-          label="Initial Value"
-          value={String(node.initial_value)}
-          onChange={(e) => {
-            const v = e.target.value;
-            const parsed = Number(v);
-            updateNode(node.id, { initial_value: Number.isFinite(parsed) && v.trim() !== '' ? parsed : v } as Partial<NodeModel>);
-          }}
-        />
+        <>
+          <TextInput
+            label="Initial Value"
+            value={String(node.initial_value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              const parsed = Number(v);
+              updateNode(node.id, { initial_value: Number.isFinite(parsed) && v.trim() !== '' ? parsed : v } as Partial<NodeModel>);
+            }}
+          />
+          <Checkbox
+            label="Show sparkline on canvas"
+            checked={!!node.show_graph}
+            onChange={(e) => updateNode(node.id, { show_graph: e.currentTarget.checked } as Partial<NodeModel>)}
+            size="xs"
+          />
+        </>
       )}
 
-      <EquationEditor
-        value={node.equation}
-        onChange={(equation) => updateNode(node.id, { equation })}
-        variableNames={equationVariableNames}
-        connectedVariableNames={connectedVariableNames}
-        availableFunctions={availableFunctions}
-      />
+      {node.type !== 'lookup' && (
+        <EquationEditor
+          value={node.equation}
+          onChange={(equation) => updateNode(node.id, { equation })}
+          variableNames={equationVariableNames}
+          connectedVariableNames={connectedVariableNames}
+          availableFunctions={availableFunctions}
+        />
+      )}
 
       {node.type === 'lookup' && (
         <LookupEditor node={node as LookupNode} onChange={(patch) => updateNode(node.id, patch)} />

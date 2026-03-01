@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import ReactFlow, { Background, BackgroundVariant, Controls, MarkerType, MiniMap, Panel, ReactFlowProvider, type Connection, type Edge, type EdgeTypes, type Node, type NodeTypes, type ReactFlowInstance } from 'reactflow';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReactFlow, { Background, BackgroundVariant, Controls, MarkerType, MiniMap, Panel, ReactFlowProvider, type Connection, type Edge, type EdgeTypes, type Node, type NodeTypes, type OnConnectStartParams, type ReactFlowInstance } from 'reactflow';
+import { createPortal } from 'react-dom';
 import 'reactflow/dist/style.css';
 
 import { useEditorStore } from '../../state/editorStore';
@@ -8,12 +9,17 @@ import type { NodeModel } from '../../types/model';
 import { AuxNodeView } from './nodes/AuxNode';
 import { FlowNodeView } from './nodes/FlowNode';
 import { LookupNodeView } from './nodes/LookupNode';
-import { StockNodeView } from './nodes/StockNode';
+import { StockNodeView, FLOW_DRAG_START_EVENT, EDGE_DRAG_START_EVENT } from './nodes/StockNode';
 import { TextNodeView } from './nodes/TextNode';
 import { CloudNodeView } from './nodes/CloudNode';
 import { CldSymbolNodeView } from './nodes/CldSymbolNode';
+import { PhantomNodeView } from './nodes/PhantomNode';
 import { FlowPipeEdge } from './edges/FlowPipeEdge';
+import { InfluenceEdge } from './edges/InfluenceEdge';
+import { FlowDragOverlay } from './FlowDragOverlay';
+import { NodePopover } from './NodePopover';
 import { CanvasComponentsBar } from '../workbench/CanvasComponentsBar';
+import { toReactFlowNodes, toReactFlowEdges } from '../../lib/modelToReactFlow';
 
 const nodeTypes: NodeTypes = {
   stockNode: StockNodeView,
@@ -23,171 +29,19 @@ const nodeTypes: NodeTypes = {
   textNode: TextNodeView,
   cloudNode: CloudNodeView,
   cldSymbolNode: CldSymbolNodeView,
+  phantomNode: PhantomNodeView,
 };
 
 const edgeTypes: EdgeTypes = {
   flowPipe: FlowPipeEdge,
+  influence: InfluenceEdge,
 };
-
-const FUNCTION_NAMES = ['PULSE TRAIN', 'STEP', 'RAMP', 'PULSE', 'DELAY1', 'DELAY3', 'DELAYN', 'DELAY', 'SMOOTH', 'SMOOTH3', 'SMOOTHN'];
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   const tag = target.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-}
-
-function xmlEscape(value: unknown): string {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function attrsXml(attrs: Record<string, unknown>): string {
-  const parts = Object.entries(attrs)
-    .filter(([, value]) => value !== undefined && value !== null)
-    .map(([key, value]) => `${key}="${xmlEscape(value)}"`);
-  return parts.length ? ` ${parts.join(' ')}` : '';
-}
-
-function modelToXml(model: { id: string; name: string; nodes: NodeModel[]; edges: Array<Record<string, unknown>> }): string {
-  const lines: string[] = [];
-  lines.push('<?xml version="1.0" encoding="UTF-8"?>');
-  lines.push(`<model${attrsXml({ id: model.id, name: model.name })}>`);
-  lines.push('  <nodes>');
-  for (const node of model.nodes) {
-    const base = { id: node.id, type: node.type, x: node.position.x, y: node.position.y };
-    if (node.type === 'text') {
-      lines.push(`    <node${attrsXml({ ...base, text: node.text })} />`);
-      continue;
-    }
-    if (node.type === 'cloud') {
-      lines.push(`    <node${attrsXml(base)} />`);
-      continue;
-    }
-    if (node.type === 'cld_symbol') {
-      lines.push(`    <node${attrsXml({ ...base, symbol: node.symbol, loop_direction: node.loop_direction, name: node.name })} />`);
-      continue;
-    }
-    if (node.type === 'stock') {
-      lines.push(
-        `    <node${attrsXml({
-          ...base,
-          name: node.name,
-          label: node.label,
-          equation: node.equation,
-          units: node.units,
-          initial_value: node.initial_value,
-        })} />`,
-      );
-      continue;
-    }
-    if (node.type === 'lookup') {
-      const points = node.points.map((point) => `${point.x}:${point.y}`).join(';');
-      lines.push(
-        `    <node${attrsXml({
-          ...base,
-          name: node.name,
-          label: node.label,
-          equation: node.equation,
-          units: node.units,
-          interpolation: node.interpolation,
-          points,
-        })} />`,
-      );
-      continue;
-    }
-    lines.push(
-      `    <node${attrsXml({
-        ...base,
-        name: node.name,
-        label: node.label,
-        equation: node.equation,
-        units: node.units,
-      })} />`,
-    );
-  }
-  lines.push('  </nodes>');
-  lines.push('  <edges>');
-  for (const edge of model.edges) {
-    lines.push(
-      `    <edge${attrsXml({
-        id: edge.id,
-        type: edge.type,
-        source: edge.source,
-        target: edge.target,
-        source_handle: edge.source_handle,
-        target_handle: edge.target_handle,
-      })} />`,
-    );
-  }
-  lines.push('  </edges>');
-  lines.push('</model>');
-  return lines.join('\n');
-}
-
-function maskFunctionInternals(equation: string): string {
-  const source = equation ?? '';
-  const upper = source.toUpperCase();
-  let out = '';
-  let i = 0;
-  while (i < source.length) {
-    let matched = false;
-    for (const fn of FUNCTION_NAMES) {
-      if (!upper.startsWith(fn, i)) continue;
-      const prev = i > 0 ? upper[i - 1] : '';
-      if (/[A-Z0-9_]/.test(prev)) continue;
-      let j = i + fn.length;
-      while (j < source.length && /\s/.test(source[j])) j += 1;
-      if (source[j] !== '(') continue;
-      let depth = 0;
-      let k = j;
-      for (; k < source.length; k += 1) {
-        const ch = source[k];
-        if (ch === '(') depth += 1;
-        if (ch === ')') {
-          depth -= 1;
-          if (depth === 0) break;
-        }
-      }
-      if (k >= source.length) break;
-      out += `${source.slice(i, i + fn.length)}(...)`;
-      i = k + 1;
-      matched = true;
-      break;
-    }
-    if (!matched) {
-      out += source[i];
-      i += 1;
-    }
-  }
-  return out;
-}
-
-function subtitleForNode(name: string, equation: string, showFunctionInternals: boolean): string {
-  const renderedEquation = showFunctionInternals ? equation : maskFunctionInternals(equation);
-  return `${name} = ${renderedEquation}`.slice(0, 64);
-}
-
-function nodeData(node: NodeModel, showFunctionInternals: boolean, flowDirectionById: Map<string, 'left' | 'right'>) {
-  if (node.type === 'text') {
-    return { text: node.text };
-  }
-  if (node.type === 'cloud') {
-    return {};
-  }
-  if (node.type === 'cld_symbol') {
-    return { symbol: node.symbol, loopDirection: node.loop_direction, name: node.name };
-  }
-  return {
-    label: node.label,
-    subtitle: showFunctionInternals ? subtitleForNode(node.name, String(node.equation), true) : '',
-    flowDirection: node.type === 'flow' ? flowDirectionById.get(node.id) ?? 'right' : undefined,
-  };
 }
 
 function ModelCanvasInner() {
@@ -198,135 +52,248 @@ function ModelCanvasInner() {
   const addModelEdge = useEditorStore((s) => s.addEdge);
   const updateNodePosition = useEditorStore((s) => s.updateNodePosition);
   const commitNodePosition = useEditorStore((s) => s.commitNodePosition);
+  const addDanglingEdge = useEditorStore((s) => s.addDanglingEdge);
+  const completeDanglingEdge = useEditorStore((s) => s.completeDanglingEdge);
+  const createFlowBetweenStocks = useEditorStore((s) => s.createFlowBetweenStocks);
+  const createFlowToCloud = useEditorStore((s) => s.createFlowToCloud);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
   const isCanvasLocked = useEditorStore((s) => s.isCanvasLocked);
+  const results = useEditorStore((s) => s.results);
   const showFunctionInternals = useUIStore((s) => s.showFunctionInternals);
   const showMinimap = useUIStore((s) => s.showMinimap);
-  const showXmlModel = useUIStore((s) => s.showXmlModel);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
-  const xmlModel = useMemo(() => modelToXml(model), [model]);
 
-  const rfNodes = useMemo<Node[]>(() => {
-    const byId = new Map(model.nodes.map((n) => [n.id, n]));
-    const flowDirectionById = new Map<string, 'left' | 'right'>();
-    for (const edge of model.edges) {
-      if (edge.type !== 'flow_link') continue;
-      const source = byId.get(edge.source);
-      const target = byId.get(edge.target);
-      if (!source || !target) continue;
+  const connectingFromRef = useRef<OnConnectStartParams | null>(null);
 
-      // flow -> stock means inflow toward stock
-      if (source.type === 'flow' && target.type === 'stock') {
-        flowDirectionById.set(source.id, target.position.x >= source.position.x ? 'right' : 'left');
-      }
-      // stock -> flow means outflow away from stock
-      if (source.type === 'stock' && target.type === 'flow') {
-        flowDirectionById.set(target.id, target.position.x >= source.position.x ? 'right' : 'left');
-      }
+  // Flow drag state (from stock + button)
+  const [flowDrag, setFlowDrag] = useState<{
+    sourceStockId: string;
+    cursorX: number;
+    cursorY: number;
+    sourceX: number;
+    sourceY: number;
+  } | null>(null);
+
+  // Popover state (double-click to edit)
+  const [popover, setPopover] = useState<{
+    nodeId: string;
+    screenX: number;
+    screenY: number;
+  } | null>(null);
+
+  // Edge drag state (from variable/lookup + button)
+  const [edgeDrag, setEdgeDrag] = useState<{
+    sourceNodeId: string;
+    cursorX: number;
+    cursorY: number;
+    sourceX: number;
+    sourceY: number;
+  } | null>(null);
+
+  const sparklineDataMap = useMemo(() => {
+    if (!results?.series) return undefined;
+    const map = new Map<string, number[]>();
+    for (const [name, values] of Object.entries(results.series)) {
+      map.set(name, values);
     }
+    return map;
+  }, [results]);
 
-    const nodes = model.nodes.map((node) => ({
-      id: node.id,
-      type:
-        node.type === 'stock'
-          ? 'stockNode'
-          : node.type === 'flow'
-            ? 'flowNode'
-          : node.type === 'lookup'
-              ? 'lookupNode'
-              : node.type === 'text'
-                ? 'textNode'
-              : node.type === 'cloud'
-                ? 'cloudNode'
-              : node.type === 'cld_symbol'
-                ? 'cldSymbolNode'
-              : 'auxNode',
-      position: node.position,
-      selected: selected?.kind === 'node' && selected.id === node.id,
-      data: nodeData(node, showFunctionInternals, flowDirectionById),
-    }));
-
-    return nodes;
-  }, [model.nodes, model.edges, selected, showFunctionInternals]);
-
-  const rfEdges = useMemo<Edge[]>(
-    () =>
-      model.edges.map((edge) => {
-        const isInfluence = edge.type === 'influence';
-        const isFlowLink = edge.type === 'flow_link';
-        return {
-          id: edge.id,
-          type: isFlowLink ? 'flowPipe' : undefined,
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.source_handle,
-          targetHandle: edge.target_handle,
-          animated: false,
-          interactionWidth: 24,
-          markerEnd: isInfluence
-            ? {
-                type: MarkerType.ArrowClosed,
-                color: '#8f9ab8',
-                width: 18,
-                height: 18,
-              }
-            : undefined,
-          style: isInfluence
-            ? { stroke: '#9ca8c6', strokeWidth: 1.2, strokeDasharray: '4 5' }
-            : { stroke: '#1c1c1f', strokeWidth: 4.2 },
-          label: '',
-          labelStyle: {
-            fill: isInfluence ? '#737f9f' : '#4b1b78',
-            fontSize: 10,
-            fontWeight: isInfluence ? 500 : 700,
-          },
-          labelBgStyle: {
-            fill: '#ffffff',
-            fillOpacity: 0.9,
-          },
-          labelBgPadding: [4, 2],
-          labelBgBorderRadius: 4,
-        };
-      }),
-    [model.edges],
+  const rfNodes = useMemo<Node[]>(
+    () => toReactFlowNodes(model.nodes, model.edges, selected, showFunctionInternals, undefined, sparklineDataMap),
+    [model.nodes, model.edges, selected, showFunctionInternals, sparklineDataMap],
   );
 
-  const onConnect = (connection: Connection) => {
-    if (isCanvasLocked) return;
-    if (!connection.source || !connection.target) return;
-    const source = model.nodes.find((n) => n.id === connection.source);
-    const target = model.nodes.find((n) => n.id === connection.target);
-    if (!source || !target) return;
-    if (
-      source.type === 'text' ||
-      source.type === 'cld_symbol' ||
-      target.type === 'text' ||
-      target.type === 'cld_symbol'
-    ) {
-      return;
-    }
-    addModelEdge({
-      id: `e_${Date.now()}`,
-      type: 'influence',
-      source: connection.source,
-      target: connection.target,
-      source_handle: connection.sourceHandle ?? undefined,
-      target_handle: connection.targetHandle ?? undefined,
-    });
-  };
+  const rfEdges = useMemo<Edge[]>(
+    () => toReactFlowEdges(model.edges, model.nodes),
+    [model.edges, model.nodes],
+  );
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      if (isCanvasLocked) return;
+      if (!connection.source || !connection.target) return;
+      const source = model.nodes.find((n) => n.id === connection.source);
+      const target = model.nodes.find((n) => n.id === connection.target);
+      if (!source || !target) return;
+
+      // If connecting from a phantom node, complete the dangling edge
+      if (source.type === 'phantom') {
+        completeDanglingEdge(source.id, connection.target);
+        return;
+      }
+      if (target.type === 'phantom') {
+        completeDanglingEdge(target.id, connection.source);
+        return;
+      }
+
+      if (
+        source.type === 'text' ||
+        source.type === 'cld_symbol' ||
+        target.type === 'text' ||
+        target.type === 'cld_symbol'
+      ) {
+        return;
+      }
+      addModelEdge({
+        id: `e_${Date.now()}`,
+        type: 'influence',
+        source: connection.source,
+        target: connection.target,
+        source_handle: connection.sourceHandle ?? undefined,
+        target_handle: connection.targetHandle ?? undefined,
+      });
+    },
+    [isCanvasLocked, model.nodes, addModelEdge, completeDanglingEdge],
+  );
+
+  const onConnectStart = useCallback((_: unknown, params: OnConnectStartParams) => {
+    connectingFromRef.current = params;
+  }, []);
+
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent) => {
+      const params = connectingFromRef.current;
+      connectingFromRef.current = null;
+      if (!params?.nodeId || !flowInstance || isCanvasLocked) return;
+
+      // Check if dropped on a node (in which case onConnect fires instead)
+      const target = event instanceof MouseEvent ? event.target : (event as TouchEvent).changedTouches?.[0]?.target;
+      if (target instanceof HTMLElement && target.closest('.react-flow__node')) return;
+
+      const clientX = event instanceof MouseEvent ? event.clientX : (event as TouchEvent).changedTouches?.[0]?.clientX;
+      const clientY = event instanceof MouseEvent ? event.clientY : (event as TouchEvent).changedTouches?.[0]?.clientY;
+      if (clientX == null || clientY == null) return;
+
+      const position = flowInstance.screenToFlowPosition({ x: clientX, y: clientY });
+      addDanglingEdge(params.nodeId, params.handleId, position);
+    },
+    [flowInstance, isCanvasLocked, addDanglingEdge],
+  );
+
+  // Flow drag from stock
+  useEffect(() => {
+    const onFlowDragStart = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || !flowInstance) return;
+      setFlowDrag({
+        sourceStockId: detail.stockId,
+        cursorX: detail.clientX,
+        cursorY: detail.clientY,
+        sourceX: detail.clientX,
+        sourceY: detail.clientY,
+      });
+    };
+    window.addEventListener(FLOW_DRAG_START_EVENT, onFlowDragStart);
+    return () => window.removeEventListener(FLOW_DRAG_START_EVENT, onFlowDragStart);
+  }, [flowInstance]);
+
+  // Edge drag from variable/lookup
+  useEffect(() => {
+    const onEdgeDragStart = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || !flowInstance) return;
+      setEdgeDrag({
+        sourceNodeId: detail.nodeId,
+        cursorX: detail.clientX,
+        cursorY: detail.clientY,
+        sourceX: detail.clientX,
+        sourceY: detail.clientY,
+      });
+    };
+    window.addEventListener(EDGE_DRAG_START_EVENT, onEdgeDragStart);
+    return () => window.removeEventListener(EDGE_DRAG_START_EVENT, onEdgeDragStart);
+  }, [flowInstance]);
+
+  useEffect(() => {
+    if (!flowDrag || !flowInstance) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      setFlowDrag((prev) => prev ? { ...prev, cursorX: e.clientX, cursorY: e.clientY } : null);
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      const dropPos = flowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      // Hit test: check if over a stock node
+      const nodes = flowInstance.getNodes();
+      const hitNode = nodes.find((n) => {
+        if (n.id === flowDrag.sourceStockId) return false;
+        if (n.type !== 'stockNode') return false;
+        const w = n.width ?? 120;
+        const h = n.height ?? 50;
+        return (
+          dropPos.x >= n.position.x &&
+          dropPos.x <= n.position.x + w &&
+          dropPos.y >= n.position.y &&
+          dropPos.y <= n.position.y + h
+        );
+      });
+      if (hitNode) {
+        createFlowBetweenStocks(flowDrag.sourceStockId, hitNode.id);
+      } else {
+        createFlowToCloud(flowDrag.sourceStockId, dropPos);
+      }
+      setFlowDrag(null);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [flowDrag, flowInstance, createFlowBetweenStocks, createFlowToCloud]);
+
+  // Edge drag mouse tracking (variable/lookup → influence edge)
+  useEffect(() => {
+    if (!edgeDrag || !flowInstance) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      setEdgeDrag((prev) => prev ? { ...prev, cursorX: e.clientX, cursorY: e.clientY } : null);
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      const dropPos = flowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      // Hit test: check if over any non-text, non-cloud node
+      const nodes = flowInstance.getNodes();
+      const hitNode = nodes.find((n) => {
+        if (n.id === edgeDrag.sourceNodeId) return false;
+        const rfType = n.type ?? '';
+        if (rfType === 'textNode' || rfType === 'cloudNode' || rfType === 'cldSymbolNode' || rfType === 'phantomNode') return false;
+        const w = n.width ?? 120;
+        const h = n.height ?? 50;
+        return (
+          dropPos.x >= n.position.x &&
+          dropPos.x <= n.position.x + w &&
+          dropPos.y >= n.position.y &&
+          dropPos.y <= n.position.y + h
+        );
+      });
+      if (hitNode) {
+        addModelEdge({
+          id: `e_${Date.now()}`,
+          type: 'influence',
+          source: edgeDrag.sourceNodeId,
+          target: hitNode.id,
+        });
+      } else {
+        addDanglingEdge(edgeDrag.sourceNodeId, null, dropPos);
+      }
+      setEdgeDrag(null);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [edgeDrag, flowInstance, addModelEdge, addDanglingEdge]);
 
   useEffect(() => {
     if (!flowInstance) return;
-
-    // Wait for layout to settle before fitting; avoids blank/off-screen content on initial mount.
-    // Only fit view once on initialization
     const first = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         flowInstance.fitView({ padding: 0.16 });
       });
     });
-
     return () => cancelAnimationFrame(first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flowInstance]);
@@ -362,45 +329,96 @@ function ModelCanvasInner() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [deleteSelected, isCanvasLocked, selected, undo, redo]);
 
+  const onNodeDragStop = useCallback(
+    (_: unknown, node: Node) => {
+      if (isCanvasLocked) return;
+      commitNodePosition(node.id, node.position.x, node.position.y);
+
+      // Phantom node overlap detection
+      const draggedNode = model.nodes.find((n) => n.id === node.id);
+      if (draggedNode?.type === 'phantom') {
+        const realNodes = model.nodes.filter(
+          (n) => n.type !== 'phantom' && n.type !== 'text' && n.type !== 'cloud' && n.type !== 'cld_symbol',
+        );
+        for (const real of realNodes) {
+          const dx = Math.abs(node.position.x - real.position.x);
+          const dy = Math.abs(node.position.y - real.position.y);
+          if (dx < 40 && dy < 40) {
+            completeDanglingEdge(node.id, real.id);
+            break;
+          }
+        }
+      }
+    },
+    [isCanvasLocked, commitNodePosition, model.nodes, completeDanglingEdge],
+  );
+
   return (
-    <ReactFlow
-      nodes={rfNodes}
-      edges={rfEdges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.16 }}
-      onInit={setFlowInstance}
-      nodesDraggable={!isCanvasLocked}
-      nodesConnectable={!isCanvasLocked}
-      elementsSelectable
-      onNodeClick={(_, node) => setSelected({ kind: 'node', id: node.id })}
-      onEdgeClick={(_, edge) => setSelected({ kind: 'edge', id: edge.id })}
-      onPaneClick={() => setSelected(null)}
-      onConnect={onConnect}
-      onNodeDrag={(_, node) => {
-        if (isCanvasLocked) return;
-        updateNodePosition(node.id, node.position.x, node.position.y);
-      }}
-      onNodeDragStop={(_, node) => {
-        if (isCanvasLocked) return;
-        commitNodePosition(node.id, node.position.x, node.position.y);
-      }}
-      style={{ width: '100%', height: '100%', background: '#f7f8fb' }}
-    >
-      <Panel position="top-center" className="canvas-components-panel">
-        <CanvasComponentsBar />
-      </Panel>
-      {showXmlModel && (
-        <Panel position="top-right" className="canvas-xml-panel">
-          <div className="canvas-xml-panel-title">XML Model</div>
-          <pre className="canvas-xml-content">{xmlModel}</pre>
+    <>
+      <ReactFlow
+        nodes={rfNodes}
+        edges={rfEdges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.16 }}
+        onInit={setFlowInstance}
+        nodesDraggable={!isCanvasLocked}
+        nodesConnectable={!isCanvasLocked}
+        elementsSelectable
+        onNodeClick={(_, node) => setSelected({ kind: 'node', id: node.id })}
+        onNodeDoubleClick={(event, node) => {
+          setSelected({ kind: 'node', id: node.id });
+          setPopover({ nodeId: node.id, screenX: (event as unknown as MouseEvent).clientX, screenY: (event as unknown as MouseEvent).clientY });
+        }}
+        onEdgeClick={(_, edge) => setSelected({ kind: 'edge', id: edge.id })}
+        onPaneClick={() => { setSelected(null); setPopover(null); }}
+        onConnect={onConnect}
+        onConnectStart={onConnectStart}
+        onConnectEnd={onConnectEnd}
+        onNodeDrag={(_, node) => {
+          if (isCanvasLocked) return;
+          updateNodePosition(node.id, node.position.x, node.position.y);
+        }}
+        onNodeDragStop={onNodeDragStop}
+        style={{ width: '100%', height: '100%', background: '#f7f8fb' }}
+      >
+        <Panel position="top-center" className="canvas-components-panel">
+          <CanvasComponentsBar />
         </Panel>
+        {showMinimap && <MiniMap pannable zoomable />}
+        <Controls />
+        <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="#b9c1cf" />
+      </ReactFlow>
+      {flowDrag && createPortal(
+        <FlowDragOverlay
+          sourceX={flowDrag.sourceX}
+          sourceY={flowDrag.sourceY}
+          cursorX={flowDrag.cursorX}
+          cursorY={flowDrag.cursorY}
+        />,
+        document.body,
       )}
-      {showMinimap && <MiniMap pannable zoomable />}
-      <Controls />
-      <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="#b9c1cf" />
-    </ReactFlow>
+      {edgeDrag && createPortal(
+        <FlowDragOverlay
+          sourceX={edgeDrag.sourceX}
+          sourceY={edgeDrag.sourceY}
+          cursorX={edgeDrag.cursorX}
+          cursorY={edgeDrag.cursorY}
+          isInfluence
+        />,
+        document.body,
+      )}
+      {popover && createPortal(
+        <NodePopover
+          nodeId={popover.nodeId}
+          screenX={popover.screenX}
+          screenY={popover.screenY}
+          onClose={() => setPopover(null)}
+        />,
+        document.body,
+      )}
+    </>
   );
 }
 

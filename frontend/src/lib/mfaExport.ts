@@ -294,7 +294,7 @@ export function buildMfaYamlDocument(
     if (edge?.target) {
       const targetNode = nodeById.get(edge.target);
       if (!targetNode) continue;
-      if (targetNode.type === 'text' || targetNode.type === 'cld_symbol') continue;
+      if (targetNode.type === 'text' || targetNode.type === 'cld_symbol' || targetNode.type === 'phantom') continue;
       targetId = targetNode.id;
       usedNodeIds.add(targetNode.id);
     } else {
@@ -323,6 +323,7 @@ export function buildMfaYamlDocument(
     ...Array.from(usedNodeIds)
       .map((id) => nodeById.get(id))
       .filter((node): node is NonNullable<typeof node> => Boolean(node))
+      .filter((node) => node.type !== 'phantom')
       .map((node) => {
         if (node.type === 'cloud') {
           return { id: node.id, title: node.id };

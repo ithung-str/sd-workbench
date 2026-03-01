@@ -95,6 +95,7 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
   const nodeOutlineLabel = (node: (typeof model.nodes)[number]): string => {
     if (node.type === 'text') return node.text;
     if (node.type === 'cloud') return 'Cloud';
+    if (node.type === 'phantom') return 'Phantom';
     if (node.type === 'cld_symbol') return node.name?.trim() || `CLD ${node.symbol}`;
     return node.label;
   };

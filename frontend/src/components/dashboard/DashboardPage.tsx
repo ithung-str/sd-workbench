@@ -180,7 +180,7 @@ export function DashboardPage() {
 
   const variableOptions = useMemo(() => {
     const nodeOptions = model.nodes
-      .filter((node) => node.type !== 'text' && node.type !== 'cloud' && node.type !== 'cld_symbol')
+      .filter((node) => node.type !== 'text' && node.type !== 'cloud' && node.type !== 'cld_symbol' && node.type !== 'phantom')
       .map((node) => ({ value: node.name, label: `${node.label} (${node.name})` }));
     const globalOptions = (model.global_variables ?? []).map((variable) => ({
       value: variable.name,

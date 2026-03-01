@@ -1,6 +1,31 @@
 export type Position = { x: number; y: number };
 export type LookupPoint = { x: number; y: number };
 
+export type WaypointPosition = { x: number; y: number };
+
+export type VisualStyle = {
+  fill?: string;
+  stroke?: string;
+  stroke_width?: number;
+  line_style?: string;
+  opacity?: number;
+  text_color?: string;
+  font_family?: string;
+  font_size?: number;
+  font_weight?: string | number;
+  text_align?: string;
+};
+
+export type LayoutMetadata = {
+  width?: number;
+  height?: number;
+  rotation?: number;
+  waypoints?: WaypointPosition[];
+  visible?: boolean;
+  locked?: boolean;
+  z_index?: number;
+};
+
 export type StockNode = {
   id: string;
   type: 'stock';
@@ -10,6 +35,11 @@ export type StockNode = {
   initial_value: number | string;
   units?: string;
   position: Position;
+  style?: VisualStyle;
+  layout?: LayoutMetadata;
+  show_graph?: boolean;
+  geo_x?: number;
+  geo_y?: number;
 };
 
 export type AuxNode = {
@@ -20,6 +50,8 @@ export type AuxNode = {
   equation: string;
   units?: string;
   position: Position;
+  style?: VisualStyle;
+  layout?: LayoutMetadata;
 };
 
 export type FlowNode = {
@@ -30,9 +62,14 @@ export type FlowNode = {
   equation: string;
   source_stock_id?: string;
   target_stock_id?: string;
+  flow_sign?: 'positive' | 'negative' | 'both';
   units?: string;
   position: Position;
+  style?: VisualStyle;
+  layout?: LayoutMetadata;
 };
+
+export type LookupInterpolation = 'linear' | 'step' | 'cubic' | 'exponential' | 's-curve';
 
 export type LookupNode = {
   id: string;
@@ -41,9 +78,13 @@ export type LookupNode = {
   label: string;
   equation: string; // input expression to evaluate on x-axis
   points: LookupPoint[];
-  interpolation?: 'linear';
+  interpolation?: LookupInterpolation;
+  formula?: string; // optional formula alternative to points, e.g. "sin(x)"
+  formula_range?: { min: number; max: number; steps: number }; // domain for formula evaluation
   units?: string;
   position: Position;
+  style?: VisualStyle;
+  layout?: LayoutMetadata;
 };
 
 export type TextNode = {
@@ -51,6 +92,13 @@ export type TextNode = {
   type: 'text';
   text: string;
   position: Position;
+  style?: VisualStyle;
+  layout?: LayoutMetadata;
+  annotation?: {
+    kind?: string;
+    title?: string;
+    note?: string;
+  };
 };
 
 export type CloudNode = {
@@ -71,7 +119,13 @@ export type CldSymbolNode = {
   position: Position;
 };
 
-export type NodeModel = StockNode | AuxNode | FlowNode | LookupNode | TextNode | CloudNode | CldSymbolNode;
+export type PhantomNode = {
+  id: string;
+  type: 'phantom';
+  position: Position;
+};
+
+export type NodeModel = StockNode | AuxNode | FlowNode | LookupNode | TextNode | CloudNode | CldSymbolNode | PhantomNode;
 
 export type GlobalVariable = {
   id: string;
@@ -81,8 +135,8 @@ export type GlobalVariable = {
 };
 
 export type EdgeModel =
-  | { id: string; type: 'influence'; source: string; target: string; source_handle?: string; target_handle?: string }
-  | { id: string; type: 'flow_link'; source: string; target: string; source_handle?: string; target_handle?: string };
+  | { id: string; type: 'influence'; source: string; target: string; source_handle?: string; target_handle?: string; style?: VisualStyle; layout?: LayoutMetadata }
+  | { id: string; type: 'flow_link'; source: string; target: string; source_handle?: string; target_handle?: string; style?: VisualStyle; layout?: LayoutMetadata };
 
 export type ModelDocument = {
   id: string;
@@ -177,7 +231,7 @@ export type ScenarioDefinition = {
   overrides?: ScenarioOverrides;
 };
 
-export type DashboardCardType = 'kpi' | 'line' | 'table';
+export type DashboardCardType = 'kpi' | 'line' | 'table' | 'map';
 
 export type DashboardCard = {
   id: string;
@@ -190,6 +244,7 @@ export type DashboardCard = {
   y?: number;
   w?: number;
   h?: number;
+  time_index?: number;
 };
 
 export type DashboardDefinition = {

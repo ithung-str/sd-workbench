@@ -1,5 +1,5 @@
 import { ActionIcon, Button, Group, Tooltip } from '@mantine/core';
-import { IconLock, IconLockOpen, IconPlus, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
+import { IconLayoutDistributeHorizontal, IconLock, IconLockOpen, IconPlus, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import { useReactFlow } from 'reactflow';
 import { useEditorStore } from '../../state/editorStore';
 
@@ -10,6 +10,7 @@ export function CanvasComponentsBar() {
   const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
   const isCanvasLocked = useEditorStore((s) => s.isCanvasLocked);
   const setCanvasLocked = useEditorStore((s) => s.setCanvasLocked);
+  const autoOrganize = useEditorStore((s) => s.autoOrganize);
   const isReadOnly = activeSimulationMode === 'vensim';
 
   return (
@@ -60,11 +61,8 @@ export function CanvasComponentsBar() {
         <Button variant="light" color="blue" size="xs" onClick={() => addNode('stock')} disabled={isReadOnly}>
           Stock
         </Button>
-        <Button variant="light" color="deepPurple" size="xs" onClick={() => addNode('flow')} disabled={isReadOnly}>
-          Flow
-        </Button>
         <Button variant="light" color="green" size="xs" onClick={() => addNode('aux')} disabled={isReadOnly}>
-          Aux
+          Variable
         </Button>
         <Button variant="light" color="orange" size="xs" onClick={() => addNode('lookup')} disabled={isReadOnly}>
           Look-up
@@ -74,6 +72,20 @@ export function CanvasComponentsBar() {
         </Button>
 
         <div className="canvas-components-divider" />
+
+        <Tooltip label="Auto-organize layout" withArrow>
+          <ActionIcon
+            variant="light"
+            color="gray"
+            size="md"
+            radius="sm"
+            aria-label="Auto-organize layout"
+            onClick={autoOrganize}
+            disabled={isReadOnly}
+          >
+            <IconLayoutDistributeHorizontal size={14} />
+          </ActionIcon>
+        </Tooltip>
 
         <Tooltip label="Add CLD marker (configure in Inspector)" withArrow>
           <Button

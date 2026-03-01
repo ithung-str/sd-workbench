@@ -1,0 +1,561 @@
+<InsightMakerModel>
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+    <Display name="Bottom Line" Note="" Type="Time Series" xAxis="Time (%u)" yAxis="" ThreeDimensional="false" Primitives="315,313,319" AutoAddPrimitives="false" ScatterplotOrder="X Primitive, Y Primitive" Image="Display" yAxis2="" Primitives2="" showMarkers="false" showLines="true" showArea="false" legendPosition="Top" id="3">
+      <mxCell style="roundImage;image=/builder/images/DisplayFull.png;" parent="1" vertex="1" visible="0">
+        <mxGeometry x="50" y="20" width="64" height="64" as="geometry" />
+      </mxCell>
+    </Display>
+    <Variable name="SS Al Demand-kg" Note="Al demand for Single Serving Coffee Pods (kg/pods)* (# of pods)" Equation="([kg/pod]*[Pods Produced - #])" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="191">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;fillColor=#C0C0C0;" parent="1" vertex="1">
+        <mxGeometry x="1890.1863421121839" y="65.74404345580751" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Variable name="kg/pod" Note="Amount of aluminum per pod (0.0035 kg/pod)" Equation="0.0035" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="211">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;fillColor=#C0C0C0;" parent="1" vertex="1">
+        <mxGeometry x="1870" y="64" width="140" height="52" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Setting Note="" Version="38" TimeLength="20" TimeStart="0" TimeStep="1" TimeUnits="Years" Units="" HiddenUIGroups="Validation,User Interface" SolutionAlgorithm="RK1" BackgroundColor="white" Throttle="1" Macros="" SensitivityPrimitives="" SensitivityRuns="50" SensitivityBounds="50, 80, 95, 100" SensitivityShowRuns="false" StyleSheet="{}" TimePause="0" OptimizerPrimitives="77,82" OptimizerGoalPrimitive="68" OptimizerGoal="Minimize" OptimizerGoalType="Integral of Value" OptimizerStepReduction="0.5" OptimizerMaxIterations="100" OptimizerRandomStarts="0" OptimizerGridStore="[{&quot;id&quot;:&quot;77&quot;,&quot;minBound&quot;:0,&quot;maxBound&quot;:1,&quot;desiredAccuracy&quot;:0.1},{&quot;id&quot;:&quot;82&quot;,&quot;minBound&quot;:0,&quot;maxBound&quot;:1,&quot;desiredAccuracy&quot;:0.1}]" version="39" id="2">
+      <mxCell parent="1" vertex="1" visible="0">
+        <mxGeometry x="20" y="20" width="80" height="40" as="geometry" />
+      </mxCell>
+    </Setting>
+    <Variable name="Pods Produced - #" Note="Based on the Pod Demand, production is 5% more to account for loss due to damage." Equation="[Pod Demand - #]*1.05&#xa;" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="55">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;" parent="1" vertex="1">
+        <mxGeometry x="1000.1863421121839" y="674.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Flow name="Production Expenses" Note="" FlowRate="[Material Expenditures - $]+[Labor Costs - $/pod]" OnlyPositive="true" TimeIndependent="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" id="63">
+      <mxCell style="vertical;startFill=0;fontFamily=Helvetica;fontSize=14;" parent="1" source="232" edge="1">
+        <mxGeometry x="275" y="325" width="100" height="100" as="geometry">
+          <mxPoint x="660" y="710" as="sourcePoint" />
+          <mxPoint x="1180" y="550" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Flow>
+    <Flow name="Capital Investments" Note="" FlowRate="[Investment - $]" OnlyPositive="true" TimeIndependent="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" id="64">
+      <mxCell style="flow;fontFamily=Helvetica;fontSize=14;startFill=0;" parent="1" source="248" edge="1">
+        <mxGeometry x="475" y="169" width="100" height="100" as="geometry">
+          <mxPoint x="475" y="269" as="sourcePoint" />
+          <mxPoint x="1435" y="649" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Flow>
+    <Variable name="Aluminum Expenditure - $" Note="" Equation="[Al - $/kg]*[SS Al Demand-kg]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="65">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;fillColor=#C0C0C0;" parent="1" vertex="1">
+        <mxGeometry x="1695.1863421121839" y="183.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Variable name="Coffee Expenditure - $" Note="($/kg)*(kg/pod)*(pods)=$ " Equation="[Coffee - $/kg]*[Coffee - kg/pod]*[Pods Produced - #]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="68">
+      <mxCell style="variable;fillColor=#993300;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;fontColor=#d4d4ff;" parent="1" vertex="1">
+        <mxGeometry x="1262.1863421121839" y="809.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Variable name="Coffee - $/kg" Note="The price of coffee per kg, as determined by the ratio of consumption and supply. ($3.00)" Equation="3" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="15" MinConstraint="4" ShowSlider="true" SliderMax="8" SliderMin="0" SliderStep="0.05" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" oldId="77" id="77">
+      <mxCell style="variable;fillColor=#FF6600;fontFamily=Helvetica;fontSize=14;fontColor=#000000;" parent="1" vertex="1">
+        <mxGeometry x="1120.1863421121839" y="859.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Variable name="Coffee - kg/pod" Note="Kilograms of coffee per pod (17.4 g/ pod)" Equation="0.0174" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" oldId="78" id="78">
+      <mxCell style="variable;fillColor=#993300;fontFamily=Helvetica;fontSize=14;fontColor=#d4d4ff;" parent="1" vertex="1">
+        <mxGeometry x="1402.1863421121839" y="870.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="79">
+      <mxCell style="link;fillColor=#993300;labelBackgroundColor=#993300;fontFamily=Helvetica;fontSize=14;fontColor=#d4d4ff;noEdgeStyle=1;orthogonal=1;" parent="1" source="77" target="68" edge="1">
+        <mxGeometry x="-918" y="404" width="100" height="100" as="geometry">
+          <mxPoint x="-918" y="504" as="sourcePoint" />
+          <mxPoint x="-818" y="404" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="1180" y="820" />
+          </Array>
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="80">
+      <mxCell style="link;fillColor=#993300;labelBackgroundColor=#993300;fontFamily=Helvetica;fontSize=14;fontColor=#d4d4ff;noEdgeStyle=1;orthogonal=1;" parent="1" source="78" target="68" edge="1">
+        <mxGeometry x="-918" y="404" width="100" height="100" as="geometry">
+          <mxPoint x="-918" y="504" as="sourcePoint" />
+          <mxPoint x="-818" y="404" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Cost Per Pack - 20 - $" Note="Price the consumer pays in the store. ($4.35)" Equation="4.35" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="10" SliderMin="0" SliderStep="0.01" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="82">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;fillColor=#FF6600;" parent="1" vertex="1">
+        <mxGeometry x="780.1863421121839" y="78.74404345580751" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="85">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;" parent="1" source="82" target="92" edge="1">
+        <mxGeometry x="-1344" y="-570" width="100" height="100" as="geometry">
+          <mxPoint x="-1344" y="-470" as="sourcePoint" />
+          <mxPoint x="-1114" y="-230" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Pods per Pack" Note="The number of coffee pods per package (20 pods/pack)" Equation="20" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="88">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;" parent="1" vertex="1">
+        <mxGeometry x="720.1863421121839" y="138.7440434558075" width="85" height="40" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="89">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;" parent="1" source="88" target="92" edge="1">
+        <mxGeometry x="-1344" y="-570" width="100" height="100" as="geometry">
+          <mxPoint x="-1344" y="-470" as="sourcePoint" />
+          <mxPoint x="-1044" y="-190" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Rev per pod - $" Note="Revenue per coffee pod purchased (Cons Cost / Pods per pack)" Equation="([Cost Per Pack - 20 - $])/[Pods per Pack]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="92">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;" parent="1" vertex="1">
+        <mxGeometry x="830.1863421121839" y="200.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="94">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;fontColor=#FFFF00;strokeColor=#FF6600;noEdgeStyle=1;" parent="1" source="92" target="233" edge="1">
+        <mxGeometry x="240" y="-354" width="100" height="100" as="geometry">
+          <mxPoint x="240" y="-254" as="sourcePoint" />
+          <mxPoint x="690" y="96" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="859" y="258" />
+          </Array>
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="112">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;" parent="1" source="55" target="68" edge="1">
+        <mxGeometry x="-1391" y="526" width="100" height="100" as="geometry">
+          <mxPoint x="-1391" y="626" as="sourcePoint" />
+          <mxPoint x="-1291" y="526" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="114">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;fontColor=#FFFF00;strokeColor=#FF6600;noEdgeStyle=1;" parent="1" source="115" target="233" edge="1">
+        <mxGeometry x="245" y="158" width="100" height="100" as="geometry">
+          <mxPoint x="645" y="748" as="sourcePoint" />
+          <mxPoint x="345" y="158" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="970" y="100" />
+          </Array>
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Pod Demand - #" Note="Based on equation to determine optimal price set by Corporation." Equation="Ifthenelse([$/Pack Adjusted for Inflation]=0,0,(-1*([$/Pack Adjusted for Inflation]-4.35)^2+25)*10e5)&#xa;&#xa;" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="1000000000" SliderMin="0" SliderStep="100000" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="115">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;" parent="1" vertex="1">
+        <mxGeometry x="919.1863421121839" y="158.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="124">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;" parent="1" source="115" target="55" edge="1">
+        <mxGeometry x="-1434" y="-444" width="100" height="100" as="geometry">
+          <mxPoint x="-1434" y="-344" as="sourcePoint" />
+          <mxPoint x="-1334" y="-444" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="1220" y="500" />
+          </Array>
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="152">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;noEdgeStyle=1;orthogonal=1;" parent="1" source="68" target="313" edge="1">
+        <mxGeometry x="-122" width="100" height="100" as="geometry">
+          <mxPoint x="-122" y="100" as="sourcePoint" />
+          <mxPoint x="-22" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="153">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;noEdgeStyle=1;orthogonal=1;" parent="1" source="65" target="313" edge="1">
+        <mxGeometry x="552" y="-10" width="100" height="100" as="geometry">
+          <mxPoint x="552" y="90" as="sourcePoint" />
+          <mxPoint x="652" y="-10" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="1780" y="490" />
+          </Array>
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="LC - Labor - $" Note="" Equation="([z%  Labor]/100)" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="154">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;fillColor=#FF6600;" parent="1" vertex="1">
+        <mxGeometry x="736.1863421121839" y="342.7440434558075" width="70" height="40" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="155">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;noEdgeStyle=1;orthogonal=1;" parent="1" source="154" target="315" edge="1">
+        <mxGeometry x="-1532" y="-825" width="100" height="100" as="geometry">
+          <mxPoint x="-1532" y="-725" as="sourcePoint" />
+          <mxPoint x="-1432" y="-825" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="LC - Transportation - $" Note="" Equation="([z% Transport]/100)" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="156">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;fillColor=#FF6600;" parent="1" vertex="1">
+        <mxGeometry x="708.1863421121839" y="536.7440434558075" width="142" height="56" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="157">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;noEdgeStyle=1;orthogonal=1;" parent="1" source="156" target="315" edge="1">
+        <mxGeometry x="-1532" y="-825" width="100" height="100" as="geometry">
+          <mxPoint x="-1532" y="-725" as="sourcePoint" />
+          <mxPoint x="-1432" y="-825" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Investment - $" Note="" Equation="[AA Profits / yr]*([% Investment]/100)" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="1" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="184">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;" parent="1" vertex="1">
+        <mxGeometry x="1545.1863421121839" y="478.7440434558075" width="90" height="35" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Variable name="LC - Retail Expense - $" Note="" Equation="([z% Retail]/100)" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="187">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;fillColor=#FF6600;" parent="1" vertex="1">
+        <mxGeometry x="732.1863421121839" y="644.7440434558075" width="90" height="45" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="190">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;noEdgeStyle=1;orthogonal=1;" parent="1" source="187" target="315" edge="1">
+        <mxGeometry x="-1532" y="-825" width="100" height="100" as="geometry">
+          <mxPoint x="-1532" y="-725" as="sourcePoint" />
+          <mxPoint x="-1432" y="-825" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="212">
+      <mxCell style="link;fillColor=#C0C0C0;labelBackgroundColor=#C0C0C0;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;" parent="1" source="211" target="191" edge="1">
+        <mxGeometry x="306" y="-836" width="100" height="100" as="geometry">
+          <mxPoint x="306" y="-736" as="sourcePoint" />
+          <mxPoint x="406" y="-836" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="% Investment" Note="% of Profits reinvested into your company (% of AA Profits) (init_value = 10)" Equation="10" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="100" SliderMin="0" SliderStep="1" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="221">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;fillColor=#FF6600;" parent="1" vertex="1">
+        <mxGeometry x="1611" y="431" width="105" height="51" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="222">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;" parent="1" source="221" target="184" edge="1">
+        <mxGeometry x="315" y="153" width="100" height="100" as="geometry">
+          <mxPoint x="315" y="253" as="sourcePoint" />
+          <mxPoint x="415" y="153" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="z%  Labor" Note="Percent of revenue paid to workers in manufacturing of coffee pods (not intended to reflect cost of labor in coffee and aluminum production) (% of Rev Per Pod - $)(init_value = 3.0)" Equation="3" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="20" SliderMin="0" SliderStep="0.5" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="223">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;fillColor=#FF6600;align=center;" parent="1" vertex="1">
+        <mxGeometry x="700" y="340" width="125" height="46" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="224">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;fillColor=#FF6600;labelBackgroundColor=#FF6600;" parent="1" source="223" target="154" edge="1">
+        <mxGeometry x="-1332" y="-779" width="100" height="100" as="geometry">
+          <mxPoint x="-1332" y="-679" as="sourcePoint" />
+          <mxPoint x="-1232" y="-779" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="z% Transport" Note="Percent of Revenue for all transport costs of finished coffee pods from manufacturer to retail store (% of Rev Per Pod - $) (init_value = 2)" Equation="2" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="10" SliderMin="0" SliderStep="0.5" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="226">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;fillColor=#FF6600;align=center;" parent="1" vertex="1">
+        <mxGeometry x="701" y="530" width="150" height="67" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="227">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;fillColor=#FF6600;labelBackgroundColor=#FF6600;" parent="1" source="226" target="156" edge="1">
+        <mxGeometry x="-1339" y="-706" width="100" height="100" as="geometry">
+          <mxPoint x="-1339" y="-606" as="sourcePoint" />
+          <mxPoint x="-1239" y="-706" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="z% Retail" Note="% of Revenue paid to retail stores (% of Rev Per Pod - $) (init_value = 3.5)" Equation="3.5" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="10" SliderMin="0" SliderStep="0.5" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="228">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;fillColor=#FF6600;align=center;" parent="1" vertex="1">
+        <mxGeometry x="720" y="645" width="115" height="52" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="229">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;fillColor=#FF6600;labelBackgroundColor=#FF6600;" parent="1" source="228" target="187" edge="1">
+        <mxGeometry x="-1272" y="-807" width="100" height="100" as="geometry">
+          <mxPoint x="-1272" y="-707" as="sourcePoint" />
+          <mxPoint x="-1172" y="-807" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Stock name="AA Revenue - $" Note="Total collected revenue collected by AA.  (Rev per Pod * Pod Demand)" InitialValue="1" StockMode="Store" Delay="10" Volume="100" NonNegative="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="232">
+      <mxCell style="stock;fontFamily=Helvetica;fontSize=14;" parent="1" vertex="1">
+        <mxGeometry x="1130.1863421121839" y="328.7440434558075" width="100" height="40" as="geometry" />
+      </mxCell>
+    </Stock>
+    <Flow name="Income - $" Note="Product of the revenue per pod ($/pod) * demand (# of pods)" FlowRate="[Rev per pod - $]*[Pod Demand - #]" OnlyPositive="true" TimeIndependent="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" id="233">
+      <mxCell style="flow;fontFamily=Helvetica;fontSize=14;" parent="1" target="232" edge="1">
+        <mxGeometry x="-21" y="6" width="100" height="100" as="geometry">
+          <mxPoint x="1179" y="86" as="sourcePoint" />
+          <mxPoint x="-21" y="106" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Flow>
+    <Stock name="AA PROFITS" Note="Moneys left after expenses, changes by AA-End of Year Balance. Cumulative profits for over 20 yrs. " InitialValue="0&#xa;" StockMode="Store" Delay="10" Volume="100" NonNegative="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="248">
+      <mxCell style="stock;fontFamily=Helvetica;fontSize=14;fillColor=#FFCC00;fontStyle=1" parent="1" vertex="1">
+        <mxGeometry x="1365" y="406" width="125" height="54" as="geometry" />
+      </mxCell>
+    </Stock>
+    <Variable name="Al - $/kg" Note="Price of Al/kg (init_value = $1.60)" Equation="1.6" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="5" SliderMin="0" SliderStep="0.01" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="268">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;fillColor=#FF6600;" parent="1" vertex="1">
+        <mxGeometry x="1695" y="75" width="120" height="48" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="271">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;" parent="1" source="268" target="65" edge="1">
+        <mxGeometry x="306" y="-836" width="100" height="100" as="geometry">
+          <mxPoint x="306" y="-736" as="sourcePoint" />
+          <mxPoint x="406" y="-836" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="273">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;" parent="1" source="55" target="191" edge="1">
+        <mxGeometry y="51" width="100" height="100" as="geometry">
+          <mxPoint y="151" as="sourcePoint" />
+          <mxPoint x="100" y="51" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="1940" y="900" />
+          </Array>
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="291">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;noEdgeStyle=1;" parent="1" source="184" target="64" edge="1">
+        <mxGeometry x="200" y="-156" width="100" height="100" as="geometry">
+          <mxPoint x="200" y="-56" as="sourcePoint" />
+          <mxPoint x="300" y="-156" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="LC - Corporate Taxes - $" Note="" Equation="[z% Taxes]/100" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="292">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;fillColor=#FF6600;" parent="1" vertex="1">
+        <mxGeometry x="711.1863421121839" y="446.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Variable name="z% Taxes" Note="Corporate Tax Rate (29.7% in Germany 2016) (% of Rev Per Pod - $) (https://goo.gl/orGs5y)" Equation="29.7" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="36.8" SliderMin="22.8" SliderStep="0.1" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="293">
+      <mxCell style="variable;fontFamily=Helvetica;fontSize=14;fillColor=#FF6600;align=center;" parent="1" vertex="1">
+        <mxGeometry x="708" y="443" width="122" height="54" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="294">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;noEdgeStyle=1;orthogonal=1;fillColor=#FF6600;labelBackgroundColor=#FF6600;" parent="1" source="293" target="292" edge="1">
+        <mxGeometry x="-1532" y="-825" width="100" height="100" as="geometry">
+          <mxPoint x="-1532" y="-725" as="sourcePoint" />
+          <mxPoint x="-1432" y="-825" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="295">
+      <mxCell style="link;fontFamily=Helvetica;fontSize=14;strokeColor=#FF0000;noEdgeStyle=1;orthogonal=1;" parent="1" source="292" target="315" edge="1">
+        <mxGeometry x="-1532" y="-825" width="100" height="100" as="geometry">
+          <mxPoint x="-1532" y="-725" as="sourcePoint" />
+          <mxPoint x="-1432" y="-825" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="AA Profits / yr" Note="Change in profits per year" Equation="[AA PROFITS]-Delay([AA PROFITS], 1)" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="307">
+      <mxCell style="variable;fontSize=14;fontFamily=Helvetica;" parent="1" vertex="1">
+        <mxGeometry x="1543.1863421121839" y="349.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="308">
+      <mxCell style="link;noEdgeStyle=1;orthogonal=1;fontSize=14;fontFamily=Helvetica;" parent="1" source="248" target="307" edge="1">
+        <mxGeometry x="200" y="-156" width="100" height="100" as="geometry">
+          <mxPoint x="200" y="-56" as="sourcePoint" />
+          <mxPoint x="300" y="-156" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Flow name="Yrly $ after expenses" Note="" FlowRate="[AA - End of Year Balance]" OnlyPositive="true" TimeIndependent="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" id="311">
+      <mxCell style="flow;fontSize=14;fontFamily=Helvetica;" parent="1" target="248" edge="1">
+        <mxGeometry x="-5" y="-231" width="100" height="100" as="geometry">
+          <mxPoint x="1435" y="49" as="sourcePoint" />
+          <mxPoint x="-5" y="-131" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Flow>
+    <Variable name="Material Expenditures - $" Note="Total of Aluminum and Coffee Expenditures" Equation="[Coffee Expenditure - $]+[Aluminum Expenditure - $]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="313">
+      <mxCell style="variable;fontSize=14;fontFamily=Helvetica;" parent="1" vertex="1">
+        <mxGeometry x="1500.1863421121839" y="724.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="314">
+      <mxCell style="link;noEdgeStyle=1;fontSize=14;fontFamily=Helvetica;strokeColor=#FF0000;" parent="1" source="313" target="63" edge="1">
+        <mxGeometry x="-20" width="100" height="100" as="geometry">
+          <mxPoint x="-20" y="100" as="sourcePoint" />
+          <mxPoint x="80" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="1360" y="740" />
+            <mxPoint x="1320" y="510" />
+          </Array>
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Labor Costs - $/pod" Note="Total of all Labor Costs as a % of Rev per Pod - $" Equation="([LC - Labor - $]+[LC - Transportation - $]+[LC - Retail Expense - $]+[LC - Corporate Taxes - $])*([Rev per pod - $]*[Pods Produced - #])*[Cost of Living Increase]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="315">
+      <mxCell style="variable;fontSize=14;fontFamily=Helvetica;" parent="1" vertex="1">
+        <mxGeometry x="991.1863421121839" y="481.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="316">
+      <mxCell style="link;noEdgeStyle=1;fontSize=14;fontFamily=Helvetica;strokeColor=#FF0000;" parent="1" source="315" target="63" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="317">
+      <mxCell style="link;noEdgeStyle=1;orthogonal=1;fontSize=14;fontFamily=Helvetica;" parent="1" source="92" target="315" edge="1">
+        <mxGeometry x="-1869" y="-805" width="100" height="100" as="geometry">
+          <mxPoint x="-1869" y="-705" as="sourcePoint" />
+          <mxPoint x="-1769" y="-805" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="318">
+      <mxCell style="link;noEdgeStyle=1;orthogonal=1;fontSize=14;fontFamily=Helvetica;" parent="1" source="55" target="315" edge="1">
+        <mxGeometry x="-1823" y="-694" width="100" height="100" as="geometry">
+          <mxPoint x="-1823" y="-594" as="sourcePoint" />
+          <mxPoint x="-1723" y="-694" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="AA - End of Year Balance" Note="Difference btwn Income and Production Expenses" Equation="[Income - $]-[Production Expenses]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="319">
+      <mxCell style="variable;fontSize=14;fontFamily=Helvetica;" parent="1" vertex="1">
+        <mxGeometry x="1250.1863421121839" y="312.7440434558075" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="320">
+      <mxCell style="link;noEdgeStyle=1;fontSize=14;fontFamily=Helvetica;" parent="1" source="233" target="319" edge="1">
+        <mxGeometry y="69" width="100" height="100" as="geometry">
+          <mxPoint y="169" as="sourcePoint" />
+          <mxPoint x="100" y="69" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="321">
+      <mxCell style="link;noEdgeStyle=1;fontSize=14;fontFamily=Helvetica;" parent="1" source="63" target="319" edge="1">
+        <mxGeometry x="18" width="100" height="100" as="geometry">
+          <mxPoint x="18" y="100" as="sourcePoint" />
+          <mxPoint x="118" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="322">
+      <mxCell style="link;noEdgeStyle=1;fontSize=14;fontFamily=Helvetica;" parent="1" source="319" target="311" edge="1">
+        <mxGeometry x="441" y="-10" width="100" height="100" as="geometry">
+          <mxPoint x="441" y="90" as="sourcePoint" />
+          <mxPoint x="541" y="-10" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="324">
+      <mxCell style="link;noEdgeStyle=1;orthogonal=1;fontSize=14;fontFamily=Helvetica;" parent="1" source="191" target="65" edge="1">
+        <mxGeometry x="306" y="-836" width="100" height="100" as="geometry">
+          <mxPoint x="306" y="-736" as="sourcePoint" />
+          <mxPoint x="406" y="-836" as="targetPoint" />
+          <Array as="points" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Cost of Living Increase" Note="" Equation="(1+([% COL Incr]/100))^Years()" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="331">
+      <mxCell style="variable;fillColor=#FF6600;" parent="1" vertex="1">
+        <mxGeometry x="718" y="251" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Variable name="% COL Incr" Note="Cost of Living Increase - Percent raise given to all Labor Costs Annually (Exponential growth, init_value = 0)" Equation="0" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="4" SliderMin="0" SliderStep="0.1" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="332">
+      <mxCell style="variable;fillColor=#FF6600;" parent="1" vertex="1">
+        <mxGeometry x="710" y="251" width="130" height="49" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="333">
+      <mxCell style="link;fillColor=#FF6600;labelBackgroundColor=#FF6600;" parent="1" source="332" target="331" edge="1">
+        <mxGeometry x="218" y="-519" width="100" height="100" as="geometry">
+          <mxPoint x="218" y="-419" as="sourcePoint" />
+          <mxPoint x="318" y="-519" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="334">
+      <mxCell style="link;strokeColor=#FF0000;" parent="1" source="331" target="315" edge="1">
+        <mxGeometry x="291" y="-20" width="100" height="100" as="geometry">
+          <mxPoint x="291" y="80" as="sourcePoint" />
+          <mxPoint x="391" y="-20" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="$/Pack Adjusted for Inflation" Note="" Equation="[Cost Per Pack - 20 - $]*(1+([% COL Incr]/100))^Years()" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="341">
+      <mxCell style="variable" parent="1" vertex="1">
+        <mxGeometry x="919" y="41" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="342">
+      <mxCell style="link;fillColor=#FFFFFF;labelBackgroundColor=#FFFFFF;" parent="1" source="332" target="341" edge="1">
+        <mxGeometry x="-276" width="100" height="100" as="geometry">
+          <mxPoint x="-276" y="100" as="sourcePoint" />
+          <mxPoint x="-176" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="790" y="210" />
+          </Array>
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="343">
+      <mxCell style="link" parent="1" source="82" target="341" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="344">
+      <mxCell style="link" parent="1" source="341" target="115" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Display name="Profits" Note="" Type="Time Series" xAxis="Time (%u)" yAxis="" yAxis2="" showMarkers="false" showLines="true" showArea="false" ThreeDimensional="false" Primitives="248" Primitives2="" AutoAddPrimitives="false" ScatterplotOrder="X Primitive, Y Primitive" Image="Display" FlipHorizontal="false" FlipVertical="false" LabelPosition="Bottom" legendPosition="Automatic" id="347">
+      <mxCell style="display" parent="1" vertex="1" visible="0">
+        <mxGeometry x="10" y="10" width="64" height="64" as="geometry" />
+      </mxCell>
+    </Display>
+    <Link name="Link" Note="" BiDirectional="false" id="350">
+      <mxCell style="link" parent="1" source="307" target="184" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+  </root>
+</InsightMakerModel>

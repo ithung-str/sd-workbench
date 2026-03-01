@@ -18,6 +18,7 @@ type Props = {
   functionNames?: string[];
   availableFunctions?: FunctionCatalogEntry[];
   onInsertFunction?: (template: string) => void;
+  onConnectVariable?: (variableName: string) => void;
   maxSuggestions?: number;
   showReferencedSummary?: boolean;
 };

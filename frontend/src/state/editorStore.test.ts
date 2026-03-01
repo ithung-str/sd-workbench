@@ -39,13 +39,13 @@ describe('editorStore', () => {
   });
 
   it('selecting and editing node updates model', () => {
-    const first = useEditorStore.getState().model.nodes.find((n) => n.type !== 'text' && n.type !== 'cloud' && n.type !== 'cld_symbol');
+    const first = useEditorStore.getState().model.nodes.find((n) => n.type !== 'text' && n.type !== 'cloud' && n.type !== 'cld_symbol' && n.type !== 'phantom');
     expect(first).toBeDefined();
     if (!first) return;
     useEditorStore.getState().setSelected({ kind: 'node', id: first.id });
     useEditorStore.getState().updateNode(first.id, { equation: '42' });
     const updated = useEditorStore.getState().model.nodes.find((n) => n.id === first.id);
-    expect(updated && updated.type !== 'text' && updated.type !== 'cloud' && updated.type !== 'cld_symbol' ? updated.equation : undefined).toBe('42');
+    expect(updated && updated.type !== 'text' && updated.type !== 'cloud' && updated.type !== 'cld_symbol' && updated.type !== 'phantom' ? updated.equation : undefined).toBe('42');
   });
 
   it('adds a CLD symbol node', () => {
@@ -136,7 +136,7 @@ describe('editorStore', () => {
   it('groups typing updates into one undo entry', () => {
     vi.useFakeTimers();
     const state = useEditorStore.getState();
-    const node = state.model.nodes.find((n) => n.type !== 'text' && n.type !== 'cloud' && n.type !== 'cld_symbol');
+    const node = state.model.nodes.find((n) => n.type !== 'text' && n.type !== 'cloud' && n.type !== 'cld_symbol' && n.type !== 'phantom');
     expect(node).toBeDefined();
     if (!node) return;
     const originalEquation = node.equation;
@@ -151,7 +151,7 @@ describe('editorStore', () => {
 
     useEditorStore.getState().undo();
     const reverted = useEditorStore.getState().model.nodes.find((n) => n.id === node.id);
-    expect(reverted && reverted.type !== 'text' && reverted.type !== 'cloud' && reverted.type !== 'cld_symbol' ? reverted.equation : undefined).toBe(originalEquation);
+    expect(reverted && reverted.type !== 'text' && reverted.type !== 'cloud' && reverted.type !== 'cld_symbol' && reverted.type !== 'phantom' ? reverted.equation : undefined).toBe(originalEquation);
   });
 
   it('clears redo stack when a new edit happens after undo', () => {

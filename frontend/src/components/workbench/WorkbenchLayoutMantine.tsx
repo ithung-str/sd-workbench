@@ -93,6 +93,9 @@ export function WorkbenchLayout() {
             <Button variant="filled" color="deep-purple" size="sm">
               + New Diagram
             </Button>
+            <Button variant="light" color="deepPurple" size="sm" onClick={() => navigateTo('/formulas')}>
+              Formulas
+            </Button>
             <Button variant="light" color="deepPurple" size="sm" onClick={() => navigateTo('/dashboard')}>
               Dashboard
             </Button>

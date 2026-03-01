@@ -1,0 +1,474 @@
+<InsightMakerModel>
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+    <Setting Note="" Version="38" TimeLength="611" TimeStart="0" TimeStep="0.25" TimeUnits="Days" Units="" HiddenUIGroups="Validation,User Interface" SolutionAlgorithm="RK1" BackgroundColor="white" Throttle="5" Macros="" SensitivityPrimitives="" SensitivityRuns="50" SensitivityBounds="50, 80, 95, 100" SensitivityShowRuns="false" StyleSheet="{}" version="39" id="2">
+      <mxCell parent="1" vertex="1" visible="0">
+        <mxGeometry x="20" y="20" width="80" height="40" as="geometry" />
+      </mxCell>
+    </Setting>
+    <Display name="Stocks" Note="" Type="Time Series" xAxis="Time (%u)" yAxis="%o" ThreeDimensional="false" Primitives="4,5,6,127314621db49f6b92a55ff2b684adbe-29,41" AutoAddPrimitives="false" ScatterplotOrder="X Primitive, Y Primitive" Image="Display" yAxis2="" Primitives2="" showMarkers="false" showLines="true" showArea="false" legendPosition="Automatic" id="3">
+      <mxCell style="roundImage;image=/builder/images/DisplayFull.png;" parent="1" vertex="1" visible="0">
+        <mxGeometry x="10" y="10" width="64" height="64" as="geometry" />
+      </mxCell>
+    </Display>
+    <Stock name="Susceptible" Note="" InitialValue="2300000" StockMode="Store" Delay="10" Volume="100" NonNegative="true" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="true" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="4">
+      <mxCell style="stock;labelBackgroundColor=none" parent="1" vertex="1">
+        <mxGeometry x="210" y="225" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Stock>
+    <Stock name="Infective" Note="" InitialValue="0" StockMode="Store" Delay="10" Volume="100" NonNegative="true" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="5">
+      <mxCell style="stock;labelBackgroundColor=none" parent="1" vertex="1">
+        <mxGeometry x="690" y="235" width="100" height="40" as="geometry" />
+      </mxCell>
+    </Stock>
+    <Stock name="Recovered" Note="" InitialValue="0" StockMode="Store" Delay="10" Volume="100" NonNegative="true" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="6">
+      <mxCell style="stock;labelBackgroundColor=none" parent="1" vertex="1">
+        <mxGeometry x="970" y="235" width="100" height="40" as="geometry" />
+      </mxCell>
+    </Stock>
+    <Flow name="to exposed" Note="" FlowRate="[initiation]+[New cases]" OnlyPositive="true" TimeIndependent="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" id="7">
+      <mxCell style="" parent="1" source="4" target="127314621db49f6b92a55ff2b684adbe-29" edge="1">
+        <mxGeometry x="20" y="110" width="100" height="100" as="geometry">
+          <mxPoint x="20" y="210" as="sourcePoint" />
+          <mxPoint x="120" y="110" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Flow>
+    <Flow name="recoveries" Note="" FlowRate="[Infective]/[Days infected]" OnlyPositive="true" TimeIndependent="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" id="8">
+      <mxCell style="" parent="1" source="5" target="6" edge="1">
+        <mxGeometry x="190" y="80" width="100" height="100" as="geometry">
+          <mxPoint x="190" y="180" as="sourcePoint" />
+          <mxPoint x="290" y="80" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="950" y="260" />
+          </Array>
+        </mxGeometry>
+      </mxCell>
+    </Flow>
+    <Variable name="initiation" Note="" Equation="Pulse(0,4,0.25)" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="9">
+      <mxCell style="parameter;labelBackgroundColor=none" parent="1" vertex="1">
+        <mxGeometry x="420" y="160" width="100" height="40" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="10">
+      <mxCell style="entity" parent="1" source="9" target="7" edge="1">
+        <mxGeometry x="20" y="110" width="100" height="100" as="geometry">
+          <mxPoint x="20" y="210" as="sourcePoint" />
+          <mxPoint x="120" y="110" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="New cases" Note="" Equation="[Infective]*[Contacts per day]*[Infectivity]*[Probability of meeting a susceptible person]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="11">
+      <mxCell style="parameter;labelBackgroundColor=none" parent="1" vertex="1">
+        <mxGeometry x="530" y="545" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Variable name="Contacts per day" Note="" Equation="18.1" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="50" SliderMin="1" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="12">
+      <mxCell style="parameter;labelBackgroundColor=none;fillColor=#99CC00;" parent="1" vertex="1">
+        <mxGeometry x="420" y="650" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Variable name="Infectivity" Note="" Equation="0.366" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="0.9" SliderMin="0.01" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="13">
+      <mxCell style="parameter;labelBackgroundColor=none;fillColor=#99CC00;" parent="1" vertex="1">
+        <mxGeometry x="600" y="650" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="14">
+      <mxCell style="entity" parent="1" source="13" target="11" edge="1">
+        <mxGeometry x="20" y="110" width="100" height="100" as="geometry">
+          <mxPoint x="20" y="210" as="sourcePoint" />
+          <mxPoint x="120" y="110" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="15">
+      <mxCell style="entity" parent="1" source="12" target="11" edge="1">
+        <mxGeometry x="20" y="110" width="100" height="100" as="geometry">
+          <mxPoint x="20" y="210" as="sourcePoint" />
+          <mxPoint x="120" y="110" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="16">
+      <mxCell style="entity" parent="1" source="5" target="11" edge="1">
+        <mxGeometry x="4.658655032611193" y="121.94444444444446" width="100" height="100" as="geometry">
+          <mxPoint x="4.658655032611193" y="221.94444444444446" as="sourcePoint" />
+          <mxPoint x="104.6586550326112" y="121.94444444444446" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="17">
+      <mxCell style="entity" parent="1" source="11" target="7" edge="1">
+        <mxGeometry x="20" y="110" width="100" height="100" as="geometry">
+          <mxPoint x="20" y="210" as="sourcePoint" />
+          <mxPoint x="120" y="110" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Total Population" Note="" Equation="[Susceptible]+[Exposed]+[Infective]+[Recovered]+[Immune]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="18">
+      <mxCell style="parameter;labelBackgroundColor=none" parent="1" vertex="1">
+        <mxGeometry x="600" y="35" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="19">
+      <mxCell style="entity" parent="1" source="6" target="18" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="20">
+      <mxCell style="entity" parent="1" source="5" target="18" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="21">
+      <mxCell style="entity" parent="1" source="4" target="18" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Probability of meeting a susceptible person" Note="" Equation="[Susceptible]/[Total Population]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="22">
+      <mxCell style="parameter;labelBackgroundColor=none;fontSize=12;" parent="1" vertex="1">
+        <mxGeometry x="270" y="95" width="200" height="55" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="23">
+      <mxCell style="entity" parent="1" source="22" target="11" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="24">
+      <mxCell style="entity" parent="1" source="18" target="22" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="25">
+      <mxCell style="entity" parent="1" source="4" target="22" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Days infected" Note="" Equation="16.77" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="30" SliderMin="1" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="26">
+      <mxCell style="parameter;labelBackgroundColor=none;fillColor=#99CC00;" parent="1" vertex="1">
+        <mxGeometry x="780" y="175" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="27">
+      <mxCell style="entity" parent="1" source="26" target="8" edge="1">
+        <mxGeometry x="170" y="50" width="100" height="100" as="geometry">
+          <mxPoint x="170" y="150" as="sourcePoint" />
+          <mxPoint x="270" y="50" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="28">
+      <mxCell style="entity" parent="1" source="5" target="8" edge="1">
+        <mxGeometry x="170" y="50" width="100" height="100" as="geometry">
+          <mxPoint x="170" y="150" as="sourcePoint" />
+          <mxPoint x="270" y="50" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Display name="Flows" Note="" Type="Time Series" xAxis="Time (%u)" yAxis="%o" ThreeDimensional="false" Primitives="7,8,127314621db49f6b92a55ff2b684adbe-30,35,46" AutoAddPrimitives="false" ScatterplotOrder="X Primitive, Y Primitive" Image="Display" yAxis2="" Primitives2="" showMarkers="false" showLines="true" showArea="false" legendPosition="Automatic" id="29">
+      <mxCell style="display" parent="1" vertex="1" visible="0">
+        <mxGeometry x="20" y="100" width="64" height="64" as="geometry" />
+      </mxCell>
+    </Display>
+    <Stock name="Exposed" Note="" InitialValue="0" StockMode="Store" Delay="10" Volume="100" NonNegative="true" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="127314621db49f6b92a55ff2b684adbe-29">
+      <mxCell style="stock;labelBackgroundColor=none" parent="1" vertex="1">
+        <mxGeometry x="440" y="235" width="100" height="40" as="geometry" />
+      </mxCell>
+    </Stock>
+    <Flow name="becoming infectious" Note="" FlowRate="[Exposed]/[Incubation period]" OnlyPositive="true" TimeIndependent="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" id="127314621db49f6b92a55ff2b684adbe-30">
+      <mxCell style="" parent="1" source="127314621db49f6b92a55ff2b684adbe-29" target="5" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Flow>
+    <Variable name="Incubation period" Note="" Equation="3.9" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="30" SliderMin="1" Image="None" LabelPosition="Middle" FlipHorizontal="false" FlipVertical="false" id="127314621db49f6b92a55ff2b684adbe-31">
+      <mxCell style="parameter;labelBackgroundColor=none;fillColor=#99CC00;" parent="1" vertex="1">
+        <mxGeometry x="570" y="165" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="127314621db49f6b92a55ff2b684adbe-32">
+      <mxCell style="entity" parent="1" source="127314621db49f6b92a55ff2b684adbe-29" target="18" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="127314621db49f6b92a55ff2b684adbe-33">
+      <mxCell style="entity" parent="1" source="127314621db49f6b92a55ff2b684adbe-31" target="127314621db49f6b92a55ff2b684adbe-30" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="127314621db49f6b92a55ff2b684adbe-34">
+      <mxCell style="entity" parent="1" source="127314621db49f6b92a55ff2b684adbe-29" target="127314621db49f6b92a55ff2b684adbe-30" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Text name="Simple SEIR model " LabelPosition="Middle" Note="" id="30">
+      <mxCell style="text;fontFamily=Verdana;" parent="1" vertex="1">
+        <mxGeometry x="1150" y="30" width="400" height="50" as="geometry" />
+      </mxCell>
+    </Text>
+    <Text name="How dangerous is Coronavirus" LabelPosition="Middle" Note="How dangerous is the virus? There are three parameters to understand in order to assess the magnitude of the risk posed by this novel coronavirus:&lt;div&gt;&lt;ol&gt;&lt;li&gt;&amp;nbsp;Transmission Rate (Ro) - number of newly infected people from a single case&amp;nbsp;&lt;/li&gt;&lt;li&gt;Case Fatality Rate (CFR) - percent of cases that result in death&lt;/li&gt;&lt;li&gt;Determine whether asymptomatic transmission is possible&lt;/li&gt;&lt;/ol&gt;&lt;/div&gt;" id="31">
+      <mxCell style="text;fontFamily=Verdana;fontSize=24;" parent="1" vertex="1">
+        <mxGeometry x="1090" y="230" width="500" height="80" as="geometry" />
+      </mxCell>
+    </Text>
+    <Text name="1. How contagious is the Covid-19 Coronavirus? (Ro)" LabelPosition="Middle" Note="&lt;h2 id=&quot;repro&quot; style=&quot;box-sizing: border-box; font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif; font-weight: 500; line-height: 1.3; color: rgb(34, 34, 34); margin-top: 40px; margin-bottom: 10px; font-size: 30px;&quot;&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;The&lt;/span&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;em style=&quot;font-size: 15px; box-sizing: border-box;&quot;&gt;attack rate&lt;/em&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;or&lt;/span&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;em style=&quot;font-size: 15px; box-sizing: border-box;&quot;&gt;transmissibility&lt;/em&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;(how rapidly the disease spreads) of a virus is indicated by its reproductive number (Ro, pronounced&lt;/span&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;em style=&quot;font-size: 15px; box-sizing: border-box;&quot;&gt;R-nought&lt;/em&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;or&lt;/span&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;em style=&quot;font-size: 15px; box-sizing: border-box;&quot;&gt;r-zero&lt;/em&gt;&lt;span style=&quot;font-size: 15px;&quot;&gt;), which represents the average number of people who will catch the disease from a single infected person.&lt;/span&gt;&lt;br&gt;&lt;/h2&gt;&lt;p style=&quot;box-sizing: border-box; margin: 0px 0px 20px; line-height: 1.6em; color: rgb(34, 34, 34); font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif;&quot;&gt;A more recent study is indicating a Ro as high as 4.08.&lt;span style=&quot;box-sizing: border-box; position: relative; font-size: 11.25px; line-height: 0; vertical-align: baseline; top: -0.5em;&quot;&gt;[&lt;a href=&quot;https://www.worldometers.info/coronavirus/#ref-22&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;22&lt;/a&gt;]&lt;/span&gt;. This value substantially exceeds WHO&#39;s estimate (made on Jan. 23) of between 1.4 and 2.5&lt;span style=&quot;box-sizing: border-box; position: relative; font-size: 11.25px; line-height: 0; vertical-align: baseline; top: -0.5em;&quot;&gt;[&lt;a href=&quot;https://www.worldometers.info/coronavirus/#ref-13&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;13&lt;/a&gt;]&lt;/span&gt;, and is also higher than recent estimates between 3.6 and 4.0 and between 2.24 to 3.58&amp;nbsp;&lt;span style=&quot;box-sizing: border-box; position: relative; font-size: 11.25px; line-height: 0; vertical-align: baseline; top: -0.5em;&quot;&gt;[&lt;a href=&quot;https://www.worldometers.info/coronavirus/#ref-23&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;23&lt;/a&gt;]&lt;/span&gt;. Preliminary studies had estimated Ro to be between&amp;nbsp;&lt;span style=&quot;box-sizing: border-box; font-weight: 700;&quot;&gt;1.5 and 3.5&lt;/span&gt;&amp;nbsp;&lt;span style=&quot;box-sizing: border-box; position: relative; font-size: 11.25px; line-height: 0; vertical-align: baseline; top: -0.5em;&quot;&gt;[&lt;a href=&quot;https://www.worldometers.info/coronavirus/#ref-5&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;5&lt;/a&gt;][&lt;a href=&quot;https://www.worldometers.info/coronavirus/#ref-6&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;6&lt;/a&gt;][&lt;a href=&quot;https://www.worldometers.info/coronavirus/#ref-7&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;7&lt;/a&gt;]&lt;/span&gt;&lt;/p&gt;&lt;p style=&quot;box-sizing: border-box; margin: 0px 0px 20px; line-height: 1.6em; color: rgb(34, 34, 34); font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif;&quot;&gt;Based on these numbers, on average every case of the Novel Coronavirus would create 3 to 4 new cases.&lt;/p&gt;&lt;p style=&quot;box-sizing: border-box; margin: 0px 0px 20px; line-height: 1.6em; color: rgb(34, 34, 34); font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif;&quot;&gt;An outbreak with a reproductive number of below 1 will gradually disappear.&lt;/p&gt;&lt;p style=&quot;box-sizing: border-box; margin: 0px 0px 20px; line-height: 1.6em; color: rgb(34, 34, 34); font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif;&quot;&gt;For comparison, the Ro for the common flu is 1.3 and for SARS it was 2.0.&lt;/p&gt;" id="32">
+      <mxCell style="text;fontSize=24;fontFamily=Verdana;" parent="1" vertex="1">
+        <mxGeometry x="1130" y="340" width="420" height="50" as="geometry" />
+      </mxCell>
+    </Text>
+    <Text name="2. Fatality Rate (case fatality ratio or CFR) of the Covid19 Coronavirus" LabelPosition="Middle" Note="&lt;em style=&quot;color: rgb(34, 34, 34); font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif; box-sizing: border-box;&quot;&gt;See full details:&amp;nbsp;&lt;a href=&quot;https://www.worldometers.info/coronavirus/coronavirus-death-rate/&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;&lt;span style=&quot;box-sizing: border-box; font-weight: 700;&quot;&gt;Wuhan Coronavirus Fatality Rate&lt;/span&gt;&lt;/a&gt;&lt;/em&gt;&lt;p style=&quot;box-sizing: border-box; margin: 0px 0px 20px; line-height: 1.6em; color: rgb(34, 34, 34); font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif;&quot;&gt;The novel coronavirus&#39; case&amp;nbsp;&lt;span style=&quot;box-sizing: border-box; font-weight: 700;&quot;&gt;fatality rate&lt;/span&gt;&amp;nbsp;is currently estimated at around&amp;nbsp;&lt;span style=&quot;box-sizing: border-box; font-weight: 700;&quot;&gt;2%&lt;/span&gt;, according to the WHO&amp;nbsp;&lt;span style=&quot;box-sizing: border-box; position: relative; font-size: 11.25px; line-height: 0; vertical-align: baseline; top: -0.5em;&quot;&gt;[&lt;a href=&quot;https://www.worldometers.info/coronavirus/#ref-16&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;16&lt;/a&gt;]&lt;/span&gt;&amp;nbsp;on January 29, 2020. A prior estimate&amp;nbsp;&lt;span style=&quot;box-sizing: border-box; font-weight: 700;&quot;&gt;&lt;span style=&quot;box-sizing: border-box; position: relative; font-size: 11.25px; line-height: 0; vertical-align: baseline; top: -0.5em;&quot;&gt;[&lt;a href=&quot;https://www.worldometers.info/coronavirus/#ref-9&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;9&lt;/a&gt;]&lt;/span&gt;&lt;/span&gt;&amp;nbsp;had put that number at 3%, between 2% and 4%). Fatality rate can change as a virus can mutate, according to epidemiologists.&lt;/p&gt;&lt;p style=&quot;box-sizing: border-box; margin: 0px 0px 20px; line-height: 1.6em; color: rgb(34, 34, 34); font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif;&quot;&gt;Once the province Hubei (where the epicenter Wuhan is situated) is removed from the calculation, the national (China) mortality rate drops to 0.3%. Within the Hubei province, the mortality rate is about 1% when excluding the city of Wuhan (where it is 5.5%).&lt;/p&gt;&lt;p style=&quot;box-sizing: border-box; margin: 0px 0px 20px; line-height: 1.6em; color: rgb(34, 34, 34); font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif;&quot;&gt;For comparison, the case fatality rate for SARS was 10%, and for MERS 34%.&lt;/p&gt;" id="33">
+      <mxCell style="text;fontSize=24;fontFamily=Verdana;" parent="1" vertex="1">
+        <mxGeometry x="1100" y="410" width="450" height="50" as="geometry" />
+      </mxCell>
+    </Text>
+    <Text name="3. Incubation Period (how long it takes for symptoms to appear)" LabelPosition="Middle" Note="&lt;h2 id=&quot;incubation&quot; style=&quot;box-sizing: border-box; font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif; font-weight: 500; line-height: 1.3; color: rgb(34, 34, 34); margin-top: 40px; margin-bottom: 10px; font-size: 30px;&quot;&gt;&lt;em style=&quot;font-size: 15px; box-sizing: border-box;&quot;&gt;See full details:&amp;nbsp;&lt;a href=&quot;https://www.worldometers.info/coronavirus/coronavirus-incubation-period/&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;&lt;span style=&quot;box-sizing: border-box; font-weight: 700;&quot;&gt;Wuhan Coronavirus Incubation Period&lt;/span&gt;&lt;/a&gt;&lt;/em&gt;&lt;br&gt;&lt;/h2&gt;&lt;p style=&quot;box-sizing: border-box; margin: 0px 0px 20px; line-height: 1.6em; color: rgb(34, 34, 34); font-family: &amp;quot;Noto Sans&amp;quot;, sans-serif;&quot;&gt;Symptoms of the novel coronavirus (2019-nCoV) may appear in as few as 2 days or as long as 14 (estimated ranges vary from 2-10 days, 2-14 days, and 10-14 days,&amp;nbsp;&lt;a href=&quot;https://www.worldometers.info/coronavirus/coronavirus-incubation-period/&quot; style=&quot;box-sizing: border-box; background-color: transparent; color: rgb(105, 154, 33);&quot;&gt;see details&lt;/a&gt;), during which the virus is contagious but the patient does not display any symptom (&lt;em style=&quot;box-sizing: border-box;&quot;&gt;asymptomatic transmission&lt;/em&gt;).&lt;/p&gt;" id="34">
+      <mxCell style="text;fontFamily=Verdana;fontSize=24;" parent="1" vertex="1">
+        <mxGeometry x="1135" y="468" width="430" height="140" as="geometry" />
+      </mxCell>
+    </Text>
+    <Flow name="Susceptible after recovey" Note="" FlowRate="([Recovered]*[Fraction of Population wo immunity])/[Days immune]" OnlyPositive="true" TimeIndependent="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="0.01" id="35">
+      <mxCell style="flow" parent="1" source="6" target="4" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="135" as="sourcePoint" />
+          <mxPoint x="630" y="435" as="targetPoint" />
+          <Array as="points">
+            <mxPoint x="650" y="415" />
+          </Array>
+          <mxPoint x="-5" y="115" as="offset" />
+        </mxGeometry>
+      </mxCell>
+    </Flow>
+    <Variable name="Fraction of Population wo immunity" Note="There seems to be a number of people whom can catch coronavirus multiple times. Question is how large fraction of the population is affected by this​?&lt;br&gt;Probably only a few percentage of the total population&lt;br&gt;" Equation="88" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="true" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="100" SliderMin="0" SliderStep="1" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="36">
+      <mxCell style="variable;fillColor=#99CC00;" parent="1" vertex="1">
+        <mxGeometry x="820" y="620" width="170" height="80" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="37">
+      <mxCell style="link" parent="1" source="36" target="35" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="38">
+      <mxCell style="link" parent="1" source="8" target="35" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Stock name="Immune" Note="" InitialValue="0" StockMode="Store" Delay="10" Volume="100" NonNegative="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="41">
+      <mxCell style="stock" parent="1" vertex="1">
+        <mxGeometry x="150" y="5" width="100" height="40" as="geometry" />
+      </mxCell>
+    </Stock>
+    <Link name="Link" Note="" BiDirectional="false" id="43">
+      <mxCell style="link" parent="1" source="41" target="18" edge="1">
+        <mxGeometry x="-30" y="5" width="100" height="100" as="geometry">
+          <mxPoint x="-30" y="105" as="sourcePoint" />
+          <mxPoint x="70" y="5" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Vaccination Rate" Note="% percent of the population that we vaccinate per day​" Equation="0.03" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="44">
+      <mxCell style="variable" parent="1" vertex="1">
+        <mxGeometry x="30" y="150" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="45">
+      <mxCell style="link" parent="1" source="44" target="46" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="220" y="160" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Flow name="Becoming Immune" Note="We vaccinate people either to the Maximum Capacity that is constrained by # of vaccines and locations &amp;amp; people to perform vaccinations or the amount of people still susceptible​" FlowRate="Min([Vaccination Rate] * [Susceptible], [Max vaccination rate]*[Vaccination capacity growth]) " OnlyPositive="true" TimeIndependent="false" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" id="46">
+      <mxCell parent="1" source="4" target="41" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+          <mxPoint x="-30" y="-5" as="offset" />
+        </mxGeometry>
+      </mxCell>
+    </Flow>
+    <Variable name="Max vaccination rate" Note="This only indicates what is the absolute max # of people we can vaccinate per day. Ensuring that we have enough vaccine doses and syringes, swabs and people to perform vaccinations.​" Equation="8738" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="100000" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="47">
+      <mxCell style="variable;fillColor=#FFFF99;" parent="1" vertex="1">
+        <mxGeometry x="20" y="245" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Converter name="Vaccination capacity growth" Note="" Source="Time" Data="0,0; 10,0; 20,0.5; 30,0.7; 50,0.8; 100,1" Interpolation="Linear" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="48">
+      <mxCell style="converter" parent="1" vertex="1">
+        <mxGeometry x="60" y="315" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Converter>
+    <Link name="Link" Note="" BiDirectional="false" id="49">
+      <mxCell style="link" parent="1" source="48" target="46" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="51">
+      <mxCell style="link" parent="1" source="47" target="46" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Text name="4. Counter measures" LabelPosition="Middle" Note="&lt;div&gt;We can take several countermeasures to either slow or stop the spread of the virus. These policy measures are in modelled in &lt;b&gt;yellow &lt;/b&gt;in the model&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;ol&gt;&lt;li&gt;Minimize contacts between people by working from home, closing schools, daycares and shops. Asking people to keep good hand hygien and keep distances in public&lt;/li&gt;&lt;li&gt;Stop or minimize travel cross borders&lt;/li&gt;&lt;li&gt;Vaccinate people once vaccine is available&lt;br&gt;&lt;/li&gt;&lt;/ol&gt;&lt;/div&gt;" id="52">
+      <mxCell style="text;fontSize=24;fontFamily=Verdana;" parent="1" vertex="1">
+        <mxGeometry x="1140" y="590" width="380" height="50" as="geometry" />
+      </mxCell>
+    </Text>
+    <Display name="Fraction Non Susceptible" Note="" Type="Time Series" xAxis="Time (%u)" yAxis="" yAxis2="" showMarkers="false" showLines="true" showArea="false" ThreeDimensional="false" Primitives="54,61,58,36" Primitives2="" AutoAddPrimitives="false" ScatterplotOrder="X Primitive, Y Primitive" Image="Display" FlipHorizontal="false" FlipVertical="false" LabelPosition="Bottom" legendPosition="Automatic" id="53">
+      <mxCell style="display" parent="1" vertex="1" visible="0">
+        <mxGeometry x="10" y="10" width="64" height="64" as="geometry" />
+      </mxCell>
+    </Display>
+    <Variable name="Non Susceptible" Note="" Equation="([Recovered]+[Immune])/[Total Population]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="54">
+      <mxCell style="variable" parent="1" vertex="1">
+        <mxGeometry x="940" y="5" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="55">
+      <mxCell style="link" parent="1" source="6" target="54" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="People whom cannot contract the illness again​" BiDirectional="false" id="56">
+      <mxCell style="link" parent="1" source="41" target="54" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="57">
+      <mxCell style="link" parent="1" source="18" target="54" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Fraction Recovered" Note="" Equation="[Recovered]/[Total Population]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="58">
+      <mxCell style="variable" parent="1" vertex="1">
+        <mxGeometry x="1050" y="70" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="59">
+      <mxCell style="link" parent="1" source="6" target="58" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="60">
+      <mxCell style="link" parent="1" source="18" target="58" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Variable name="Fraction Immune" Note="" Equation="[Immune]/[Total Population]" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="false" SliderMax="100" SliderMin="0" SliderStep="" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="61">
+      <mxCell style="variable" parent="1" vertex="1">
+        <mxGeometry x="70" y="55" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="62">
+      <mxCell style="link" parent="1" source="41" target="61" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Link name="Link" Note="" BiDirectional="false" id="63">
+      <mxCell style="link" parent="1" source="18" target="61" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Text name="Improvements to mirror reality better" LabelPosition="Middle" Note="&lt;ol&gt;&lt;li&gt;​Symptomatic Infected people would have a lower # of contacts &lt;br&gt;&lt;/li&gt;&lt;li&gt;Divide people into Asymptomatic Infected and Symptomatic Infected since Asymptomatic infected can still be around and about infecting others while Symptomatic Infected would be sequestered to bed. and both groups would have different # of contacts / day&lt;/li&gt;&lt;li&gt;Fraction of People wo immunity is to small of a fraction to give rise to system level impacts. More interesting to simulate people becoming susceptible after 180-200 days again.&lt;br&gt;&lt;/li&gt;&lt;/ol&gt;" id="64">
+      <mxCell style="text;fontSize=18;fontFamily=Verdana;" parent="1" vertex="1">
+        <mxGeometry x="30" y="588" width="370" height="65" as="geometry" />
+      </mxCell>
+    </Text>
+    <Text name="Simulation - README" LabelPosition="Middle" Note="This simulation will allow you to experiment with various parameters ​for the COVID-19 Virus.&amp;nbsp; Remember that SEIR Models are good to experiment with various epidemological factors and how they change the dynamics and possible pathways but might not mirror reality in all cases.&lt;br&gt;&lt;br&gt;&lt;ol&gt;&lt;li&gt;Vaccines will be available from day 10 onwards. You can change what the max rate for vaccinations will be but it will take approx 20 days from start of vaccinations until we get close to the max vaccination rate.&lt;/li&gt;&lt;li&gt;First test changing the following variables to see what happens:&lt;br&gt;&lt;ul&gt;&lt;li&gt;Incubation Period&lt;/li&gt;&lt;li&gt;Days Infected&lt;/li&gt;&lt;li&gt;Contacts Per Day&lt;/li&gt;&lt;li&gt;Infectivity&lt;/li&gt;&lt;/ul&gt;&lt;/li&gt;&lt;/ol&gt;" id="65">
+      <mxCell style="text;fontFamily=Verdana;fontSize=18;" parent="1" vertex="1">
+        <mxGeometry x="60" y="520" width="300" height="70" as="geometry" />
+      </mxCell>
+    </Text>
+    <Text name="Further reading" LabelPosition="Middle" Note="&lt;div&gt;&lt;div&gt;&lt;b&gt;&lt;u&gt;Real Time tracking of Coronavirus COVID-19 / HCoV-19&lt;/u&gt;&lt;/b&gt;&lt;br&gt;https://nextstrain.org/ncov?animate=2019-12-13,2020-02-29,0,0,30000&amp;amp;c=country&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;https://www.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf6&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;&lt;u&gt;Tips on how to protect aginst COVID-19&lt;/u&gt;&lt;/b&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;https://www.facebook.com/stories/1664658003554566/UzpfSVNDOjE0Nzg0NjczNTU2NTc2ODg=/&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;&lt;u&gt;COVID-19 Insights&lt;/u&gt;&lt;/b&gt;&lt;/div&gt;&lt;div&gt;​https://www.the-scientist.com/news-opinion/coronaviruss-genetics-reveal-its-global-travels-67183&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;https://www.the-scientist.com/news-opinion/why-some-covid-19-cases-are-worse-than-others-67160&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;https://www.sonar-global.eu/keyreadings/from-italy-anthropological-reflections-on-coronavirus-covid-19&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;https://www.technologyreview.com/s/615284/what-are-the-best-coronavirus-treatments/&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;https://www.washingtonpost.com/health/2020/02/28/what-you-need-know-about-coronavirus/?arc404=true&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;br&gt;" id="66">
+      <mxCell style="text;fontSize=18;fontFamily=Verdana;fontStyle=4" parent="1" vertex="1">
+        <mxGeometry x="113" y="660" width="175" height="50" as="geometry" />
+      </mxCell>
+    </Text>
+    <Text name="Revision History" LabelPosition="Middle" Note="By Rolf Häsänen&lt;br&gt;2020&lt;br&gt;0.1 Initial version cloned from Insight 584 updated with Exposed Stock to make an SEIR model from SIR&lt;br&gt;&lt;div&gt;0.2 Added Covid-19 data &lt;br&gt;0.3 Added further reading&lt;/div&gt;&lt;div&gt;0.4 Added Vaccination capability&lt;/div&gt;&lt;div&gt;2021&lt;/div&gt;&lt;div&gt;0.5 Added revision history&lt;/div&gt;&lt;div&gt;0.6 Changed the recovered to susceptible flow &lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;NOTE: add your changes and name to new revisions as you clone this insight&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" id="67">
+      <mxCell style="text" parent="1" vertex="1">
+        <mxGeometry x="1180" y="790" width="270" height="40" as="geometry" />
+      </mxCell>
+    </Text>
+    <Variable name="Days immune" Note="" Equation="170" Units="Unitless" MaxConstraintUsed="false" MinConstraintUsed="false" MaxConstraint="100" MinConstraint="0" ShowSlider="true" SliderMax="300" SliderMin="170" SliderStep="10" Image="None" FlipHorizontal="false" FlipVertical="false" LabelPosition="Middle" id="68">
+      <mxCell style="variable;fillColor=#99CC00;" parent="1" vertex="1">
+        <mxGeometry x="920" y="520" width="120" height="50" as="geometry" />
+      </mxCell>
+    </Variable>
+    <Link name="Link" Note="" BiDirectional="false" id="69">
+      <mxCell style="link" parent="1" source="68" target="35" edge="1">
+        <mxGeometry width="100" height="100" as="geometry">
+          <mxPoint y="100" as="sourcePoint" />
+          <mxPoint x="100" as="targetPoint" />
+        </mxGeometry>
+      </mxCell>
+    </Link>
+    <Text name="&lt;div&gt;TODOs&lt;br&gt;&lt;br&gt;-Extend model with flow from Immune to Susceptible after a timeframe. (based on virus speed of mutation or vaccine efficiency lifetime)&lt;/div&gt;&lt;div&gt;-Add long covid effects on population to simulate possible population effects over 10-20 years span&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" LabelPosition="Middle" oldId="70" id="70">
+      <mxCell style="text;fontSize=12;align=left;" parent="1" vertex="1">
+        <mxGeometry x="110" y="750" width="200" height="200" as="geometry" />
+      </mxCell>
+    </Text>
+  </root>
+</InsightMakerModel>
