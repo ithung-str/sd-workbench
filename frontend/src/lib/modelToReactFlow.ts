@@ -44,6 +44,7 @@ export type EdgeData = {
   waypoints?: WaypointPosition[];
   visualStyle?: VisualStyle;
   flowSign?: 'positive' | 'negative' | 'both';
+  flowLinkRole?: 'inflow' | 'outflow'; // inflow = stock→flow, outflow = flow→stock
 };
 
 // ---------------------------------------------------------------------------
@@ -399,11 +400,15 @@ export function toReactFlowEdges(
         waypoints,
         visualStyle: edgeStyle,
         ...(isFlowLink ? (() => {
-          // Find the flow node for this flow_link edge to get flow_sign
+          // Find the flow node for this flow_link edge to get flow_sign and role
           const sourceNode = byId.get(edge.source);
           const targetNode = byId.get(edge.target);
           const flowNode = sourceNode?.type === 'flow' ? sourceNode : targetNode?.type === 'flow' ? targetNode : undefined;
-          return flowNode?.type === 'flow' ? { flowSign: flowNode.flow_sign ?? 'positive' } : {};
+          const flowLinkRole: 'inflow' | 'outflow' = sourceNode?.type === 'flow' ? 'outflow' : 'inflow';
+          return {
+            ...(flowNode?.type === 'flow' ? { flowSign: flowNode.flow_sign ?? 'positive' } : {}),
+            flowLinkRole,
+          };
         })() : {}),
       } as EdgeData,
     };

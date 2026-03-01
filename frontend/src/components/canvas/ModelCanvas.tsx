@@ -136,6 +136,13 @@ function ModelCanvasInner() {
       ) {
         return;
       }
+
+      // Stock-to-stock: create a flow between them instead of an influence arrow
+      if (source.type === 'stock' && target.type === 'stock') {
+        createFlowBetweenStocks(connection.source, connection.target);
+        return;
+      }
+
       addModelEdge({
         id: `e_${Date.now()}`,
         type: 'influence',
@@ -145,7 +152,7 @@ function ModelCanvasInner() {
         target_handle: connection.targetHandle ?? undefined,
       });
     },
-    [isCanvasLocked, model.nodes, addModelEdge, completeDanglingEdge],
+    [isCanvasLocked, model.nodes, addModelEdge, completeDanglingEdge, createFlowBetweenStocks],
   );
 
   const onConnectStart = useCallback((_: unknown, params: OnConnectStartParams) => {

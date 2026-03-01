@@ -28,9 +28,29 @@ function ArrowPolygon({ tipX, tipY, leftX, leftY, rightX, rightY }: ReturnType<t
 export function FlowPipeEdge(props: EdgeProps<EdgeData>) {
   const waypoints = props.data?.waypoints;
   const flowSign = props.data?.flowSign ?? 'positive';
+  const role = props.data?.flowLinkRole;
 
-  const showTargetArrow = flowSign === 'positive' || flowSign === 'both';
-  const showSourceArrow = flowSign === 'negative' || flowSign === 'both';
+  // Determine arrow visibility based on the role of this specific edge segment.
+  // Inflow (stock → flow): no arrows — the pipe just enters the valve
+  // Outflow (flow → stock): arrow at the stock end (target) for positive,
+  //   arrow at the flow end (source) for negative, both for both.
+  // If no role info, fall back to legacy behavior.
+  let showTargetArrow: boolean;
+  let showSourceArrow: boolean;
+
+  if (role === 'inflow') {
+    // stock → flow: no arrows at all, continuous pipe into valve
+    showTargetArrow = false;
+    showSourceArrow = false;
+  } else if (role === 'outflow') {
+    // flow → stock: arrow at the stock (target) end
+    showTargetArrow = flowSign === 'positive' || flowSign === 'both';
+    showSourceArrow = flowSign === 'negative' || flowSign === 'both';
+  } else {
+    // Legacy fallback
+    showTargetArrow = flowSign === 'positive' || flowSign === 'both';
+    showSourceArrow = flowSign === 'negative' || flowSign === 'both';
+  }
 
   if (waypoints && waypoints.length > 0) {
     const allPoints = [
