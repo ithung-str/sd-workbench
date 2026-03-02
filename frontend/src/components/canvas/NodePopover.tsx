@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useEditorStore } from '../../state/editorStore';
-import { getConnectedNames, getEquationVariableNames, getStockFlowEquation } from '../../lib/modelHelpers';
+import { getConnectedNames, getEquationVariableNames, getStockFlowEquation, toIdentifier } from '../../lib/modelHelpers';
 import { buildContextFunctions } from '../inspector/functionCatalog';
 import { EquationEditor } from '../inspector/EquationEditor';
 import type { NodeModel, StockNode, LookupNode } from '../../types/model';
@@ -89,8 +89,11 @@ export function NodePopover({ nodeId, screenX, screenY, onClose }: Props) {
         <label>Name</label>
         <input
           type="text"
-          value={node.name}
-          onChange={(e) => updateNode(node.id, { name: e.target.value, label: e.target.value })}
+          value={node.label}
+          onChange={(e) => {
+            const label = e.target.value;
+            updateNode(node.id, { name: toIdentifier(label), label });
+          }}
         />
       </div>
 

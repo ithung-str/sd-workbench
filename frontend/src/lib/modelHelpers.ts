@@ -1,5 +1,17 @@
 import type { ModelDocument } from '../types/model';
 
+/** Convert an arbitrary string to a valid equation identifier (lowercase, underscores, no leading digits). */
+export function toIdentifier(value: string): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
+  // Ensure it doesn't start with a digit
+  if (/^[0-9]/.test(slug)) return `_${slug}`;
+  return slug || '_';
+}
+
 /** Return the names of variables connected to `nodeId` via edges (excluding text/cloud/cld_symbol). */
 export function getConnectedNames(nodeId: string, model: ModelDocument): string[] {
   const neighborIds = new Set<string>();

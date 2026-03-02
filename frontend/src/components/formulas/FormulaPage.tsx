@@ -22,7 +22,7 @@ import {
   IconSelector,
   IconTrash,
 } from '@tabler/icons-react';
-import { getConnectedNames, getEquationVariableNames, getStockFlowEquation } from '../../lib/modelHelpers';
+import { getConnectedNames, getEquationVariableNames, getStockFlowEquation, toIdentifier } from '../../lib/modelHelpers';
 import { useEditorStore } from '../../state/editorStore';
 import { buildContextFunctions } from '../inspector/functionCatalog';
 import { EquationEditor } from '../inspector/EquationEditor';
@@ -241,9 +241,9 @@ export function FormulaPage() {
     const value = fieldDraft.trim();
     if (editingField === 'name' && value) {
       if (row.type === 'global') {
-        updateGlobalVariable(row.id, { name: value });
+        updateGlobalVariable(row.id, { name: toIdentifier(value) });
       } else {
-        updateNode(row.id, { name: value, label: value });
+        updateNode(row.id, { name: toIdentifier(value), label: value });
       }
     } else if (editingField === 'units') {
       if (row.type === 'global') {

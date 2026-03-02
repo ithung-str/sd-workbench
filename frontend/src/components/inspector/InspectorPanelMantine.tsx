@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Stack, Title, Button, TextInput, Textarea, Group, Text, Paper, Alert, Checkbox, NumberInput } from '@mantine/core';
 import { IconTrash, IconInfoCircle } from '@tabler/icons-react';
 import { collectGlobalVariableUsage } from '../../lib/globalVariableUsage';
-import { getStockFlowEquation } from '../../lib/modelHelpers';
+import { getStockFlowEquation, toIdentifier } from '../../lib/modelHelpers';
 import { useEditorStore } from '../../state/editorStore';
 import type { CldLoopDirection, CldSymbol, EdgeModel, LookupNode, NodeModel } from '../../types/model';
 import { EquationEditor } from './EquationEditor';
@@ -294,17 +294,26 @@ export function InspectorPanel() {
       </Group>
 
       <TextInput
-        label="Name"
+        label="Name (identifier)"
+        description="Used in equations. Letters, digits, underscores only."
         size="xs"
         value={node.name}
-        onChange={(e) => updateNode(node.id, { name: e.target.value })}
+        onChange={(e) => updateNode(node.id, { name: toIdentifier(e.target.value) })}
       />
 
       <TextInput
-        label="Label"
+        label="Label (display)"
         size="xs"
         value={node.label}
-        onChange={(e) => updateNode(node.id, { label: e.target.value })}
+        onChange={(e) => {
+          const label = e.target.value;
+          const patch: Partial<NodeModel> = { label };
+          // Auto-sync name if it matches the old label's identifier form
+          if (node.name === toIdentifier(node.label)) {
+            patch.name = toIdentifier(label);
+          }
+          updateNode(node.id, patch);
+        }}
       />
 
       <TextInput
