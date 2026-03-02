@@ -32,6 +32,7 @@ import type {
   NodeModel,
   OATSensitivityResponse,
   ScenarioDefinition,
+  SensitivityConfig,
   SimConfig,
   SimulateResponse,
   ValidateResponse,
@@ -82,6 +83,8 @@ type EditorState = {
   activeScenarioId: string;
   dashboards: DashboardDefinition[];
   activeDashboardId: string | null;
+  sensitivityConfigs: SensitivityConfig[];
+  activeSensitivityConfigId: string;
   compareResults: BatchSimulateResponse | null;
   oatResults: OATSensitivityResponse | null;
   monteCarloResults: MonteCarloResponse | null;
@@ -155,6 +158,7 @@ type EditorState = {
   clearAiChat: () => void;
   setAiChatOpen: (open: boolean) => void;
   createScenario: () => void;
+  duplicateScenario: (id: string) => void;
   updateScenario: (id: string, patch: Partial<ScenarioDefinition>) => void;
   deleteScenario: (id: string) => void;
   setActiveScenario: (id: string) => void;
@@ -162,6 +166,12 @@ type EditorState = {
   updateDashboard: (id: string, patch: Partial<DashboardDefinition>) => void;
   deleteDashboard: (id: string) => void;
   setActiveDashboard: (id: string) => void;
+  createSensitivityConfig: () => void;
+  duplicateSensitivityConfig: (id: string) => void;
+  updateSensitivityConfig: (id: string, patch: Partial<SensitivityConfig>) => void;
+  deleteSensitivityConfig: (id: string) => void;
+  setActiveSensitivityConfig: (id: string) => void;
+  runActiveSensitivity: () => Promise<void>;
   addDashboardCard: (dashboardId: string, card: Omit<DashboardCard, 'id' | 'order'> & { id?: string; order?: number }) => void;
   updateDashboardCard: (dashboardId: string, cardId: string, patch: Partial<DashboardCard>) => void;
   moveDashboardCard: (dashboardId: string, cardId: string, direction: 'up' | 'down') => void;
@@ -274,6 +284,17 @@ function defaultScenarios(model: ModelDocument): { scenarios: ScenarioDefinition
   return { scenarios: [baseline], activeScenarioId: baseline.id };
 }
 
+function defaultSensitivityConfigs(model: ModelDocument): { sensitivityConfigs: SensitivityConfig[]; activeSensitivityConfigId: string } {
+  const existing = model.metadata?.analysis?.sensitivity_configs ?? [];
+  if (existing.length > 0) {
+    const activeId =
+      model.metadata?.analysis?.defaults?.active_sensitivity_config_id ??
+      existing[0].id;
+    return { sensitivityConfigs: existing, activeSensitivityConfigId: activeId };
+  }
+  return { sensitivityConfigs: [], activeSensitivityConfigId: '' };
+}
+
 function persistScenarios(model: ModelDocument, scenarios: ScenarioDefinition[], activeScenarioId: string): ModelDocument {
   const existingAnalysis = model.metadata?.analysis;
   const existingDashboards = existingAnalysis?.dashboards ?? [];
@@ -310,6 +331,8 @@ function persistAnalysis(
   activeScenarioId: string,
   dashboards: DashboardDefinition[],
   activeDashboardId: string | null,
+  sensitivityConfigs?: SensitivityConfig[],
+  activeSensitivityConfigId?: string,
 ): ModelDocument {
   return {
     ...model,
@@ -318,9 +341,11 @@ function persistAnalysis(
       analysis: {
         scenarios,
         dashboards,
+        sensitivity_configs: sensitivityConfigs,
         defaults: {
           baseline_scenario_id: activeScenarioId,
           active_dashboard_id: activeDashboardId ?? undefined,
+          active_sensitivity_config_id: activeSensitivityConfigId ?? undefined,
         },
       },
     },
@@ -388,6 +413,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
   const initialModel = cloneModel(teacupModel);
   const initialScenarios = defaultScenarios(initialModel);
   const initialDashboards = defaultDashboards(initialModel);
+  const initialSensitivityConfigs = defaultSensitivityConfigs(initialModel);
   const pushHistory = (before: HistoryEntry, after: HistoryEntry) => {
     if (snapshotsEqual(before, after)) return;
     set((state) => {
@@ -444,12 +470,15 @@ export const useEditorStore = create<EditorState>((set, get) => {
     const canonical = importedVensim.model_view.canonical ?? cloneModel(blankModel);
     const scenarioDefaults = defaultScenarios(canonical);
     const dashboardDefaults = defaultDashboards(canonical);
+    const sensitivityDefaults = defaultSensitivityConfigs(canonical);
     const persisted = persistAnalysis(
       canonical,
       scenarioDefaults.scenarios,
       scenarioDefaults.activeScenarioId,
       dashboardDefaults.dashboards,
       dashboardDefaults.activeDashboardId,
+      sensitivityDefaults.sensitivityConfigs,
+      sensitivityDefaults.activeSensitivityConfigId,
     );
     const time = importedVensim.model_view.time_settings;
     set({
@@ -460,6 +489,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
       activeScenarioId: scenarioDefaults.activeScenarioId,
       dashboards: dashboardDefaults.dashboards,
       activeDashboardId: dashboardDefaults.activeDashboardId,
+      sensitivityConfigs: sensitivityDefaults.sensitivityConfigs,
+      activeSensitivityConfigId: sensitivityDefaults.activeSensitivityConfigId,
       selected: null,
       results: null,
       compareResults: null,
@@ -489,6 +520,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
       initialScenarios.activeScenarioId,
       initialDashboards.dashboards,
       initialDashboards.activeDashboardId,
+      initialSensitivityConfigs.sensitivityConfigs,
+      initialSensitivityConfigs.activeSensitivityConfigId,
     ),
     selected: null,
     simConfig: { start: 0, stop: 30, dt: 1, method: 'euler' },
@@ -502,6 +535,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
     activeScenarioId: initialScenarios.activeScenarioId,
     dashboards: initialDashboards.dashboards,
     activeDashboardId: initialDashboards.activeDashboardId,
+    sensitivityConfigs: initialSensitivityConfigs.sensitivityConfigs,
+    activeSensitivityConfigId: initialSensitivityConfigs.activeSensitivityConfigId,
     compareResults: null,
     oatResults: null,
     monteCarloResults: null,
@@ -1049,12 +1084,15 @@ export const useEditorStore = create<EditorState>((set, get) => {
         const updated = cloneModel(response.model!);
         const scenarioDefaults = defaultScenarios(updated);
         const dashboardDefaults = defaultDashboards(updated);
+        const sensitivityDefaults = defaultSensitivityConfigs(updated);
         const persisted = persistAnalysis(
           updated,
           scenarioDefaults.scenarios,
           scenarioDefaults.activeScenarioId,
           dashboardDefaults.dashboards,
           dashboardDefaults.activeDashboardId,
+          sensitivityDefaults.sensitivityConfigs,
+          sensitivityDefaults.activeSensitivityConfigId,
         );
         set({
           model: persisted,
@@ -1062,6 +1100,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
           activeScenarioId: scenarioDefaults.activeScenarioId,
           dashboards: dashboardDefaults.dashboards,
           activeDashboardId: dashboardDefaults.activeDashboardId,
+          sensitivityConfigs: sensitivityDefaults.sensitivityConfigs,
+          activeSensitivityConfigId: sensitivityDefaults.activeSensitivityConfigId,
           selected: null,
           localIssues: localValidate(persisted),
           validation: defaultValidation(),
@@ -1088,12 +1128,15 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const cloned = cloneModel({ ...model, global_variables: model.global_variables ?? [] });
       const scenarioDefaults = defaultScenarios(cloned);
       const dashboardDefaults = defaultDashboards(cloned);
+      const sensitivityDefaults = defaultSensitivityConfigs(cloned);
       const persisted = persistAnalysis(
         cloned,
         scenarioDefaults.scenarios,
         scenarioDefaults.activeScenarioId,
         dashboardDefaults.dashboards,
         dashboardDefaults.activeDashboardId,
+        sensitivityDefaults.sensitivityConfigs,
+        sensitivityDefaults.activeSensitivityConfigId,
       );
       set({
         model: persisted,
@@ -1101,6 +1144,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
         activeScenarioId: scenarioDefaults.activeScenarioId,
         dashboards: dashboardDefaults.dashboards,
         activeDashboardId: dashboardDefaults.activeDashboardId,
+        sensitivityConfigs: sensitivityDefaults.sensitivityConfigs,
+        activeSensitivityConfigId: sensitivityDefaults.activeSensitivityConfigId,
         selected: null,
         results: null,
         compareResults: null,
@@ -1195,6 +1240,41 @@ export const useEditorStore = create<EditorState>((set, get) => {
             activeScenarioId,
             state.dashboards,
             state.activeDashboardId,
+            state.sensitivityConfigs,
+            state.activeSensitivityConfigId,
+          ),
+        };
+      });
+    },
+    duplicateScenario: (id) => {
+      set((state) => {
+        const source = scenarioById(state.scenarios, id);
+        if (!source) return {};
+        const next: ScenarioDefinition = {
+          id: `scenario_${Date.now()}`,
+          name: `${source.name} (copy)`,
+          status: 'draft',
+          color: source.color,
+          description: source.description,
+          overrides: {
+            params: { ...(source.overrides?.params ?? {}) },
+            sim_config: { ...(source.overrides?.sim_config ?? {}) },
+            outputs: [...(source.overrides?.outputs ?? [])],
+          },
+        };
+        const scenarios = [...state.scenarios, next];
+        const activeScenarioId = next.id;
+        return {
+          scenarios,
+          activeScenarioId,
+          model: persistAnalysis(
+            state.model,
+            scenarios,
+            activeScenarioId,
+            state.dashboards,
+            state.activeDashboardId,
+            state.sensitivityConfigs,
+            state.activeSensitivityConfigId,
           ),
         };
       });
@@ -1225,6 +1305,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.activeScenarioId,
             state.dashboards,
             state.activeDashboardId,
+            state.sensitivityConfigs,
+            state.activeSensitivityConfigId,
           ),
         };
       });
@@ -1242,6 +1324,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
             baseline,
             state.dashboards,
             state.activeDashboardId,
+            state.sensitivityConfigs,
+            state.activeSensitivityConfigId,
           ),
         };
       });
@@ -1249,7 +1333,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     setActiveScenario: (id) => {
       set((state) => ({
         activeScenarioId: id,
-        model: persistAnalysis(state.model, state.scenarios, id, state.dashboards, state.activeDashboardId),
+        model: persistAnalysis(state.model, state.scenarios, id, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
       }));
     },
     updateDefaultStyle: (nodeType, style) => {
@@ -1292,7 +1376,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return {
           dashboards,
           activeDashboardId: id,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, id),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId),
         };
       });
     },
@@ -1303,7 +1387,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         );
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
         };
       });
     },
@@ -1314,15 +1398,134 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return {
           dashboards,
           activeDashboardId,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, activeDashboardId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
         };
       });
     },
     setActiveDashboard: (id) => {
       set((state) => ({
         activeDashboardId: id,
-        model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, id),
+        model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId),
       }));
+    },
+    createSensitivityConfig: () => {
+      set((state) => {
+        const outputOptions = state.model.nodes
+          .filter((n) => n.type !== 'text' && n.type !== 'cloud' && n.type !== 'cld_symbol' && n.type !== 'phantom')
+          .map((n) => n.name);
+        const next: SensitivityConfig = {
+          id: `sensitivity_${Date.now()}`,
+          name: `Analysis ${state.sensitivityConfigs.length + 1}`,
+          type: 'oat',
+          output: outputOptions[0] ?? '',
+          metric: 'final',
+          parameters: [],
+          color: '#1b6ca8',
+        };
+        const sensitivityConfigs = [...state.sensitivityConfigs, next];
+        const activeSensitivityConfigId = next.id;
+        return {
+          sensitivityConfigs,
+          activeSensitivityConfigId,
+          model: persistAnalysis(
+            state.model, state.scenarios, state.activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            sensitivityConfigs, activeSensitivityConfigId,
+          ),
+        };
+      });
+    },
+    duplicateSensitivityConfig: (id) => {
+      set((state) => {
+        const source = state.sensitivityConfigs.find((c) => c.id === id);
+        if (!source) return {};
+        const next: SensitivityConfig = {
+          ...structuredClone(source),
+          id: `sensitivity_${Date.now()}`,
+          name: `${source.name} (copy)`,
+        };
+        const sensitivityConfigs = [...state.sensitivityConfigs, next];
+        const activeSensitivityConfigId = next.id;
+        return {
+          sensitivityConfigs,
+          activeSensitivityConfigId,
+          model: persistAnalysis(
+            state.model, state.scenarios, state.activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            sensitivityConfigs, activeSensitivityConfigId,
+          ),
+        };
+      });
+    },
+    updateSensitivityConfig: (id, patch) => {
+      set((state) => {
+        const sensitivityConfigs = state.sensitivityConfigs.map((c) =>
+          c.id === id ? { ...c, ...patch } : c,
+        );
+        return {
+          sensitivityConfigs,
+          model: persistAnalysis(
+            state.model, state.scenarios, state.activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            sensitivityConfigs, state.activeSensitivityConfigId,
+          ),
+        };
+      });
+    },
+    deleteSensitivityConfig: (id) => {
+      set((state) => {
+        const sensitivityConfigs = state.sensitivityConfigs.filter((c) => c.id !== id);
+        const activeSensitivityConfigId =
+          state.activeSensitivityConfigId === id
+            ? (sensitivityConfigs[0]?.id ?? '')
+            : state.activeSensitivityConfigId;
+        return {
+          sensitivityConfigs,
+          activeSensitivityConfigId,
+          model: persistAnalysis(
+            state.model, state.scenarios, state.activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            sensitivityConfigs, activeSensitivityConfigId,
+          ),
+        };
+      });
+    },
+    setActiveSensitivityConfig: (id) => {
+      set((state) => ({
+        activeSensitivityConfigId: id,
+        model: persistAnalysis(
+          state.model, state.scenarios, state.activeScenarioId,
+          state.dashboards, state.activeDashboardId,
+          state.sensitivityConfigs, id,
+        ),
+      }));
+    },
+    runActiveSensitivity: async () => {
+      const state = get();
+      const config = state.sensitivityConfigs.find(
+        (c) => c.id === state.activeSensitivityConfigId,
+      );
+      if (!config || config.parameters.length === 0) return;
+      if (config.type === 'oat') {
+        await state.runOATSensitivity({
+          output: config.output,
+          metric: config.metric,
+          parameters: config.parameters,
+        });
+      } else {
+        await state.runMonteCarlo({
+          output: config.output,
+          metric: config.metric,
+          runs: config.runs ?? 100,
+          seed: config.seed ?? 42,
+          parameters: config.parameters.map((p) => ({
+            name: p.name,
+            distribution: 'uniform' as const,
+            min: p.low,
+            max: p.high,
+          })),
+        });
+      }
     },
     addDashboardCard: (dashboardId, card) => {
       set((state) => {
@@ -1357,7 +1560,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
         };
       });
     },
@@ -1372,7 +1575,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
         };
       });
     },
@@ -1393,7 +1596,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
         };
       });
     },
@@ -1406,7 +1609,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
         };
       });
     },
