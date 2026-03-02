@@ -276,6 +276,22 @@ class DashboardDefinition(BaseModel):
 class AnalysisDefaults(BaseModel):
     baseline_scenario_id: Optional[str] = None
     active_dashboard_id: Optional[str] = None
+    active_sensitivity_config_id: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SensitivityConfigSchema(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    color: Optional[str] = None
+    type: Literal["oat", "monte-carlo"]
+    output: str
+    metric: Literal["final", "max", "min", "mean"]
+    parameters: list["SensitivityParameterRange"] = Field(default_factory=list)
+    runs: Optional[int] = None
+    seed: Optional[int] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -283,6 +299,7 @@ class AnalysisDefaults(BaseModel):
 class AnalysisConfig(BaseModel):
     scenarios: list[ScenarioDefinition] = Field(default_factory=list)
     dashboards: list[DashboardDefinition] = Field(default_factory=list)
+    sensitivity_configs: list[SensitivityConfigSchema] = Field(default_factory=list)
     defaults: AnalysisDefaults = Field(default_factory=AnalysisDefaults)
 
     model_config = ConfigDict(extra="forbid")
