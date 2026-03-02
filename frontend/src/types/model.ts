@@ -268,13 +268,28 @@ export type DashboardDefinition = {
   cards: DashboardCard[];
 };
 
+export type SensitivityConfig = {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  type: 'oat' | 'monte-carlo';
+  output: string;
+  metric: 'final' | 'max' | 'min' | 'mean';
+  parameters: SensitivityParameterRange[];
+  runs?: number;
+  seed?: number;
+};
+
 export type AnalysisConfig = {
   scenarios: ScenarioDefinition[];
   defaults?: {
     baseline_scenario_id?: string;
     active_dashboard_id?: string;
+    active_sensitivity_config_id?: string;
   };
   dashboards?: DashboardDefinition[];
+  sensitivity_configs?: SensitivityConfig[];
 };
 
 export type ScenarioRunResult = {
