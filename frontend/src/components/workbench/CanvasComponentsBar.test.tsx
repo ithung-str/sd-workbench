@@ -10,6 +10,7 @@ const mockReactFlow = {
   zoomOut: vi.fn(),
   fitView: vi.fn(),
   setViewport: vi.fn(),
+  getNodes: vi.fn(() => []),
 };
 
 vi.mock('reactflow', () => ({
@@ -43,6 +44,47 @@ describe('CanvasComponentsBar', () => {
     expect(mockReactFlow.zoomOut).toHaveBeenCalledTimes(1);
     expect(mockReactFlow.fitView).toHaveBeenCalledTimes(1);
     expect(mockReactFlow.setViewport).toHaveBeenCalledTimes(1);
+  });
+
+  it('align buttons disabled when fewer than 2 nodes selected', () => {
+    mockReactFlow.getNodes.mockReturnValue([]);
+    render(
+      <MantineProvider>
+        <CanvasComponentsBar />
+      </MantineProvider>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Align left' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Align right' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Align top' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Align bottom' })).toBeDisabled();
+  });
+
+  it('align buttons call alignNodes with selected node ids', async () => {
+    const user = userEvent.setup();
+    mockReactFlow.getNodes.mockReturnValue([
+      { id: 'a', selected: true },
+      { id: 'b', selected: true },
+      { id: 'c', selected: false },
+    ]);
+
+    const alignSpy = vi.fn();
+    useEditorStore.setState((state) => ({
+      ...state,
+      alignNodes: alignSpy,
+    }));
+
+    render(
+      <MantineProvider>
+        <CanvasComponentsBar />
+      </MantineProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Align left' }));
+    expect(alignSpy).toHaveBeenCalledWith('left', ['a', 'b']);
+
+    await user.click(screen.getByRole('button', { name: 'Align top' }));
+    expect(alignSpy).toHaveBeenCalledWith('top', ['a', 'b']);
   });
 
   it('inserts CLD symbol and toggles lock', async () => {

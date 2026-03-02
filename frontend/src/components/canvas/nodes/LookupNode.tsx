@@ -59,7 +59,9 @@ export function LookupNodeView({ data }: { data: LabelNodeData }) {
       onMouseLeave={() => setHovered(false)}
     >
       <Handle type="target" position={Position.Left} id="left" />
+      <Handle type="source" position={Position.Left} id="left" />
       <Handle type="target" position={Position.Top} id="top" />
+      <Handle type="source" position={Position.Top} id="top" />
       <div className="lookup-glyph" aria-hidden="true">
         <svg viewBox="0 0 44 24" preserveAspectRatio="none">
           <path d="M2 20 L2 3 M2 20 L42 20" className="axes" />
@@ -73,10 +75,12 @@ export function LookupNodeView({ data }: { data: LabelNodeData }) {
       <div className="rf-node-label">{data.label}</div>
       <div className="rf-node-subtitle">{data.subtitle}</div>
       <Handle type="source" position={Position.Right} id="right" />
+      <Handle type="target" position={Position.Right} id="right" />
       <Handle type="source" position={Position.Bottom} id="bottom" />
+      <Handle type="target" position={Position.Bottom} id="bottom" />
       {hovered && (
         <button
-          className="stock-flow-plus"
+          className="stock-flow-plus nodrag"
           onMouseDown={onEdgeDragStart}
           tabIndex={-1}
         >

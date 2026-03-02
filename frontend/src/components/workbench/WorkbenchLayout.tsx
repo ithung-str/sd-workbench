@@ -45,7 +45,7 @@ export function WorkbenchLayout() {
     { key: 'blank', label: 'Unsaved diagram' },
     { key: 'teacup', label: 'Teacup Cooling' },
     { key: 'bathtub', label: 'Bathtub Inventory' },
-    { key: 'population', label: 'Simple Population' },
+    { key: 'population', label: 'Population' },
   ];
 
   const selectedPreset =

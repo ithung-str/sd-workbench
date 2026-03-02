@@ -1,6 +1,8 @@
 import type { DashboardCard, DashboardCardType } from '../types/model';
 
 export const DASHBOARD_GRID_SIZE = 24;
+export const MIN_CARD_WIDTH = 168;
+export const MIN_CARD_HEIGHT = 120;
 const DEFAULT_CANVAS_WIDTH = 1400;
 const DEFAULT_CANVAS_HEIGHT = 1200;
 const DEFAULT_PADDING = 24;

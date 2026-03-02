@@ -37,8 +37,8 @@ describe('mfaExport', () => {
     expect(stock?.stockSeries?.['2021-01-01']).toBe(10);
     expect(stock?.stockSeries?.['2021-01-03']).toBe(14);
 
-    const link = doc.links.find((l) => l.id === 'cloud_source_flow_inflow_to_stock_inventory');
-    expect(link?.source).toBe('cloud_source_flow_inflow');
+    const link = doc.links.find((l) => l.id === 'cloud_flow_inflow_src_to_stock_inventory');
+    expect(link?.source).toBe('cloud_flow_inflow_src');
     expect(link?.target).toBe('stock_inventory');
     expect(link?.value).toBe(4);
     expect(link?.valueSeries?.['2021-01-01']).toBe(3);
@@ -103,7 +103,7 @@ describe('mfaExport', () => {
       missingValueRule: 'carry_forward',
     });
     const carryStock = carry.nodes.find((n) => n.id === 'stock_inventory');
-    const carryLink = carry.links.find((l) => l.id === 'cloud_source_flow_inflow_to_stock_inventory');
+    const carryLink = carry.links.find((l) => l.id === 'cloud_flow_inflow_src_to_stock_inventory');
     expect(carryStock?.stockSeries?.['2021-01-02']).toBe(10);
     expect(carryLink?.valueSeries?.['2021-01-02']).toBe(3);
 
@@ -113,7 +113,7 @@ describe('mfaExport', () => {
       missingValueRule: 'fallback_scalar',
     });
     const fallbackStock = fallback.nodes.find((n) => n.id === 'stock_inventory');
-    const fallbackLink = fallback.links.find((l) => l.id === 'cloud_source_flow_inflow_to_stock_inventory');
+    const fallbackLink = fallback.links.find((l) => l.id === 'cloud_flow_inflow_src_to_stock_inventory');
     expect(fallbackStock?.stockSeries?.['2021-01-02']).toBe(10);
     expect(fallbackLink?.valueSeries?.['2021-01-02']).toBe(3);
 
@@ -123,7 +123,7 @@ describe('mfaExport', () => {
       missingValueRule: 'exact',
     });
     const exactStock = exact.nodes.find((n) => n.id === 'stock_inventory');
-    const exactLink = exact.links.find((l) => l.id === 'cloud_source_flow_inflow_to_stock_inventory');
+    const exactLink = exact.links.find((l) => l.id === 'cloud_flow_inflow_src_to_stock_inventory');
     expect(exactStock?.stockSeries?.['2021-01-02']).toBeUndefined();
     expect(exactLink?.valueSeries?.['2021-01-02']).toBeUndefined();
   });
@@ -143,7 +143,7 @@ describe('mfaExport', () => {
     expect(stock?.stock).toBe(12);
     expect(stock?.stockSeries).toBeUndefined();
 
-    const link = doc.links.find((l) => l.id === 'cloud_source_flow_inflow_to_stock_inventory');
+    const link = doc.links.find((l) => l.id === 'cloud_flow_inflow_src_to_stock_inventory');
     expect(link?.value).toBe(4);
     expect(link?.valueSeries).toBeUndefined();
 

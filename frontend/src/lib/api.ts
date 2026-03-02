@@ -39,7 +39,7 @@ async function parseJson<T>(res: Response): Promise<T> {
 
 function modelForBackend(model: ModelDocument): ModelDocument {
   const { global_variables: _globals, ...base } = model;
-  const semanticNodes = base.nodes.filter((node) => node.type !== 'cld_symbol' && node.type !== 'phantom');
+  const semanticNodes = base.nodes.filter((node) => node.type !== 'cld_symbol' && node.type !== 'phantom' && node.type !== 'cloud');
   const semanticIds = new Set(semanticNodes.map((node) => node.id));
   const semanticEdges = base.edges.filter((edge) => semanticIds.has(edge.source) && semanticIds.has(edge.target));
   const globals = model.global_variables ?? [];

@@ -143,13 +143,16 @@ function ModelCanvasInner() {
         return;
       }
 
+      // Stocks cannot receive influence edges — they only accumulate through flows
+      if (target.type === 'stock') {
+        return;
+      }
+
       addModelEdge({
         id: `e_${Date.now()}`,
         type: 'influence',
         source: connection.source,
         target: connection.target,
-        source_handle: connection.sourceHandle ?? undefined,
-        target_handle: connection.targetHandle ?? undefined,
       });
     },
     [isCanvasLocked, model.nodes, addModelEdge, completeDanglingEdge, createFlowBetweenStocks],

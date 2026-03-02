@@ -1,16 +1,18 @@
 import { useState } from 'react';
-import { AppShell, Button, Group, Select, Text, Title, ActionIcon, Menu, ScrollArea } from '@mantine/core';
+import { AppShell, Group, Select, Tabs, Text, Title, ActionIcon, Menu, ScrollArea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconMenu2, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import { ModelCanvas } from '../canvas/ModelCanvas';
 import { PalettePanel } from '../palette/PalettePanelMantine';
 import { InspectorPanel } from '../inspector/InspectorPanelMantine';
 import { ResultsDock } from '../results/ResultsDockMantine';
+import { FormulaPage } from '../formulas/FormulaPage';
+import { DashboardPage } from '../dashboard/DashboardPage';
+import { ScenarioPage } from '../scenarios/ScenarioPage';
 import { ImportExportControls } from '../io/ImportExportControls';
 import { useUIStore } from '../../state/uiStore';
 import { modelPresets, type ModelPresetKey } from '../../lib/sampleModels';
-import { useEditorStore } from '../../state/editorStore';
-import { navigateTo } from '../../lib/navigation';
+import { useEditorStore, type WorkbenchTab } from '../../state/editorStore';
 
 const defaultLogoUrl = new URL('../../../icons/logo.c8183304f1fb39b2784238e3b10258dd.svg', import.meta.url).href;
 const WORKBENCH_HEADER_HEIGHT = 60;
@@ -22,15 +24,19 @@ export function WorkbenchLayout() {
 
   const model = useEditorStore((s) => s.model);
   const loadModel = useEditorStore((s) => s.loadModel);
+  const activeTab = useEditorStore((s) => s.activeTab);
+  const setActiveTab = useEditorStore((s) => s.setActiveTab);
   const logoUrl = (import.meta.env.VITE_SC_LOGO_URL as string | undefined) || defaultLogoUrl;
   const bottomTrayExpanded = useUIStore((s) => s.bottomTrayExpanded);
   const bottomTrayHeight = useUIStore((s) => s.bottomTrayHeight);
+
+  const isCanvas = activeTab === 'canvas';
 
   const presetOptions: Array<{ key: ModelPresetKey; label: string }> = [
     { key: 'blank', label: 'Unsaved diagram' },
     { key: 'teacup', label: 'Teacup Cooling' },
     { key: 'bathtub', label: 'Bathtub Inventory' },
-    { key: 'population', label: 'Simple Population' },
+    { key: 'population', label: 'Population' },
     { key: 'supplyChain', label: 'Supply Chain' },
   ];
 
@@ -39,9 +45,9 @@ export function WorkbenchLayout() {
   return (
     <AppShell
       header={{ height: WORKBENCH_HEADER_HEIGHT }}
-      footer={{ height: bottomTrayExpanded ? bottomTrayHeight : 68 }}
-      navbar={{ width: 360, breakpoint: 'sm', collapsed: { mobile: !leftOpened, desktop: !leftOpened } }}
-      aside={{ width: 340, breakpoint: 'md', collapsed: { mobile: !rightOpened, desktop: !rightOpened } }}
+      footer={{ height: isCanvas ? (bottomTrayExpanded ? bottomTrayHeight : 68) : 0 }}
+      navbar={{ width: 360, breakpoint: 'sm', collapsed: { mobile: !isCanvas || !leftOpened, desktop: !isCanvas || !leftOpened } }}
+      aside={{ width: 340, breakpoint: 'md', collapsed: { mobile: !isCanvas || !rightOpened, desktop: !isCanvas || !rightOpened } }}
       padding="0"
     >
       <AppShell.Header>
@@ -77,7 +83,7 @@ export function WorkbenchLayout() {
             </div>
           </Group>
 
-          <Group gap="xs" style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Group gap="sm" style={{ flex: 1, justifyContent: 'center' }}>
             <Select
               aria-label="Model picker"
               value={selectedNative}
@@ -86,22 +92,35 @@ export function WorkbenchLayout() {
                 loadModel(modelPresets[value as ModelPresetKey]);
               }}
               data={presetOptions.map((opt) => ({ value: opt.key, label: opt.label }))}
-              w={300}
-              size="sm"
+              w={220}
+              size="xs"
             />
+          </Group>
 
-            <Button variant="filled" color="deep-purple" size="sm">
-              + New Diagram
-            </Button>
-            <Button variant="light" color="deepPurple" size="sm" onClick={() => navigateTo('/formulas')}>
-              Formulas
-            </Button>
-            <Button variant="light" color="deepPurple" size="sm" onClick={() => navigateTo('/dashboard')}>
-              Dashboard
-            </Button>
-            <Button variant="light" color="deepPurple" size="sm" onClick={() => navigateTo('/scenarios')}>
-              Scenarios
-            </Button>
+          <Group gap="xs">
+            <Tabs
+              value={activeTab}
+              onChange={(v) => v && setActiveTab(v as WorkbenchTab)}
+              variant="default"
+              color="violet"
+              styles={{
+                root: { alignSelf: 'stretch', display: 'flex', alignItems: 'stretch' },
+                list: { borderBottom: 'none', flexWrap: 'nowrap', gap: 0 },
+                tab: {
+                  fontWeight: 500,
+                  fontSize: '0.85rem',
+                  paddingLeft: 12,
+                  paddingRight: 12,
+                },
+              }}
+            >
+              <Tabs.List>
+                <Tabs.Tab value="canvas">Canvas</Tabs.Tab>
+                <Tabs.Tab value="formulas">Formulas</Tabs.Tab>
+                <Tabs.Tab value="dashboard">Dashboard</Tabs.Tab>
+                <Tabs.Tab value="scenarios">Scenarios</Tabs.Tab>
+              </Tabs.List>
+            </Tabs>
 
             <Menu opened={menuOpened} onChange={setMenuOpened}>
               <Menu.Target>
@@ -171,58 +190,67 @@ export function WorkbenchLayout() {
 
       <AppShell.Main
         className="workbench-main"
-        p={0}
         style={{
           ['--workbench-header-height' as string]: `${WORKBENCH_HEADER_HEIGHT}px`,
           background: '#ffffff',
           position: 'relative',
-          overflow: 'hidden',
+          overflow: isCanvas ? 'hidden' : 'auto',
         }}
       >
-        <ModelCanvas />
+        {activeTab === 'canvas' && (
+          <>
+            <ModelCanvas />
 
-        {!leftOpened && (
-          <ActionIcon
-            className="sidebar-reopen-tab sidebar-reopen-tab-left"
-            variant="filled"
-            color="deepPurple"
-            size="lg"
-            data-testid="left-expand"
-            aria-label="Expand left sidebar"
-            title="Expand left sidebar"
-            onClick={openLeft}
-          >
-            <IconChevronRight size={18} />
-          </ActionIcon>
+            {!leftOpened && (
+              <ActionIcon
+                className="sidebar-reopen-tab sidebar-reopen-tab-left"
+                variant="filled"
+                color="deepPurple"
+                size="lg"
+                data-testid="left-expand"
+                aria-label="Expand left sidebar"
+                title="Expand left sidebar"
+                onClick={openLeft}
+              >
+                <IconChevronRight size={18} />
+              </ActionIcon>
+            )}
+
+            {!rightOpened && (
+              <ActionIcon
+                className="sidebar-reopen-tab sidebar-reopen-tab-right"
+                variant="filled"
+                color="deepPurple"
+                size="lg"
+                data-testid="right-expand"
+                aria-label="Expand right sidebar"
+                title="Expand right sidebar"
+                onClick={openRight}
+              >
+                <IconChevronLeft size={18} />
+              </ActionIcon>
+            )}
+          </>
         )}
 
-        {!rightOpened && (
-          <ActionIcon
-            className="sidebar-reopen-tab sidebar-reopen-tab-right"
-            variant="filled"
-            color="deepPurple"
-            size="lg"
-            data-testid="right-expand"
-            aria-label="Expand right sidebar"
-            title="Expand right sidebar"
-            onClick={openRight}
-          >
-            <IconChevronLeft size={18} />
-          </ActionIcon>
-        )}
+        {activeTab === 'formulas' && <FormulaPage />}
+        {activeTab === 'dashboard' && <DashboardPage />}
+        {activeTab === 'scenarios' && <ScenarioPage />}
       </AppShell.Main>
 
-      <AppShell.Footer
-        p={0}
-        style={{
-          background: '#ffffff',
-          borderTop: '1px solid #e7e7ee',
-          overflow: 'hidden',
-          transition: 'height 180ms ease',
-        }}
-      >
-        <ResultsDock />
-      </AppShell.Footer>
+      {isCanvas && (
+        <AppShell.Footer
+          p={0}
+          style={{
+            background: '#ffffff',
+            borderTop: '1px solid #e7e7ee',
+            overflow: 'hidden',
+            transition: 'height 180ms ease',
+          }}
+        >
+          <ResultsDock />
+        </AppShell.Footer>
+      )}
     </AppShell>
   );
 }

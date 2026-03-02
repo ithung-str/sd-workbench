@@ -107,6 +107,7 @@ class StockNode(BaseNode):
     initial_value: float | str
     min_value: Optional[float] = None
     max_value: Optional[float] = None
+    non_negative: Optional[bool] = None
 
 
 class AuxNode(BaseNode):
@@ -119,6 +120,7 @@ class FlowNode(BaseNode):
     target_stock_id: Optional[str] = None
     min_value: Optional[float] = None
     max_value: Optional[float] = None
+    non_negative: Optional[bool] = None
 
 
 class LookupNode(BaseNode):

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionIcon,
-  AppShell,
   Button,
   Group,
   Menu,
@@ -14,7 +13,6 @@ import {
 import {
   IconAlertCircle,
   IconAlertTriangle,
-  IconArrowLeft,
   IconCheck,
   IconChevronDown,
   IconChevronUp,
@@ -24,7 +22,6 @@ import {
   IconSelector,
   IconTrash,
 } from '@tabler/icons-react';
-import { navigateTo } from '../../lib/navigation';
 import { getConnectedNames, getEquationVariableNames, getStockFlowEquation } from '../../lib/modelHelpers';
 import { useEditorStore } from '../../state/editorStore';
 import { buildContextFunctions } from '../inspector/functionCatalog';
@@ -305,25 +302,8 @@ export function FormulaPage() {
     return sortDir === 'asc' ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />;
   };
 
-  return (
-    <AppShell header={{ height: 48 }} padding="0">
-      <AppShell.Header>
-        <Group h="100%" px="md" gap="sm" justify="space-between">
-          <Group gap="sm">
-            <ActionIcon variant="subtle" color="gray" size="sm" onClick={() => navigateTo('/')}>
-              <IconArrowLeft size={16} />
-            </ActionIcon>
-            <Text fw={600} size="sm" c="dark">Formulas</Text>
-            <Text size="xs" c="dimmed">{model.name}</Text>
-          </Group>
-          <Button variant="light" color="deepPurple" size="compact-xs" onClick={() => navigateTo('/dashboard')}>
-            Dashboard
-          </Button>
-        </Group>
-      </AppShell.Header>
-
-      <AppShell.Main>
-        <div style={{ padding: '16px 24px' }}>
+  const contentBody = (
+        <div className="formula-page" style={{ padding: '16px 24px', height: '100%', overflow: 'auto' }}>
           {/* Toolbar */}
           <Group justify="space-between" mb="sm">
             <Group gap={6}>
@@ -595,9 +575,9 @@ export function FormulaPage() {
             {filteredSortedRows.length} of {rows.length} variables
           </Text>
         </div>
-      </AppShell.Main>
-    </AppShell>
   );
+
+  return contentBody;
 }
 
 // ---------------------------------------------------------------------------

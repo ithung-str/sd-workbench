@@ -3,7 +3,7 @@ import { detectLoops, inferPolarityFromEquation } from './loopDetection';
 import {
   teacupModel,
   bathtubInventoryModel,
-  simplePopulationModel,
+  populationModel,
   supplyChainModel,
   blankModel,
 } from './sampleModels';
@@ -72,10 +72,10 @@ describe('detectLoops', () => {
   });
 
   it('teacup model: detects feedback loop', () => {
-    // Teacup has: temperature → temperature_change → temperature (via influence edges)
-    // temperature_change eq: (room_temperature - temperature) / characteristic_time
+    // Teacup has: temperature → temperature_change → temperature
+    // temperature_change is a flow with eq: (room_temperature - temperature) / characteristic_time
     // So temperature has NEGATIVE polarity on temperature_change (subtracted)
-    // temperature_change → temperature is influence, stock eq: temperature_change → positive
+    // temperature_change → temperature is a flow_link (inflow) → positive
     // Loop: temperature →(-) temperature_change →(+) temperature = one negative → Balancing
     const loops = detectLoops(teacupModel);
     expect(loops.length).toBeGreaterThanOrEqual(1);
@@ -87,19 +87,17 @@ describe('detectLoops', () => {
     expect(mainLoop!.type).toBe('B'); // balancing: negative feedback (cooling)
   });
 
-  it('simple population model: detects reinforcing loop', () => {
-    // population → births → population
-    // births eq: population * growth_rate → population is positive
-    // births → population via flow_link (inflow) → positive
-    // All positive → Reinforcing
-    const loops = detectLoops(simplePopulationModel);
+  it('population model: detects reinforcing and balancing loops', () => {
+    // Reinforcing: population → births → population (all positive → R)
+    // Balancing: population → deaths → population (positive influence, but outflow = negative → B)
+    const loops = detectLoops(populationModel);
     expect(loops.length).toBeGreaterThanOrEqual(1);
 
-    const mainLoop = loops.find((l) =>
+    const birthsLoop = loops.find((l) =>
       l.nodeNames.includes('population') && l.nodeNames.includes('births'),
     );
-    expect(mainLoop).toBeDefined();
-    expect(mainLoop!.type).toBe('R'); // reinforcing: exponential growth
+    expect(birthsLoop).toBeDefined();
+    expect(birthsLoop!.type).toBe('R'); // reinforcing: exponential growth
   });
 
   it('bathtub model: no feedback loops (open system)', () => {
@@ -117,7 +115,7 @@ describe('detectLoops', () => {
   });
 
   it('loop has correct structure', () => {
-    const loops = detectLoops(simplePopulationModel);
+    const loops = detectLoops(populationModel);
     const loop = loops.find((l) => l.nodeNames.includes('population'));
     expect(loop).toBeDefined();
     expect(loop!.nodeIds.length).toBe(loop!.nodeNames.length);

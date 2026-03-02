@@ -1,15 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { WorkbenchLayout } from './components/workbench/WorkbenchLayoutMantine';
-import { DashboardPage } from './components/dashboard/DashboardPage';
-import { FormulaPage } from './components/formulas/FormulaPage';
-import { ScenarioPage } from './components/scenarios/ScenarioPage';
 import { healthCheck } from './lib/api';
 import { useEditorStore } from './state/editorStore';
+import type { WorkbenchTab } from './state/editorStore';
+
+const PATH_TO_TAB: Record<string, WorkbenchTab> = {
+  '/formulas': 'formulas',
+  '/dashboard': 'dashboard',
+  '/scenarios': 'scenarios',
+};
 
 export default function App() {
   const runValidate = useEditorStore((s) => s.runValidate);
   const setBackendHealthy = useEditorStore((s) => s.setBackendHealthy);
-  const [path, setPath] = useState(window.location.pathname);
+  const setActiveTab = useEditorStore((s) => s.setActiveTab);
 
   useEffect(() => {
     void runValidate();
@@ -18,14 +22,11 @@ export default function App() {
       .catch(() => setBackendHealthy(false));
   }, [runValidate, setBackendHealthy]);
 
+  // Map initial URL path to tab on mount
   useEffect(() => {
-    const onLocationChange = () => setPath(window.location.pathname);
-    window.addEventListener('popstate', onLocationChange);
-    return () => window.removeEventListener('popstate', onLocationChange);
-  }, []);
+    const tab = PATH_TO_TAB[window.location.pathname];
+    if (tab) setActiveTab(tab);
+  }, [setActiveTab]);
 
-  if (path === '/dashboard') return <DashboardPage />;
-  if (path === '/formulas') return <FormulaPage />;
-  if (path === '/scenarios') return <ScenarioPage />;
   return <WorkbenchLayout />;
 }

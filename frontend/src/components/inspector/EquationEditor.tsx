@@ -21,6 +21,8 @@ type Props = {
   onConnectVariable?: (variableName: string) => void;
   maxSuggestions?: number;
   showReferencedSummary?: boolean;
+  rows?: number;
+  compact?: boolean;
 };
 
 const SUGGESTION_LIST_ID = 'equation-editor-suggestion-list';
@@ -68,6 +70,8 @@ export function EquationEditor({
   onInsertFunction,
   maxSuggestions = 8,
   showReferencedSummary = true,
+  rows = 4,
+  compact = false,
 }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const textRef = useRef<HTMLTextAreaElement | null>(null);
@@ -225,10 +229,10 @@ export function EquationEditor({
       : null;
 
   return (
-    <div className="equation-editor" ref={rootRef}>
+    <div className={`equation-editor ${compact ? 'compact' : ''}`} ref={rootRef}>
       <div className="equation-editor-top-row">
         <label htmlFor="equation-editor">Equation</label>
-        <div className="equation-function-picker-wrap">
+        {!compact && <div className="equation-function-picker-wrap">
           <select
             aria-label="Insert function"
             className="equation-function-picker"
@@ -264,7 +268,7 @@ export function EquationEditor({
             })}
           </select>
           <span className="equation-function-picker-help" title="Pick a function to insert its template at cursor.">?</span>
-        </div>
+        </div>}
       </div>
       <div
         className={`equation-editor-input-wrap ${isFocused ? 'is-focused' : ''} ${hasWarning ? 'has-warning' : ''} ${hasError ? 'has-error' : ''}`}
@@ -314,7 +318,7 @@ export function EquationEditor({
           }}
           onBlur={() => setIsFocused(false)}
           onScroll={(e) => setScroll({ top: e.currentTarget.scrollTop, left: e.currentTarget.scrollLeft })}
-          rows={4}
+          rows={rows}
           role="combobox"
           aria-autocomplete="list"
           aria-expanded={mode === 'suggest'}
@@ -372,7 +376,7 @@ export function EquationEditor({
         </div>
       ) : null}
 
-      <p className="field-hint">Allowed: + - * / **, min/max/abs/exp/log, variable names.</p>
+      {!compact && <p className="field-hint">Allowed: + - * / **, min/max/abs/exp/log, variable names.</p>}
     </div>
   );
 }

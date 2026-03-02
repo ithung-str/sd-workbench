@@ -2,12 +2,13 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionIcon,
   Alert,
-  AppShell,
   Badge,
   Box,
   Button,
   Card,
+  Collapse,
   Group,
+  Menu,
   NumberInput,
   Paper,
   Select,
@@ -19,7 +20,6 @@ import {
 } from '@mantine/core';
 import {
   IconArrowDown,
-  IconArrowLeft,
   IconArrowUp,
   IconGripVertical,
   IconPlayerPlay,
@@ -32,10 +32,13 @@ import {
   DASHBOARD_GRID_SIZE,
   findNearestFreeRect,
   firstFreeRect,
+  MIN_CARD_HEIGHT,
+  MIN_CARD_WIDTH,
   resolveCardRect,
+  snapToGrid,
   type Rect,
 } from '../../lib/dashboardLayout';
-import { navigateTo } from '../../lib/navigation';
+import { generateTemplateCards } from '../../lib/dashboardTemplates';
 import { useEditorStore } from '../../state/editorStore';
 import type { DashboardCard, DashboardCardType, ScenarioRunResult } from '../../types/model';
 
@@ -151,6 +154,15 @@ type DragState = {
   origin: Rect;
 };
 
+type ResizeState = {
+  cardId: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  originW: number;
+  originH: number;
+};
+
 export function DashboardPage() {
   const model = useEditorStore((s) => s.model);
   const dashboards = useEditorStore((s) => s.dashboards);
@@ -175,6 +187,8 @@ export function DashboardPage() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
   const [cardLayout, setCardLayout] = useState<Record<string, Rect>>({});
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [resizeState, setResizeState] = useState<ResizeState | null>(null);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const cardLayoutRef = useRef<Record<string, Rect>>({});
 
@@ -364,40 +378,86 @@ export function DashboardPage() {
     };
   }, [dragState, activeDashboard, sortedCards, layoutSeed, canvasHeight, updateDashboardCard]);
 
-  return (
-    <AppShell header={{ height: 60 }} padding="md">
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Button variant="subtle" leftSection={<IconArrowLeft size={16} />} onClick={() => navigateTo('/')}>
-              Back to Model
-            </Button>
-            <Title order={4}>Dashboard Builder</Title>
-            <Badge variant="light">{model.name}</Badge>
-            {duplicateScenarioCount > 0 ? <Badge color="yellow" variant="light">deduped {duplicateScenarioCount} scenario entries</Badge> : null}
-          </Group>
-          <Group>
-            <Select
-              label="Scenario"
-              size="xs"
-              value={selectedScenarioId}
-              data={scenarioOptions}
-              onChange={(value) => setSelectedScenarioId(value ?? '')}
-              placeholder="Run dashboard first"
-              w={220}
-            />
-            <Button
-              leftSection={<IconPlayerPlay size={16} />}
-              onClick={() => void runScenarioBatch()}
-              loading={isRunningBatch}
-            >
-              Run Dashboard
-            </Button>
-          </Group>
-        </Group>
-      </AppShell.Header>
+  const beginResize = (event: React.PointerEvent<HTMLDivElement>, cardId: string) => {
+    const rect = cardLayoutRef.current[cardId];
+    if (!rect) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.stopPropagation();
+    setResizeState({
+      cardId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originW: rect.w,
+      originH: rect.h,
+    });
+  };
 
-      <AppShell.Main>
+  useEffect(() => {
+    if (!resizeState) return;
+
+    const onPointerMove = (event: PointerEvent) => {
+      const currentRect = cardLayoutRef.current[resizeState.cardId];
+      if (!currentRect) return;
+      const deltaX = event.clientX - resizeState.startX;
+      const deltaY = event.clientY - resizeState.startY;
+      const snappedW = Math.max(MIN_CARD_WIDTH, snapToGrid(resizeState.originW + deltaX));
+      const snappedH = Math.max(MIN_CARD_HEIGHT, snapToGrid(resizeState.originH + deltaY));
+      setCardLayout((prev) => ({
+        ...prev,
+        [resizeState.cardId]: { ...currentRect, w: snappedW, h: snappedH },
+      }));
+    };
+
+    const onPointerUp = () => {
+      if (!activeDashboard) {
+        setResizeState(null);
+        return;
+      }
+      const finalRect = cardLayoutRef.current[resizeState.cardId];
+      if (finalRect) {
+        updateDashboardCard(activeDashboard.id, resizeState.cardId, {
+          w: finalRect.w,
+          h: finalRect.h,
+        });
+      }
+      setResizeState(null);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [resizeState, activeDashboard, updateDashboardCard]);
+
+  return (
+    <Box className="dashboard-page" p="md" style={{ height: '100%', overflow: 'auto' }}>
+      <Group justify="space-between" mb="md">
+        <Group>
+          <Title order={4}>Dashboard Builder</Title>
+          {duplicateScenarioCount > 0 ? <Badge color="yellow" variant="light">deduped {duplicateScenarioCount} scenario entries</Badge> : null}
+        </Group>
+        <Group>
+          <Select
+            label="Scenario"
+            size="xs"
+            value={selectedScenarioId}
+            data={scenarioOptions}
+            onChange={(value) => setSelectedScenarioId(value ?? '')}
+            placeholder="Run dashboard first"
+            w={220}
+          />
+          <Button
+            leftSection={<IconPlayerPlay size={16} />}
+            onClick={() => void runScenarioBatch()}
+            loading={isRunningBatch}
+          >
+            Run Dashboard
+          </Button>
+        </Group>
+      </Group>
         <Box
           style={{
             display: 'flex',
@@ -418,9 +478,21 @@ export function DashboardPage() {
                 onChange={(value) => value && setActiveDashboard(value)}
               />
               <Group grow>
-                <Button variant="light" leftSection={<IconPlus size={14} />} onClick={() => createDashboard()}>
-                  New
-                </Button>
+                <Menu shadow="md" width={220}>
+                  <Menu.Target>
+                    <Button variant="light" leftSection={<IconPlus size={14} />}>New</Button>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Label>Choose template</Menu.Label>
+                    <Menu.Item onClick={() => createDashboard()}>Blank</Menu.Item>
+                    <Menu.Item onClick={() => createDashboard('Overview', generateTemplateCards(model, 'overview'))}>
+                      Overview (stocks)
+                    </Menu.Item>
+                    <Menu.Item onClick={() => createDashboard('All Variables', generateTemplateCards(model, 'all_variables'))}>
+                      All Variables
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
                 <Button
                   variant="light"
                   color="red"
@@ -486,33 +558,82 @@ export function DashboardPage() {
                     {sortedCards.length === 0 ? (
                       <Text size="sm" c="dimmed">No cards yet.</Text>
                     ) : (
-                      sortedCards.map((card) => (
-                        <Paper key={card.id} withBorder p="xs">
-                          <Group justify="space-between" align="center" wrap="nowrap">
-                            <div>
-                              <Text fw={600} size="sm">{card.title}</Text>
-                              <Text size="xs" c="dimmed">{card.type.toUpperCase()} • {card.variable}</Text>
-                            </div>
-                            <Group gap={4}>
-                              <ActionCardButton
-                                label="Move up"
-                                icon={<IconArrowUp size={14} />}
-                                onClick={() => moveDashboardCard(activeDashboard.id, card.id, 'up')}
-                              />
-                              <ActionCardButton
-                                label="Move down"
-                                icon={<IconArrowDown size={14} />}
-                                onClick={() => moveDashboardCard(activeDashboard.id, card.id, 'down')}
-                              />
-                              <ActionCardButton
-                                label="Delete"
-                                icon={<IconTrash size={14} />}
-                                onClick={() => deleteDashboardCard(activeDashboard.id, card.id)}
-                              />
+                      sortedCards.map((card) => {
+                        const isEditing = editingCardId === card.id;
+                        return (
+                          <Paper key={card.id} withBorder p="xs">
+                            <Group justify="space-between" align="center" wrap="nowrap">
+                              <div
+                                style={{ cursor: 'pointer', flex: 1 }}
+                                onClick={() => setEditingCardId(isEditing ? null : card.id)}
+                              >
+                                <Text fw={600} size="sm">{card.title}</Text>
+                                <Text size="xs" c="dimmed">{card.type.toUpperCase()} • {card.variable}</Text>
+                              </div>
+                              <Group gap={4}>
+                                <ActionCardButton
+                                  label="Move up"
+                                  icon={<IconArrowUp size={14} />}
+                                  onClick={() => moveDashboardCard(activeDashboard.id, card.id, 'up')}
+                                />
+                                <ActionCardButton
+                                  label="Move down"
+                                  icon={<IconArrowDown size={14} />}
+                                  onClick={() => moveDashboardCard(activeDashboard.id, card.id, 'down')}
+                                />
+                                <ActionCardButton
+                                  label="Delete"
+                                  icon={<IconTrash size={14} />}
+                                  onClick={() => deleteDashboardCard(activeDashboard.id, card.id)}
+                                />
+                              </Group>
                             </Group>
-                          </Group>
-                        </Paper>
-                      ))
+                            <Collapse in={isEditing}>
+                              <Stack gap="xs" mt="xs">
+                                <TextInput
+                                  label="Title"
+                                  size="xs"
+                                  value={card.title}
+                                  onChange={(e) => updateDashboardCard(activeDashboard.id, card.id, { title: e.currentTarget.value })}
+                                />
+                                <Select
+                                  label="Type"
+                                  size="xs"
+                                  value={card.type}
+                                  data={[
+                                    { value: 'kpi', label: 'KPI' },
+                                    { value: 'line', label: 'Line Chart' },
+                                    { value: 'table', label: 'Data Table' },
+                                  ]}
+                                  onChange={(value) => {
+                                    if (value) updateDashboardCard(activeDashboard.id, card.id, { type: value as DashboardCardType });
+                                  }}
+                                />
+                                <Select
+                                  label="Variable"
+                                  size="xs"
+                                  value={card.variable}
+                                  data={variableOptions}
+                                  searchable
+                                  onChange={(value) => {
+                                    if (value) updateDashboardCard(activeDashboard.id, card.id, { variable: value });
+                                  }}
+                                />
+                                {card.type === 'table' ? (
+                                  <NumberInput
+                                    label="Table Rows"
+                                    size="xs"
+                                    value={card.table_rows ?? 10}
+                                    min={1}
+                                    max={200}
+                                    onChange={(value) => updateDashboardCard(activeDashboard.id, card.id, { table_rows: Number(value) || 10 })}
+                                  />
+                                ) : null}
+                              </Stack>
+                            </Collapse>
+                          </Paper>
+                        );
+                      })
                     )}
                   </Stack>
                 </>
@@ -579,6 +700,20 @@ export function DashboardPage() {
                             <CardContent card={card} run={selectedRun} />
                           </Box>
                         </Stack>
+                        <div
+                          onPointerDown={(event) => beginResize(event, card.id)}
+                          style={{
+                            position: 'absolute',
+                            right: 0,
+                            bottom: 0,
+                            width: 16,
+                            height: 16,
+                            cursor: 'nwse-resize',
+                            background: 'linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.15) 50%)',
+                            borderRadius: '0 0 8px 0',
+                            zIndex: 10,
+                          }}
+                        />
                       </Card>
                     );
                   })}
@@ -587,8 +722,7 @@ export function DashboardPage() {
             )}
           </Stack>
         </Box>
-      </AppShell.Main>
-    </AppShell>
+    </Box>
   );
 }
 

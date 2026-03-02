@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Stack, Title, Button, TextInput, Textarea, Group, Text, Paper, Alert, Checkbox, NumberInput } from '@mantine/core';
 import { IconTrash, IconInfoCircle } from '@tabler/icons-react';
 import { collectGlobalVariableUsage } from '../../lib/globalVariableUsage';
+import { getStockFlowEquation } from '../../lib/modelHelpers';
 import { useEditorStore } from '../../state/editorStore';
 import type { CldLoopDirection, CldSymbol, EdgeModel, LookupNode, NodeModel } from '../../types/model';
 import { EquationEditor } from './EquationEditor';
@@ -99,6 +100,11 @@ export function InspectorPanel() {
   const availableFunctions = useMemo(
     () => buildContextFunctions(activeSimulationMode, importedVensim),
     [activeSimulationMode, importedVensim],
+  );
+
+  const stockFlowEquation = useMemo(
+    () => (node?.type === 'stock' ? getStockFlowEquation(node.id, model) : null),
+    [node, model],
   );
 
   if (!node && !edge && !globalVariable) {
@@ -279,7 +285,7 @@ export function InspectorPanel() {
   }
 
   return (
-    <Stack gap="md">
+    <Stack gap="xs">
       <Group justify="space-between">
         <Title order={3} size="h4">Selected Node</Title>
         <Button leftSection={<IconTrash size={16} />} color="red" variant="light" size="xs" onClick={deleteSelected}>
@@ -289,57 +295,56 @@ export function InspectorPanel() {
 
       <TextInput
         label="Name"
+        size="xs"
         value={node.name}
         onChange={(e) => updateNode(node.id, { name: e.target.value })}
       />
 
       <TextInput
         label="Label"
+        size="xs"
         value={node.label}
         onChange={(e) => updateNode(node.id, { label: e.target.value })}
       />
 
       <TextInput
         label="Units"
+        size="xs"
         value={node.units ?? ''}
         onChange={(e) => updateNode(node.id, { units: e.target.value || undefined })}
       />
 
       {connectedUnits.length > 0 && (
-        <Paper p="sm" withBorder>
-          <Stack gap="xs">
-            <Group justify="space-between">
-              <Text size="sm" fw={600} c="dimmed">Connected units</Text>
-              {!node.units && connectedUnits.find((r) => r.units) && (
-                <Button
-                  size="xs"
-                  variant="subtle"
-                  onClick={() => updateNode(node.id, { units: connectedUnits.find((r) => r.units)?.units } as Partial<NodeModel>)}
-                >
-                  Use linked unit
-                </Button>
-              )}
-            </Group>
-            <Stack gap={4}>
-              {connectedUnits.map((row) => (
-                <Paper key={row.id} p="xs" withBorder bg={row.edgeType === 'flow_link' ? 'violet.0' : undefined}>
-                  <Group justify="space-between">
-                    <Text size="sm">{row.label}</Text>
-                    <Text size="sm" fw={600} c={row.units ? 'dark' : 'dimmed'}>
-                      {row.units || '(no units)'}
-                    </Text>
-                  </Group>
-                </Paper>
-              ))}
-            </Stack>
-          </Stack>
-        </Paper>
+        <Group gap={4} align="center" wrap="wrap">
+          <Text size="xs" c="dimmed" fw={600}>Connected:</Text>
+          {connectedUnits.map((row) => (
+            <Text key={row.id} size="xs" c={row.units ? undefined : 'dimmed'} style={{ background: '#f4f3f8', borderRadius: 4, padding: '1px 6px' }}>
+              {row.label}{row.units ? ` (${row.units})` : ''}
+            </Text>
+          ))}
+          {!node.units && connectedUnits.find((r) => r.units) && (
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={() => updateNode(node.id, { units: connectedUnits.find((r) => r.units)?.units } as Partial<NodeModel>)}
+            >
+              Use unit
+            </Button>
+          )}
+        </Group>
       )}
 
       {node.type === 'stock' && (
         <>
+          {stockFlowEquation && (
+            <div>
+              <Text size="xs" fw={600} c="dimmed">d(Stock)/dt</Text>
+              <Text size="xs" ff="monospace" style={{ background: '#f4f3f8', borderRadius: 4, padding: '4px 8px' }}>{stockFlowEquation}</Text>
+            </div>
+          )}
           <TextInput
             label="Initial Value"
+            size="xs"
             value={String(node.initial_value)}
             onChange={(e) => {
               const v = e.target.value;
@@ -363,16 +368,34 @@ export function InspectorPanel() {
               onChange={(value) => updateNode(node.id, { max_value: value === '' ? undefined : Number(value) } as Partial<NodeModel>)}
             />
           </Group>
-          <Checkbox
-            label="Show sparkline on canvas"
-            checked={!!node.show_graph}
-            onChange={(e) => updateNode(node.id, { show_graph: e.currentTarget.checked } as Partial<NodeModel>)}
-            size="xs"
-          />
+          <Group gap="md">
+            <Checkbox
+              label="Non-negative"
+              checked={!!node.non_negative}
+              onChange={(e) => updateNode(node.id, { non_negative: e.currentTarget.checked || undefined } as Partial<NodeModel>)}
+              size="xs"
+            />
+            <Checkbox
+              label="Show sparkline on canvas"
+              checked={!!node.show_graph}
+              onChange={(e) => updateNode(node.id, { show_graph: e.currentTarget.checked } as Partial<NodeModel>)}
+              size="xs"
+            />
+          </Group>
         </>
       )}
 
-      {node.type !== 'lookup' && (
+      {node.type !== 'lookup' && node.type !== 'stock' && (
+        <EquationEditor
+          value={node.equation}
+          onChange={(equation) => updateNode(node.id, { equation })}
+          variableNames={equationVariableNames}
+          connectedVariableNames={connectedVariableNames}
+          availableFunctions={availableFunctions}
+        />
+      )}
+
+      {node.type === 'stock' && !stockFlowEquation && (
         <EquationEditor
           value={node.equation}
           onChange={(equation) => updateNode(node.id, { equation })}
@@ -388,16 +411,6 @@ export function InspectorPanel() {
 
       {node.type === 'flow' && (
         <>
-          <TextInput
-            label="Source Stock ID"
-            value={node.source_stock_id ?? ''}
-            onChange={(e) => updateNode(node.id, { source_stock_id: e.target.value || undefined })}
-          />
-          <TextInput
-            label="Target Stock ID"
-            value={node.target_stock_id ?? ''}
-            onChange={(e) => updateNode(node.id, { target_stock_id: e.target.value || undefined })}
-          />
           <Group grow>
             <NumberInput
               label="Min Value"
@@ -414,6 +427,12 @@ export function InspectorPanel() {
               onChange={(value) => updateNode(node.id, { max_value: value === '' ? undefined : Number(value) } as Partial<NodeModel>)}
             />
           </Group>
+          <Checkbox
+            label="Non-negative"
+            checked={!!node.non_negative}
+            onChange={(e) => updateNode(node.id, { non_negative: e.currentTarget.checked || undefined } as Partial<NodeModel>)}
+            size="xs"
+          />
         </>
       )}
 

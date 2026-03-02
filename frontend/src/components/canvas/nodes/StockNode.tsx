@@ -89,10 +89,12 @@ export function StockNodeView({ data }: { data: LabelNodeData }) {
         onResize={onResize}
       />
       {data.selected && (
-        <div className="stock-rotate-handle" onMouseDown={onRotateStart} />
+        <div className="stock-rotate-handle nodrag" onMouseDown={onRotateStart} />
       )}
       <Handle type="target" position={Position.Left} id="left" />
+      <Handle type="source" position={Position.Left} id="left" />
       <Handle type="target" position={Position.Top} id="top" />
+      <Handle type="source" position={Position.Top} id="top" />
       <div className="rf-node-label">{data.label}</div>
       <div className="rf-node-subtitle">{data.subtitle}</div>
       {data.sparklineValues && data.sparklineValues.length > 1 && (
@@ -108,10 +110,12 @@ export function StockNodeView({ data }: { data: LabelNodeData }) {
         </svg>
       )}
       <Handle type="source" position={Position.Right} id="right" />
+      <Handle type="target" position={Position.Right} id="right" />
       <Handle type="source" position={Position.Bottom} id="bottom" />
+      <Handle type="target" position={Position.Bottom} id="bottom" />
       {(hovered || data.selected) && (
         <button
-          className="stock-flow-plus"
+          className="stock-flow-plus nodrag"
           onMouseDown={onFlowDragStart}
           tabIndex={-1}
         >

@@ -14,7 +14,7 @@ import type {
 export type LabelNodeData = {
   label: string;
   subtitle: string;
-  flowDirection?: 'left' | 'right';
+  flowDirection?: 'left' | 'right' | 'up' | 'down';
   visualStyle?: VisualStyle;
   layoutMeta?: LayoutMetadata;
   sparklineValues?: number[];
@@ -72,9 +72,9 @@ export function mapNodeType(modelType: string): string {
 export function computeFlowDirections(
   nodes: NodeModel[],
   edges: EdgeModel[],
-): Map<string, 'left' | 'right'> {
+): Map<string, 'left' | 'right' | 'up' | 'down'> {
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const result = new Map<string, 'left' | 'right'>();
+  const result = new Map<string, 'left' | 'right' | 'up' | 'down'>();
 
   for (const edge of edges) {
     if (edge.type !== 'flow_link') continue;
@@ -82,13 +82,25 @@ export function computeFlowDirections(
     const target = byId.get(edge.target);
     if (!source || !target) continue;
 
-    // flow -> stock: direction toward stock
-    if (source.type === 'flow' && target.type === 'stock') {
-      result.set(source.id, target.position.x >= source.position.x ? 'right' : 'left');
+    // flow -> stock/cloud: direction toward the stock/cloud
+    if (source.type === 'flow' && (target.type === 'stock' || target.type === 'cloud')) {
+      const dx = target.position.x - source.position.x;
+      const dy = target.position.y - source.position.y;
+      if (Math.abs(dy) > Math.abs(dx)) {
+        result.set(source.id, dy >= 0 ? 'down' : 'up');
+      } else {
+        result.set(source.id, dx >= 0 ? 'right' : 'left');
+      }
     }
-    // stock -> flow: direction away from stock
-    if (source.type === 'stock' && target.type === 'flow') {
-      result.set(target.id, target.position.x >= source.position.x ? 'right' : 'left');
+    // stock/cloud -> flow: direction away from stock/cloud
+    if ((source.type === 'stock' || source.type === 'cloud') && target.type === 'flow') {
+      const dx = target.position.x - source.position.x;
+      const dy = target.position.y - source.position.y;
+      if (Math.abs(dy) > Math.abs(dx)) {
+        result.set(target.id, dy >= 0 ? 'down' : 'up');
+      } else {
+        result.set(target.id, dx >= 0 ? 'right' : 'left');
+      }
     }
   }
 
@@ -154,7 +166,7 @@ export function subtitleForNode(name: string, equation: string, showFunctionInte
 export function buildNodeData(
   node: NodeModel,
   showFunctionInternals: boolean,
-  flowDirectionById: Map<string, 'left' | 'right'>,
+  flowDirectionById: Map<string, 'left' | 'right' | 'up' | 'down'>,
 ): LabelNodeData | TextNodeData | CloudNodeData | CldSymbolNodeData {
   const style = 'style' in node ? node.style : undefined;
   const layout = 'layout' in node ? node.layout : undefined;
@@ -194,11 +206,6 @@ export function computeHandles(
   sourceNode: NodeModel | undefined,
   targetNode: NodeModel | undefined,
 ): HandlePair {
-  // Keep explicit handles set by user interaction
-  if (edge.source_handle && edge.target_handle) {
-    return { sourceHandle: edge.source_handle, targetHandle: edge.target_handle };
-  }
-
   if (!sourceNode || !targetNode) {
     return { sourceHandle: undefined, targetHandle: undefined };
   }
@@ -214,15 +221,28 @@ export function computeHandles(
   const tgtDy = targetNode.position.y - sourceNode.position.y;
 
   if (edge.type === 'flow_link') {
+    const isMoreVertical = Math.abs(tgtDy) > Math.abs(tgtDx);
     if (sourceNode.type === 'flow') {
-      // flow → stock/cloud: source from valve center, target on stock side
+      // flow → stock/cloud: source from valve center, target on stock/cloud side
+      if (isMoreVertical) {
+        return {
+          sourceHandle: tgtDy >= 0 ? 'flow-out-bottom' : 'flow-out-top',
+          targetHandle: tgtDy >= 0 ? 'top' : 'bottom',
+        };
+      }
       return {
         sourceHandle: 'flow-out',
         targetHandle: tgtDx >= 0 ? 'left' : 'right',
       };
     }
     if (targetNode.type === 'flow') {
-      // stock/cloud → flow: source from stock side, target to valve center
+      // stock/cloud → flow: source from stock/cloud side, target to valve center
+      if (isMoreVertical) {
+        return {
+          sourceHandle: dy >= 0 ? 'bottom' : 'top',
+          targetHandle: dy >= 0 ? 'flow-in-top' : 'flow-in-bottom',
+        };
+      }
       return {
         sourceHandle: dx >= 0 ? 'right' : 'left',
         targetHandle: 'flow-in',
@@ -349,22 +369,7 @@ export function toReactFlowEdges(
     const handles = computeHandles(edge, byId.get(edge.source), byId.get(edge.target));
 
     const edgeStyle = edge.style;
-    let waypoints = edge.layout?.waypoints;
-
-    // Auto-generate elbow waypoints for flow_link edges without explicit waypoints
-    if (isFlowLink && (!waypoints || waypoints.length === 0)) {
-      const sourceNode = byId.get(edge.source);
-      const targetNode = byId.get(edge.target);
-      if (sourceNode && targetNode) {
-        const elbow = computeElbowWaypoint(sourceNode.position, targetNode.position);
-        // Only add elbow if it differs meaningfully from a straight line
-        const dx = Math.abs(targetNode.position.x - sourceNode.position.x);
-        const dy = Math.abs(targetNode.position.y - sourceNode.position.y);
-        if (dx > 10 && dy > 10) {
-          waypoints = [elbow];
-        }
-      }
-    }
+    const waypoints = edge.layout?.waypoints;
 
     return {
       id: edge.id,

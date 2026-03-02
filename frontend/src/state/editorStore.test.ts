@@ -83,7 +83,7 @@ describe('editorStore', () => {
 
   it('undoes and redoes deleting a selected node and linked edges', () => {
     const state = useEditorStore.getState();
-    const node = state.model.nodes.find((n) => n.id === 'aux_temperature_change');
+    const node = state.model.nodes.find((n) => n.id === 'flow_temperature_change');
     expect(node).toBeDefined();
     if (!node) return;
 
@@ -108,7 +108,7 @@ describe('editorStore', () => {
   it('undoes and redoes add edge', () => {
     const state = useEditorStore.getState();
     const start = state.model.edges.length;
-    state.addEdge({ id: 'edge_test', type: 'influence', source: 'aux_room_temperature', target: 'aux_temperature_change' });
+    state.addEdge({ id: 'edge_test', type: 'influence', source: 'aux_room_temperature', target: 'flow_temperature_change' });
     expect(useEditorStore.getState().model.edges.length).toBe(start + 1);
 
     useEditorStore.getState().undo();

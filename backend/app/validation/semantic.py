@@ -22,9 +22,14 @@ def _is_variable_node(node) -> bool:
 
 def _allowed_edge(edge_type: str, source_type: str, target_type: str) -> bool:
     if edge_type == "influence":
+        # Stocks cannot be influence targets — they only accumulate through flows
+        if target_type == "stock":
+            return False
         return source_type in VARIABLE_NODE_TYPES and target_type in VARIABLE_NODE_TYPES
     if edge_type == "flow_link":
-        return {source_type, target_type} == {"stock", "flow"}
+        # flow_link connects flow↔stock or flow↔cloud
+        pair = {source_type, target_type}
+        return pair == {"stock", "flow"} or pair == {"cloud", "flow"}
     return False
 
 

@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
-  AppShell,
   Badge,
   Box,
   Button,
@@ -17,12 +16,10 @@ import {
   Title,
 } from '@mantine/core';
 import {
-  IconArrowLeft,
   IconPlayerPlay,
   IconPlus,
   IconTrash,
 } from '@tabler/icons-react';
-import { navigateTo } from '../../lib/navigation';
 import { useEditorStore } from '../../state/editorStore';
 import { ResultsChart } from '../results/ResultsChart';
 import { ResultsTable } from '../results/ResultsTable';
@@ -70,33 +67,21 @@ export function ScenarioPage() {
   }, [model.nodes]);
 
   return (
-    <AppShell header={{ height: 60 }} padding="md">
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Button
-              variant="subtle"
-              leftSection={<IconArrowLeft size={16} />}
-              onClick={() => navigateTo('/')}
-            >
-              Back to Model
-            </Button>
-            <Title order={4}>Scenario Builder</Title>
-            <Badge variant="light">{model.name}</Badge>
-          </Group>
-          <Group>
-            <Button
-              leftSection={<IconPlayerPlay size={16} />}
-              onClick={() => void runScenarioBatch()}
-              loading={isRunningBatch}
-            >
-              Run Scenarios
-            </Button>
-          </Group>
+    <Box className="scenario-page" p="md" style={{ height: '100%', overflow: 'auto' }}>
+      <Group justify="space-between" mb="md">
+        <Group>
+          <Title order={4}>Scenario Builder</Title>
         </Group>
-      </AppShell.Header>
-
-      <AppShell.Main>
+        <Group>
+          <Button
+            leftSection={<IconPlayerPlay size={16} />}
+            onClick={() => void runScenarioBatch()}
+            loading={isRunningBatch}
+          >
+            Run Scenarios
+          </Button>
+        </Group>
+      </Group>
         <Box
           style={{
             display: 'flex',
@@ -512,7 +497,6 @@ export function ScenarioPage() {
             )}
           </Stack>
         </Box>
-      </AppShell.Main>
-    </AppShell>
+    </Box>
   );
 }

@@ -100,7 +100,6 @@
 /* Ensure proper z-indexing and layout for the workbench canvas page only */
 .workbench-main {
   z-index: 1;
-  overflow: hidden;
   display: flex !important;
   flex-direction: column !important;
   height: 100% !important;
@@ -275,14 +274,14 @@
 }
 
 .canvas-components-panel {
-  margin-top: calc(var(--workbench-header-height, 60px) + 10px);
+  margin-top: 10px;
   z-index: 1600 !important;
   pointer-events: auto;
   max-width: calc(100% - 24px);
 }
 
 .canvas-xml-panel.react-flow__panel {
-  margin-top: calc(var(--workbench-header-height, 60px) + 64px);
+  margin-top: 64px;
   margin-right: 10px;
   width: min(420px, 42vw);
   max-height: 52vh;
@@ -344,7 +343,7 @@
 
 @media (max-width: 900px) {
   .canvas-components-panel {
-    margin-top: calc(var(--workbench-header-height, 60px) + 8px);
+    margin-top: 8px;
   }
 
   .canvas-components-bar {
@@ -425,8 +424,8 @@
   overflow: hidden;
 }
 
-/* Remove any top padding/margin that might cause white space */
-.workbench-main > div:first-child {
+/* Canvas shell: remove extra padding/margin, fill available space */
+.workbench-main > .canvas-shell {
   margin-top: 0 !important;
   padding-top: 0 !important;
   height: 100% !important;

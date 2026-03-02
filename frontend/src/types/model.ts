@@ -35,6 +35,7 @@ export type StockNode = {
   initial_value: number | string;
   min_value?: number;
   max_value?: number;
+  non_negative?: boolean;
   units?: string;
   position: Position;
   style?: VisualStyle;
@@ -67,6 +68,7 @@ export type FlowNode = {
   flow_sign?: 'positive' | 'negative' | 'both';
   min_value?: number;
   max_value?: number;
+  non_negative?: boolean;
   units?: string;
   position: Position;
   style?: VisualStyle;

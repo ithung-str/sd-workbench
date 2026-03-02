@@ -8,7 +8,7 @@ import { useEditorStore } from '../../../state/editorStore';
  * Bowtie / hourglass valve symbol — the standard SD flow regulator.
  * Renders as two triangles meeting at the center, sitting on the flow pipe.
  */
-function ValveSymbol() {
+function ValveSymbol({ vertical }: { vertical?: boolean }) {
   return (
     <svg
       className="flow-valve-bowtie"
@@ -17,6 +17,7 @@ function ValveSymbol() {
       viewBox="0 0 22 22"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      style={vertical ? { transform: 'rotate(90deg)' } : undefined}
     >
       <polygon
         points="1,1 11,11 1,21"
@@ -46,9 +47,10 @@ export function FlowNodeView({
     () => visualStyleToCss(resolveNodeStyle('flow', defaultStyles, data.visualStyle)),
     [defaultStyles, data.visualStyle],
   );
+  const isVertical = data.flowDirection === 'up' || data.flowDirection === 'down';
   return (
     <div className="rf-node rf-node-flow rf-node-shape-flow" style={resolvedCss}>
-      {/* Centered handles — both pipe segments converge to the middle of the valve */}
+      {/* Horizontal pipe handles */}
       <Handle
         type="target"
         position={Position.Left}
@@ -62,11 +64,39 @@ export function FlowNodeView({
         className="flow-center-handle"
       />
 
-      {/* Handles for variable connections (influence edges from above/below) */}
+      {/* Vertical pipe handles */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="flow-in-top"
+        className="flow-center-handle"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="flow-out-bottom"
+        className="flow-center-handle"
+      />
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="flow-in-bottom"
+        className="flow-center-handle"
+      />
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="flow-out-top"
+        className="flow-center-handle"
+      />
+
+      {/* Handles for variable connections (influence edges from above/below or left/right) */}
       <Handle type="target" position={Position.Top} id="var-top" className="flow-var-handle" />
       <Handle type="target" position={Position.Bottom} id="var-bottom" className="flow-var-handle" />
+      <Handle type="target" position={Position.Left} id="var-left" className="flow-var-handle" />
+      <Handle type="target" position={Position.Right} id="var-right" className="flow-var-handle" />
 
-      <ValveSymbol />
+      <ValveSymbol vertical={isVertical} />
       <div className="rf-node-label">{data.label}</div>
       <div className="rf-node-subtitle">{data.subtitle}</div>
     </div>

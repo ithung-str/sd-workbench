@@ -103,7 +103,7 @@ describe('subtitleForNode', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildNodeData', () => {
-  const flowDirs = new Map<string, 'left' | 'right'>([['f1', 'left']]);
+  const flowDirs = new Map<string, 'left' | 'right' | 'up' | 'down'>([['f1', 'left']]);
 
   it('returns text payload for text nodes', () => {
     const node: TextNode = { id: 't1', type: 'text', text: 'Hello', position: { x: 0, y: 0 } };

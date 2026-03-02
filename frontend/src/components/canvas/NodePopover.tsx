@@ -62,11 +62,12 @@ export function NodePopover({ nodeId, screenX, screenY, onClose }: Props) {
     return null;
   }
 
-  // Position: clamp to viewport
+  // Position: clamp to viewport. Estimate content height conservatively;
+  // CSS max-height: 80vh + overflow-y: auto handles any overflow.
   const popW = 360;
-  const popH = 300;
+  const popEstH = 320;
   const left = Math.min(screenX, window.innerWidth - popW - 16);
-  const top = Math.min(screenY + 10, window.innerHeight - popH - 16);
+  const top = Math.max(16, Math.min(screenY + 10, window.innerHeight - popEstH - 16));
 
   const isStock = node.type === 'stock';
   const isLookup = node.type === 'lookup';
@@ -126,6 +127,8 @@ export function NodePopover({ nodeId, screenX, screenY, onClose }: Props) {
           connectedVariableNames={connectedVariableNames}
           availableFunctions={availableFunctions}
           showReferencedSummary={false}
+          rows={2}
+          compact
         />
       ) : null}
 

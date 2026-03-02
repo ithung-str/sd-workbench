@@ -63,6 +63,8 @@ def simulate_euler(executable: ExecutableModel, start: float, stop: float, dt: f
                 context[name] = float(evaluate_expression(node.equation, context))
             # Clamp flow values if min/max constraints are set
             if isinstance(node, FlowNode):
+                if node.non_negative:
+                    context[name] = max(context[name], 0.0)
                 if node.min_value is not None:
                     context[name] = max(context[name], node.min_value)
                 if node.max_value is not None:
@@ -82,6 +84,8 @@ def simulate_euler(executable: ExecutableModel, start: float, stop: float, dt: f
             derivative = float(evaluate_expression(stock.equation, context))
             next_stock_state[stock.name] = stock_state[stock.name] + derivative * dt
             # Clamp stock values if min/max constraints are set
+            if stock.non_negative:
+                next_stock_state[stock.name] = max(next_stock_state[stock.name], 0.0)
             if stock.min_value is not None:
                 next_stock_state[stock.name] = max(next_stock_state[stock.name], stock.min_value)
             if stock.max_value is not None:

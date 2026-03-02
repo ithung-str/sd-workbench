@@ -1074,6 +1074,15 @@ button.danger {
   caret-color: #2f2a38;
 }
 
+.equation-editor.compact .equation-editor-input-wrap {
+  min-height: unset;
+}
+
+.equation-editor.compact .equation-editor-input-wrap .equation-editor-input {
+  min-height: unset;
+  resize: none;
+}
+
 .equation-inline-chip {
   display: inline;
   border: 0;

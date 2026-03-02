@@ -42,6 +42,7 @@ import type {
 import type { VensimPresetDescriptor } from '../lib/vensimPresets';
 
 export type DockTab = 'validation' | 'chart' | 'table' | 'compare' | 'sensitivity';
+export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios';
 
 type Selection =
   | { kind: 'node'; id: string }
@@ -98,6 +99,7 @@ type EditorState = {
   isRunningBatch: boolean;
   isRunningSensitivity: boolean;
   isCanvasLocked: boolean;
+  activeTab: WorkbenchTab;
   backendHealthy: boolean | null;
   isLoadingVensimPreset: boolean;
   loadingVensimPresetId: string | null;
@@ -117,6 +119,7 @@ type EditorState = {
   commitNodePosition: (id: string, x: number, y: number) => void;
   addEdge: (edge: EdgeModel) => void;
   deleteSelected: () => void;
+  cleanPhantoms: () => void;
   addDanglingEdge: (sourceId: string, sourceHandle: string | null, position: { x: number; y: number }) => void;
   completeDanglingEdge: (phantomId: string, targetId: string) => void;
   createFlowBetweenStocks: (sourceStockId: string, targetStockId: string) => void;
@@ -155,7 +158,7 @@ type EditorState = {
   updateScenario: (id: string, patch: Partial<ScenarioDefinition>) => void;
   deleteScenario: (id: string) => void;
   setActiveScenario: (id: string) => void;
-  createDashboard: (name?: string) => void;
+  createDashboard: (name?: string, cards?: Omit<DashboardCard, 'id' | 'order'>[]) => void;
   updateDashboard: (id: string, patch: Partial<DashboardDefinition>) => void;
   deleteDashboard: (id: string) => void;
   setActiveDashboard: (id: string) => void;
@@ -164,8 +167,10 @@ type EditorState = {
   moveDashboardCard: (dashboardId: string, cardId: string, direction: 'up' | 'down') => void;
   deleteDashboardCard: (dashboardId: string, cardId: string) => void;
   updateDefaultStyle: (nodeType: 'stock' | 'flow' | 'aux' | 'lookup', style: Partial<import('../types/model').VisualStyle>) => void;
+  setActiveTab: (tab: WorkbenchTab) => void;
   setBackendHealthy: (value: boolean | null) => void;
   autoOrganize: () => void;
+  alignNodes: (direction: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v', nodeIds: string[]) => void;
 };
 
 function defaultValidation(): ValidateResponse {
@@ -514,6 +519,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     isRunningBatch: false,
     isRunningSensitivity: false,
     isCanvasLocked: false,
+    activeTab: 'canvas',
     backendHealthy: null,
     isLoadingVensimPreset: false,
     loadingVensimPresetId: null,
@@ -522,6 +528,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     historyLimit: HISTORY_LIMIT,
     pendingCommit: null,
     setSelected: (selected) => set({ selected }),
+    setActiveTab: (activeTab) => set({ activeTab }),
     setBackendHealthy: (value) => set({ backendHealthy: value }),
     setCanvasLocked: (locked) => set({ isCanvasLocked: locked }),
     addNode: (type) => {
@@ -674,6 +681,21 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const afterState = get();
       pushHistory(before, snapshotFromState(afterState.model, afterState.selected));
     },
+    cleanPhantoms: () => {
+      const state = get();
+      const phantomIds = new Set(state.model.nodes.filter((n) => n.type === 'phantom').map((n) => n.id));
+      if (phantomIds.size === 0) return;
+      flushPendingCommit();
+      const before = snapshotFromState(state.model, state.selected);
+      set((s) => {
+        const nodes = s.model.nodes.filter((n) => n.type !== 'phantom');
+        const edges = s.model.edges.filter((e) => !phantomIds.has(e.source) && !phantomIds.has(e.target));
+        const model = { ...s.model, nodes, edges };
+        return { model, localIssues: localValidate(model) };
+      });
+      const afterState2 = get();
+      pushHistory(before, snapshotFromState(afterState2.model, afterState2.selected));
+    },
     addDanglingEdge: (sourceId, sourceHandle, position) => {
       flushPendingCommit();
       const before = snapshotFromState(get().model, get().selected);
@@ -685,7 +707,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
           type: 'influence',
           source: sourceId,
           target: phantomId,
-          source_handle: sourceHandle ?? undefined,
+          source_handle: undefined,
           target_handle: undefined,
         };
         const model = {
@@ -700,6 +722,9 @@ export const useEditorStore = create<EditorState>((set, get) => {
     },
     completeDanglingEdge: (phantomId, targetId) => {
       flushPendingCommit();
+      // Stocks cannot receive influence edges
+      const targetNode = get().model.nodes.find((n) => n.id === targetId);
+      if (targetNode?.type === 'stock') return;
       const before = snapshotFromState(get().model, get().selected);
       set((state) => {
         const edges = state.model.edges.map((e) =>
@@ -1239,13 +1264,29 @@ export const useEditorStore = create<EditorState>((set, get) => {
         };
       });
     },
-    createDashboard: (name) => {
+    createDashboard: (name, templateCards) => {
       set((state) => {
         const id = `dashboard_${Date.now()}`;
+        const builtCards: DashboardCard[] = [];
+        const occupied: import('../lib/dashboardLayout').Rect[] = [];
+        for (const [i, cardInput] of (templateCards ?? []).entries()) {
+          const rect = resolveCardRect({ type: cardInput.type, x: cardInput.x, y: cardInput.y, w: cardInput.w, h: cardInput.h });
+          const placed = firstFreeRect({ w: rect.w, h: rect.h }, occupied);
+          builtCards.push({
+            ...cardInput,
+            id: `card_${Date.now()}_${i}`,
+            order: i + 1,
+            x: cardInput.x ?? placed.x,
+            y: cardInput.y ?? placed.y,
+            w: cardInput.w ?? placed.w,
+            h: cardInput.h ?? placed.h,
+          });
+          occupied.push(placed);
+        }
         const dashboard: DashboardDefinition = {
           id,
           name: name?.trim() || `Dashboard ${state.dashboards.length + 1}`,
-          cards: [],
+          cards: builtCards,
         };
         const dashboards = [...state.dashboards, dashboard];
         return {
@@ -1377,6 +1418,53 @@ export const useEditorStore = create<EditorState>((set, get) => {
         const nodes = state.model.nodes.map((n) => {
           const pos = positions.find((p) => p.id === n.id);
           return pos ? { ...n, position: { x: pos.x, y: pos.y } } : n;
+        });
+        return { model: { ...state.model, nodes }, localIssues: localValidate({ ...state.model, nodes }) };
+      });
+      pushHistory(before, snapshotFromState(get().model, get().selected));
+    },
+    alignNodes: (direction, nodeIds) => {
+      if (nodeIds.length < 2) return;
+      flushPendingCommit();
+      const before = snapshotFromState(get().model, get().selected);
+      const selected = get().model.nodes.filter((n) => nodeIds.includes(n.id));
+      if (selected.length < 2) return;
+
+      const NODE_W = 120; // approximate node width for right-align
+
+      let targetX: number | undefined;
+      let targetY: number | undefined;
+      switch (direction) {
+        case 'left':
+          targetX = Math.min(...selected.map((n) => n.position.x));
+          break;
+        case 'right':
+          targetX = Math.max(...selected.map((n) => n.position.x + NODE_W)) - NODE_W;
+          break;
+        case 'top':
+          targetY = Math.min(...selected.map((n) => n.position.y));
+          break;
+        case 'bottom':
+          targetY = Math.max(...selected.map((n) => n.position.y));
+          break;
+        case 'center-h':
+          targetX = selected.reduce((s, n) => s + n.position.x, 0) / selected.length;
+          break;
+        case 'center-v':
+          targetY = selected.reduce((s, n) => s + n.position.y, 0) / selected.length;
+          break;
+      }
+
+      set((state) => {
+        const nodes = state.model.nodes.map((n) => {
+          if (!nodeIds.includes(n.id)) return n;
+          return {
+            ...n,
+            position: {
+              x: targetX !== undefined ? targetX : n.position.x,
+              y: targetY !== undefined ? targetY : n.position.y,
+            },
+          };
         });
         return { model: { ...state.model, nodes }, localIssues: localValidate({ ...state.model, nodes }) };
       });

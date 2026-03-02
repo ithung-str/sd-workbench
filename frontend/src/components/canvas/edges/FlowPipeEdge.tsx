@@ -47,10 +47,20 @@ export function FlowPipeEdge(props: EdgeProps<EdgeData>) {
     showSourceArrow = flowSign === 'negative' || flowSign === 'both';
   }
 
-  if (waypoints && waypoints.length > 0) {
+  // Auto-compute elbow waypoint from actual handle positions when no explicit waypoints exist
+  let effectiveWaypoints = waypoints;
+  if (!effectiveWaypoints || effectiveWaypoints.length === 0) {
+    const dx = Math.abs(props.targetX - props.sourceX);
+    const dy = Math.abs(props.targetY - props.sourceY);
+    if (dx > 10 && dy > 10) {
+      effectiveWaypoints = [{ x: props.targetX, y: props.sourceY }];
+    }
+  }
+
+  if (effectiveWaypoints && effectiveWaypoints.length > 0) {
     const allPoints = [
       { x: props.sourceX, y: props.sourceY },
-      ...waypoints,
+      ...effectiveWaypoints,
       { x: props.targetX, y: props.targetY },
     ];
 
