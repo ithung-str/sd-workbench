@@ -33,6 +33,8 @@ export type StockNode = {
   label: string;
   equation: string;
   initial_value: number | string;
+  min_value?: number;
+  max_value?: number;
   units?: string;
   position: Position;
   style?: VisualStyle;
@@ -63,6 +65,8 @@ export type FlowNode = {
   source_stock_id?: string;
   target_stock_id?: string;
   flow_sign?: 'positive' | 'negative' | 'both';
+  min_value?: number;
+  max_value?: number;
   units?: string;
   position: Position;
   style?: VisualStyle;
@@ -138,6 +142,13 @@ export type EdgeModel =
   | { id: string; type: 'influence'; source: string; target: string; source_handle?: string; target_handle?: string; style?: VisualStyle; layout?: LayoutMetadata }
   | { id: string; type: 'flow_link'; source: string; target: string; source_handle?: string; target_handle?: string; style?: VisualStyle; layout?: LayoutMetadata };
 
+export type DiagramStyleDefaults = {
+  stock?: VisualStyle;
+  flow?: VisualStyle;
+  aux?: VisualStyle;
+  lookup?: VisualStyle;
+};
+
 export type ModelDocument = {
   id: string;
   name: string;
@@ -148,6 +159,7 @@ export type ModelDocument = {
     created_at?: string;
     updated_at?: string;
     analysis?: AnalysisConfig;
+    default_styles?: DiagramStyleDefaults;
   };
   nodes: NodeModel[];
   edges: EdgeModel[];

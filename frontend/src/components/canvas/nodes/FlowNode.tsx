@@ -1,15 +1,24 @@
+import { useMemo } from 'react';
 import { Handle, Position } from 'reactflow';
+import type { LabelNodeData } from '../../../lib/modelToReactFlow';
+import { resolveNodeStyle, visualStyleToCss } from '../../../lib/visualStyleUtils';
+import { useEditorStore } from '../../../state/editorStore';
 
 const flowValveIcon = new URL('../../../../icons/Flow_valve.svg', import.meta.url).href;
 
 export function FlowNodeView({
   data,
 }: {
-  data: { label: string; subtitle: string; flowDirection?: 'left' | 'right' };
+  data: LabelNodeData;
 }) {
+  const defaultStyles = useEditorStore((s) => s.model.metadata?.default_styles);
   const direction = data.flowDirection ?? 'right';
+  const resolvedCss = useMemo(
+    () => visualStyleToCss(resolveNodeStyle('flow', defaultStyles, data.visualStyle)),
+    [defaultStyles, data.visualStyle],
+  );
   return (
-    <div className="rf-node rf-node-flow rf-node-shape-flow">
+    <div className="rf-node rf-node-flow rf-node-shape-flow" style={resolvedCss}>
       {/* Handles for flow connections (left and right) */}
       <Handle type="target" position={Position.Left} id="flow-left" style={{ top: '24px', left: '0px' }} />
       <Handle type="source" position={Position.Right} id="flow-right" style={{ top: '24px', right: '0px' }} />

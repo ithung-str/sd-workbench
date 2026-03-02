@@ -21,6 +21,7 @@ import {
   IconCheck,
   IconCode,
   IconFlask,
+  IconPaint,
   IconPencil,
   IconPlus,
   IconSettings,
@@ -28,6 +29,7 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react';
+import { ColorInput } from '@mantine/core';
 import { collectGlobalVariableUsage } from '../../lib/globalVariableUsage';
 import { useEditorStore } from '../../state/editorStore';
 import { useUIStore } from '../../state/uiStore';
@@ -46,6 +48,8 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
   const setSelected = useEditorStore((s) => s.setSelected);
   const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
   const importedVensim = useEditorStore((s) => s.importedVensim);
+  const updateDefaultStyle = useEditorStore((s) => s.updateDefaultStyle);
+  const defaultStyles = model.metadata?.default_styles;
   const aiCommand = useEditorStore((s) => s.aiCommand);
   const setAiCommand = useEditorStore((s) => s.setAiCommand);
   const runAiCommand = useEditorStore((s) => s.runAiCommand);
@@ -152,6 +156,47 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
                 </div>
                 <Switch checked={showXmlModel} onChange={toggleXmlModel} size="md" color="deepPurple" />
               </Group>
+            </Stack>
+          </Accordion.Panel>
+        </Accordion.Item>
+
+        <Accordion.Item value="global-styles">
+          <Accordion.Control>
+            <Group gap={8} wrap="nowrap">
+              <IconPaint size={16} />
+              <Text size="sm" fw={500}>Global Styles</Text>
+            </Group>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <Stack gap="md">
+              {(['stock', 'flow', 'aux', 'lookup'] as const).map((nodeType) => (
+                <Paper key={nodeType} withBorder p="xs">
+                  <Text size="sm" fw={600} mb={6} tt="capitalize">{nodeType}</Text>
+                  <Stack gap="xs">
+                    <ColorInput
+                      label="Fill"
+                      size="xs"
+                      placeholder="Default"
+                      value={defaultStyles?.[nodeType]?.fill ?? ''}
+                      onChange={(value) => updateDefaultStyle(nodeType, { fill: value || undefined })}
+                    />
+                    <ColorInput
+                      label="Stroke"
+                      size="xs"
+                      placeholder="Default"
+                      value={defaultStyles?.[nodeType]?.stroke ?? ''}
+                      onChange={(value) => updateDefaultStyle(nodeType, { stroke: value || undefined })}
+                    />
+                    <ColorInput
+                      label="Text Color"
+                      size="xs"
+                      placeholder="Default"
+                      value={defaultStyles?.[nodeType]?.text_color ?? ''}
+                      onChange={(value) => updateDefaultStyle(nodeType, { text_color: value || undefined })}
+                    />
+                  </Stack>
+                </Paper>
+              ))}
             </Stack>
           </Accordion.Panel>
         </Accordion.Item>

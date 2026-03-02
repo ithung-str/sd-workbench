@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { LabelNodeData } from '../../../lib/modelToReactFlow';
+import { resolveNodeStyle, visualStyleToCss } from '../../../lib/visualStyleUtils';
+import { useEditorStore } from '../../../state/editorStore';
 import { EDGE_DRAG_START_EVENT } from './StockNode';
 
 function lookupSparkPath(points: Array<{ x: number; y: number }>, w: number, h: number): string {
@@ -23,7 +25,12 @@ function lookupSparkPath(points: Array<{ x: number; y: number }>, w: number, h: 
 }
 
 export function LookupNodeView({ data }: { data: LabelNodeData }) {
+  const defaultStyles = useEditorStore((s) => s.model.metadata?.default_styles);
   const [hovered, setHovered] = useState(false);
+  const resolvedCss = useMemo(
+    () => visualStyleToCss(resolveNodeStyle('lookup', defaultStyles, data.visualStyle)),
+    [defaultStyles, data.visualStyle],
+  );
 
   const onEdgeDragStart = useCallback(
     (e: React.MouseEvent) => {
@@ -47,6 +54,7 @@ export function LookupNodeView({ data }: { data: LabelNodeData }) {
   return (
     <div
       className="rf-node rf-node-lookup rf-node-shape-lookup"
+      style={resolvedCss}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

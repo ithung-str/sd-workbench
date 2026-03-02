@@ -1,10 +1,17 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { LabelNodeData } from '../../../lib/modelToReactFlow';
+import { resolveNodeStyle, visualStyleToCss } from '../../../lib/visualStyleUtils';
+import { useEditorStore } from '../../../state/editorStore';
 import { EDGE_DRAG_START_EVENT } from './StockNode';
 
 export function AuxNodeView({ data }: { data: LabelNodeData }) {
+  const defaultStyles = useEditorStore((s) => s.model.metadata?.default_styles);
   const [hovered, setHovered] = useState(false);
+  const resolvedCss = useMemo(
+    () => visualStyleToCss(resolveNodeStyle('aux', defaultStyles, data.visualStyle)),
+    [defaultStyles, data.visualStyle],
+  );
 
   const onEdgeDragStart = useCallback(
     (e: React.MouseEvent) => {
@@ -23,6 +30,7 @@ export function AuxNodeView({ data }: { data: LabelNodeData }) {
   return (
     <div
       className="rf-node rf-node-aux rf-node-shape-aux"
+      style={resolvedCss}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

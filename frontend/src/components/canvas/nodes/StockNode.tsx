@@ -1,6 +1,7 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Handle, NodeResizer, Position } from 'reactflow';
 import type { LabelNodeData } from '../../../lib/modelToReactFlow';
+import { resolveNodeStyle, visualStyleToCss } from '../../../lib/visualStyleUtils';
 import { useEditorStore } from '../../../state/editorStore';
 
 export const FLOW_DRAG_START_EVENT = 'stock-flow-drag-start';
@@ -8,10 +9,15 @@ export const EDGE_DRAG_START_EVENT = 'node-edge-drag-start';
 
 export function StockNodeView({ data }: { data: LabelNodeData }) {
   const updateNode = useEditorStore((s) => s.updateNode);
+  const defaultStyles = useEditorStore((s) => s.model.metadata?.default_styles);
   const [hovered, setHovered] = useState(false);
   const rotateStartRef = useRef<{ startAngle: number; startRotation: number } | null>(null);
 
   const rotation = data.layoutMeta?.rotation ?? 0;
+  const resolvedCss = useMemo(
+    () => visualStyleToCss(resolveNodeStyle('stock', defaultStyles, data.visualStyle)),
+    [defaultStyles, data.visualStyle],
+  );
 
   const onResize = useCallback(
     (_event: unknown, params: { width: number; height: number }) => {
@@ -72,7 +78,7 @@ export function StockNodeView({ data }: { data: LabelNodeData }) {
   return (
     <div
       className="rf-node rf-node-stock rf-node-shape-stock"
-      style={{ transform: rotation ? `rotate(${rotation}deg)` : undefined }}
+      style={{ transform: rotation ? `rotate(${rotation}deg)` : undefined, ...resolvedCss }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

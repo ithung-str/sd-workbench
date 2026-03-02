@@ -158,6 +158,7 @@ type EditorState = {
   updateDashboardCard: (dashboardId: string, cardId: string, patch: Partial<DashboardCard>) => void;
   moveDashboardCard: (dashboardId: string, cardId: string, direction: 'up' | 'down') => void;
   deleteDashboardCard: (dashboardId: string, cardId: string) => void;
+  updateDefaultStyle: (nodeType: 'stock' | 'flow' | 'aux' | 'lookup', style: Partial<import('../types/model').VisualStyle>) => void;
   setBackendHealthy: (value: boolean | null) => void;
   autoOrganize: () => void;
 };
@@ -1194,6 +1195,18 @@ export const useEditorStore = create<EditorState>((set, get) => {
         activeScenarioId: id,
         model: persistAnalysis(state.model, state.scenarios, id, state.dashboards, state.activeDashboardId),
       }));
+    },
+    updateDefaultStyle: (nodeType, style) => {
+      set((state) => {
+        const existing = state.model.metadata?.default_styles ?? {};
+        const merged = { ...existing, [nodeType]: { ...(existing[nodeType] ?? {}), ...style } };
+        return {
+          model: {
+            ...state.model,
+            metadata: { ...(state.model.metadata ?? {}), default_styles: merged },
+          },
+        };
+      });
     },
     createDashboard: (name) => {
       set((state) => {

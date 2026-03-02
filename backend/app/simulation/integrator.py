@@ -3,7 +3,7 @@ from __future__ import annotations
 from bisect import bisect_right
 
 from app.equations.evaluator import evaluate_expression
-from app.schemas.model import LookupNode, StockNode
+from app.schemas.model import FlowNode, LookupNode, StockNode
 from app.simulation.translator import ExecutableModel
 
 
@@ -61,6 +61,12 @@ def simulate_euler(executable: ExecutableModel, start: float, stop: float, dt: f
                 context[name] = _lookup_interpolate(node, x_input)
             else:
                 context[name] = float(evaluate_expression(node.equation, context))
+            # Clamp flow values if min/max constraints are set
+            if isinstance(node, FlowNode):
+                if node.min_value is not None:
+                    context[name] = max(context[name], node.min_value)
+                if node.max_value is not None:
+                    context[name] = min(context[name], node.max_value)
             series[name].append(context[name])
 
         # record stocks at current time
@@ -75,6 +81,11 @@ def simulate_euler(executable: ExecutableModel, start: float, stop: float, dt: f
         for stock in executable.stock_nodes:
             derivative = float(evaluate_expression(stock.equation, context))
             next_stock_state[stock.name] = stock_state[stock.name] + derivative * dt
+            # Clamp stock values if min/max constraints are set
+            if stock.min_value is not None:
+                next_stock_state[stock.name] = max(next_stock_state[stock.name], stock.min_value)
+            if stock.max_value is not None:
+                next_stock_state[stock.name] = min(next_stock_state[stock.name], stock.max_value)
         stock_state = next_stock_state
 
     # include requested outputs only + time, but retain dependency vars if explicitly requested

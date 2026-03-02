@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Stack, Title, Button, TextInput, Textarea, Group, Text, Paper, Alert, Checkbox } from '@mantine/core';
+import { Stack, Title, Button, TextInput, Textarea, Group, Text, Paper, Alert, Checkbox, NumberInput } from '@mantine/core';
 import { IconTrash, IconInfoCircle } from '@tabler/icons-react';
 import { collectGlobalVariableUsage } from '../../lib/globalVariableUsage';
 import { useEditorStore } from '../../state/editorStore';
@@ -347,6 +347,22 @@ export function InspectorPanel() {
               updateNode(node.id, { initial_value: Number.isFinite(parsed) && v.trim() !== '' ? parsed : v } as Partial<NodeModel>);
             }}
           />
+          <Group grow>
+            <NumberInput
+              label="Min Value"
+              size="xs"
+              placeholder="No min"
+              value={node.min_value ?? ''}
+              onChange={(value) => updateNode(node.id, { min_value: value === '' ? undefined : Number(value) } as Partial<NodeModel>)}
+            />
+            <NumberInput
+              label="Max Value"
+              size="xs"
+              placeholder="No max"
+              value={node.max_value ?? ''}
+              onChange={(value) => updateNode(node.id, { max_value: value === '' ? undefined : Number(value) } as Partial<NodeModel>)}
+            />
+          </Group>
           <Checkbox
             label="Show sparkline on canvas"
             checked={!!node.show_graph}
@@ -382,6 +398,22 @@ export function InspectorPanel() {
             value={node.target_stock_id ?? ''}
             onChange={(e) => updateNode(node.id, { target_stock_id: e.target.value || undefined })}
           />
+          <Group grow>
+            <NumberInput
+              label="Min Value"
+              size="xs"
+              placeholder="No min"
+              value={node.min_value ?? ''}
+              onChange={(value) => updateNode(node.id, { min_value: value === '' ? undefined : Number(value) } as Partial<NodeModel>)}
+            />
+            <NumberInput
+              label="Max Value"
+              size="xs"
+              placeholder="No max"
+              value={node.max_value ?? ''}
+              onChange={(value) => updateNode(node.id, { max_value: value === '' ? undefined : Number(value) } as Partial<NodeModel>)}
+            />
+          </Group>
         </>
       )}
 

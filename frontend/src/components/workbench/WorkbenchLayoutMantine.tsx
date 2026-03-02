@@ -99,6 +99,9 @@ export function WorkbenchLayout() {
             <Button variant="light" color="deepPurple" size="sm" onClick={() => navigateTo('/dashboard')}>
               Dashboard
             </Button>
+            <Button variant="light" color="deepPurple" size="sm" onClick={() => navigateTo('/scenarios')}>
+              Scenarios
+            </Button>
 
             <Menu opened={menuOpened} onChange={setMenuOpened}>
               <Menu.Target>

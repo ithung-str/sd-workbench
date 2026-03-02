@@ -32,6 +32,8 @@ class BaseNode(BaseModel):
 class StockNode(BaseNode):
     type: Literal["stock"]
     initial_value: float | str
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
 
 
 class AuxNode(BaseNode):
@@ -42,6 +44,8 @@ class FlowNode(BaseNode):
     type: Literal["flow"]
     source_stock_id: Optional[str] = None
     target_stock_id: Optional[str] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
 
 
 class LookupNode(BaseNode):

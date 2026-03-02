@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { VisualStyle } from '../types/model';
+import type { DiagramStyleDefaults, VisualStyle } from '../types/model';
 
 /**
  * Convert an imported VisualStyle to React inline CSS properties.
@@ -21,4 +21,27 @@ export function visualStyleToCss(style?: VisualStyle): CSSProperties | undefined
   if (style.text_align) css.textAlign = style.text_align as CSSProperties['textAlign'];
 
   return Object.keys(css).length > 0 ? css : undefined;
+}
+
+/**
+ * Resolve a node's effective style by merging global type defaults with node-specific overrides.
+ * Node-specific values take priority over global defaults.
+ */
+export function resolveNodeStyle(
+  nodeType: 'stock' | 'flow' | 'aux' | 'lookup',
+  globalDefaults?: DiagramStyleDefaults,
+  nodeStyle?: VisualStyle,
+): VisualStyle | undefined {
+  const globalStyle = globalDefaults?.[nodeType];
+  if (!globalStyle && !nodeStyle) return undefined;
+  if (!globalStyle) return nodeStyle;
+  if (!nodeStyle) return globalStyle;
+  // Merge: node-specific overrides take priority
+  const merged: VisualStyle = { ...globalStyle };
+  for (const [key, value] of Object.entries(nodeStyle)) {
+    if (value != null) {
+      (merged as Record<string, unknown>)[key] = value;
+    }
+  }
+  return merged;
 }
