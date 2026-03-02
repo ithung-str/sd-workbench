@@ -1,4 +1,6 @@
 import type {
+  AIChatMessage,
+  AIExecuteResponse,
   BatchSimulateRequest,
   BatchSimulateResponse,
   MonteCarloRequest,
@@ -189,12 +191,12 @@ export async function getVensimParityReadiness(importId: string): Promise<Vensim
   return parseJson(res);
 }
 
-export async function executeAiCommand(prompt: string, model: ModelDocument): Promise<{ ok: boolean; model: ModelDocument; warnings: ValidationIssue[] }> {
+export async function executeAiCommand(prompt: string, model: ModelDocument, history?: AIChatMessage[]): Promise<AIExecuteResponse> {
   const normalized = modelForBackend(model);
   const res = await fetch(`${API_BASE}/api/ai/execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, model: normalized }),
+    body: JSON.stringify({ prompt, model: normalized, history: history ?? [] }),
   });
   return parseJson(res);
 }

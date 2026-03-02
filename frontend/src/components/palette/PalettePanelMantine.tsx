@@ -520,7 +520,7 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
           <Accordion.Control>
             <Group gap={8} wrap="nowrap">
               <IconSparkles size={16} />
-              <Text size="sm" fw={500}>AI Canvas Command</Text>
+              <Text size="sm" fw={500}>AI Assistant</Text>
             </Group>
           </Accordion.Control>
           <Accordion.Panel>
@@ -546,11 +546,16 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
                 color="deepPurple"
                 size="sm"
               >
-                {isApplyingAi ? 'Applying…' : 'Apply with AI'}
+                {isApplyingAi ? 'Applying…' : 'Send to AI'}
               </Button>
               {activeSimulationMode === 'vensim' ? (
                 <Text size="xs" c="dimmed">
                   AI canvas edits are available in native JSON mode.
+                </Text>
+              ) : null}
+              {activeSimulationMode !== 'vensim' ? (
+                <Text size="xs" c="dimmed">
+                  AI will ask clarifying questions if your request is ambiguous. See the AI Chat panel in the header for conversation history.
                 </Text>
               ) : null}
             </Stack>
