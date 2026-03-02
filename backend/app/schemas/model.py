@@ -17,6 +17,75 @@ class LookupPoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class WaypointPosition(BaseModel):
+    x: float
+    y: float
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class VisualStyle(BaseModel):
+    fill: Optional[str] = None
+    stroke: Optional[str] = None
+    stroke_width: Optional[float] = None
+    line_style: Optional[str] = None
+    opacity: Optional[float] = None
+    text_color: Optional[str] = None
+    font_family: Optional[str] = None
+    font_size: Optional[float] = None
+    font_weight: Optional[str] = None
+    text_align: Optional[str] = None
+    background: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LayoutMetadata(BaseModel):
+    width: Optional[float] = None
+    height: Optional[float] = None
+    rotation: Optional[float] = None
+    visible: Optional[bool] = None
+    locked: Optional[bool] = None
+    z_index: Optional[int] = None
+    source: Optional[str] = None
+    waypoints: Optional[list[WaypointPosition]] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class AnnotationMetadata(BaseModel):
+    kind: Optional[str] = None
+    title: Optional[str] = None
+    note: Optional[str] = None
+    raw_xml: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ImportedModelInfo(BaseModel):
+    description: Optional[str] = None
+    author: Optional[str] = None
+    notes: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ImportedRoundTripMetadata(BaseModel):
+    source_ids: dict[str, str] = Field(default_factory=dict)
+    unmapped_fragments: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ImportedMetadata(BaseModel):
+    source_format: Optional[str] = None
+    model_info: Optional[ImportedModelInfo] = None
+    style_defaults: dict[str, str] = Field(default_factory=dict)
+    roundtrip: Optional[ImportedRoundTripMetadata] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class BaseNode(BaseModel):
     id: str
     type: str
@@ -25,6 +94,10 @@ class BaseNode(BaseModel):
     equation: str
     units: Optional[str] = None
     position: Position
+    style: Optional[VisualStyle] = None
+    layout: Optional[LayoutMetadata] = None
+    annotation: Optional[AnnotationMetadata] = None
+    source_id: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -71,6 +144,10 @@ class TextNode(BaseModel):
     type: Literal["text"]
     text: str = ""
     position: Position
+    style: Optional[VisualStyle] = None
+    layout: Optional[LayoutMetadata] = None
+    annotation: Optional[AnnotationMetadata] = None
+    source_id: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -93,6 +170,9 @@ class InfluenceEdge(BaseModel):
     target: str
     source_handle: Optional[str] = None
     target_handle: Optional[str] = None
+    style: Optional[VisualStyle] = None
+    layout: Optional[LayoutMetadata] = None
+    source_id: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -104,6 +184,8 @@ class FlowLinkEdge(BaseModel):
     target: str
     source_handle: Optional[str] = None
     target_handle: Optional[str] = None
+    style: Optional[VisualStyle] = None
+    layout: Optional[LayoutMetadata] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -204,12 +286,23 @@ class AnalysisConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class DiagramStyleDefaults(BaseModel):
+    stock: Optional[VisualStyle] = None
+    flow: Optional[VisualStyle] = None
+    aux: Optional[VisualStyle] = None
+    lookup: Optional[VisualStyle] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ModelMetadata(BaseModel):
     description: Optional[str] = None
     author: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     analysis: Optional[AnalysisConfig] = None
+    imported: Optional[ImportedMetadata] = None
+    default_styles: Optional[DiagramStyleDefaults] = None
 
     model_config = ConfigDict(extra="forbid")
 
