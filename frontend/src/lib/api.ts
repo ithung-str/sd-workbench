@@ -198,3 +198,23 @@ export async function executeAiCommand(prompt: string, model: ModelDocument): Pr
   });
   return parseJson(res);
 }
+
+export async function importSpreadsheet(file: File): Promise<{ ok: boolean; model: ModelDocument; warnings: { code: string; message: string; severity: string }[]; node_count: number }> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API_BASE}/api/imports/spreadsheet`, {
+    method: 'POST',
+    body: form,
+  });
+  return parseJson(res);
+}
+
+export async function exportXmile(model: ModelDocument, simConfig?: { start: number; stop: number; dt: number; method: 'euler' }): Promise<{ ok: boolean; xml: string }> {
+  const normalized = modelForBackend(model);
+  const res = await fetch(`${API_BASE}/api/imports/export/xmile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: normalized, sim_config: simConfig ?? null }),
+  });
+  return parseJson(res);
+}
