@@ -43,7 +43,7 @@ import type {
 import type { VensimPresetDescriptor } from '../lib/vensimPresets';
 
 export type DockTab = 'validation' | 'chart' | 'table' | 'compare' | 'sensitivity';
-export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios';
+export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity';
 
 type Selection =
   | { kind: 'node'; id: string }

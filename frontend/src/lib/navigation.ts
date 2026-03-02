@@ -6,6 +6,7 @@ const TAB_MAP: Record<string, WorkbenchTab> = {
   '/formulas': 'formulas',
   '/dashboard': 'dashboard',
   '/scenarios': 'scenarios',
+  '/sensitivity': 'sensitivity',
 };
 
 export function navigateTo(path: string): void {

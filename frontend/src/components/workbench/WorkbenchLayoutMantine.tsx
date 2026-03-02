@@ -9,6 +9,7 @@ import { ResultsDock } from '../results/ResultsDockMantine';
 import { FormulaPage } from '../formulas/FormulaPage';
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ScenarioPage } from '../scenarios/ScenarioPage';
+import { SensitivityPage } from '../sensitivity/SensitivityPage';
 import { ImportExportControls } from '../io/ImportExportControls';
 import { useUIStore } from '../../state/uiStore';
 import { modelPresets, type ModelPresetKey } from '../../lib/sampleModels';
@@ -46,12 +47,12 @@ export function WorkbenchLayout() {
     <AppShell
       header={{ height: WORKBENCH_HEADER_HEIGHT }}
       footer={{ height: isCanvas ? (bottomTrayExpanded ? bottomTrayHeight : 68) : 0 }}
-      navbar={{ width: 360, breakpoint: 'sm', collapsed: { mobile: !isCanvas || !leftOpened, desktop: !isCanvas || !leftOpened } }}
-      aside={{ width: 340, breakpoint: 'md', collapsed: { mobile: !isCanvas || !rightOpened, desktop: !isCanvas || !rightOpened } }}
+      navbar={{ width: 320, breakpoint: 'sm', collapsed: { mobile: !isCanvas || !leftOpened, desktop: !isCanvas || !leftOpened } }}
+      aside={{ width: 300, breakpoint: 'md', collapsed: { mobile: !isCanvas || !rightOpened, desktop: !isCanvas || !rightOpened } }}
       padding="0"
     >
       <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
+        <Group h="100%" px="sm" justify="space-between">
           <Group>
             {logoUrl ? (
               <img src={logoUrl} alt="Structural Collective" style={{ height: 34 }} />
@@ -119,6 +120,7 @@ export function WorkbenchLayout() {
                 <Tabs.Tab value="formulas">Formulas</Tabs.Tab>
                 <Tabs.Tab value="dashboard">Dashboard</Tabs.Tab>
                 <Tabs.Tab value="scenarios">Scenarios</Tabs.Tab>
+                <Tabs.Tab value="sensitivity">Sensitivity</Tabs.Tab>
               </Tabs.List>
             </Tabs>
 
@@ -236,6 +238,7 @@ export function WorkbenchLayout() {
         {activeTab === 'formulas' && <FormulaPage />}
         {activeTab === 'dashboard' && <DashboardPage />}
         {activeTab === 'scenarios' && <ScenarioPage />}
+        {activeTab === 'sensitivity' && <SensitivityPage />}
       </AppShell.Main>
 
       {isCanvas && (
