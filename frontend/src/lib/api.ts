@@ -37,32 +37,37 @@ async function parseJson<T>(res: Response): Promise<T> {
   return body as T;
 }
 
+function syncOutputs(nodes: ModelDocument['nodes']): string[] {
+  const outputs: string[] = [];
+  for (const node of nodes) {
+    if (node.type === 'text' || node.type === 'cld_symbol' || node.type === 'phantom' || node.type === 'cloud') continue;
+    if ('name' in node && node.name) outputs.push(node.name);
+  }
+  return outputs;
+}
+
 function modelForBackend(model: ModelDocument): ModelDocument {
   const { global_variables: _globals, ...base } = model;
   const semanticNodes = base.nodes.filter((node) => node.type !== 'cld_symbol' && node.type !== 'phantom' && node.type !== 'cloud');
   const semanticIds = new Set(semanticNodes.map((node) => node.id));
   const semanticEdges = base.edges.filter((edge) => semanticIds.has(edge.source) && semanticIds.has(edge.target));
   const globals = model.global_variables ?? [];
-  if (globals.length === 0) {
-    return {
-      ...base,
-      nodes: semanticNodes,
-      edges: semanticEdges,
-    };
-  }
-  const globalNodes: AuxNode[] = globals.map((variable, idx) => ({
-    id: `global_${variable.id || idx}`,
-    type: 'aux',
-    name: variable.name,
-    label: `Global ${variable.name}`,
-    equation: variable.equation,
-    units: variable.units,
-    position: { x: -10000, y: -10000 - idx * 40 },
-  }));
+  const allNodes = globals.length === 0
+    ? semanticNodes
+    : [...semanticNodes, ...globals.map((variable, idx): AuxNode => ({
+        id: `global_${variable.id || idx}`,
+        type: 'aux',
+        name: variable.name,
+        label: `Global ${variable.name}`,
+        equation: variable.equation,
+        units: variable.units,
+        position: { x: -10000, y: -10000 - idx * 40 },
+      }))];
   return {
     ...base,
-    nodes: [...semanticNodes, ...globalNodes],
+    nodes: allNodes,
     edges: semanticEdges,
+    outputs: syncOutputs(allNodes),
   };
 }
 
