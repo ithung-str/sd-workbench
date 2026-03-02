@@ -369,6 +369,7 @@ function ModelCanvasInner() {
         edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.16 }}
+        connectionRadius={30}
         onInit={setFlowInstance}
         nodesDraggable={!isCanvasLocked}
         nodesConnectable={!isCanvasLocked}

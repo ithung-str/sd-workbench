@@ -4,6 +4,7 @@ import { ModelCanvas } from '../canvas/ModelCanvas';
 import { InspectorPanel } from '../inspector/InspectorPanel';
 import { ResultsDock } from '../results/ResultsDock';
 import { ImportExportControls } from '../io/ImportExportControls';
+import { AIChatPanel } from './AIChatPanel';
 import { useUIStore } from '../../state/uiStore';
 import { modelPresets, type ModelPresetKey } from '../../lib/sampleModels';
 import { useEditorStore } from '../../state/editorStore';
@@ -24,12 +25,13 @@ export function WorkbenchLayout() {
   const loadModel = useEditorStore((s) => s.loadModel);
   const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
   const importedVensim = useEditorStore((s) => s.importedVensim);
-  const aiCommand = useEditorStore((s) => s.aiCommand);
-  const setAiCommand = useEditorStore((s) => s.setAiCommand);
-  const runAiCommand = useEditorStore((s) => s.runAiCommand);
+  const aiChatOpen = useEditorStore((s) => s.aiChatOpen);
+  const setAiChatOpen = useEditorStore((s) => s.setAiChatOpen);
+  const aiChatHistory = useEditorStore((s) => s.aiChatHistory);
   const isApplyingAi = useEditorStore((s) => s.isApplyingAi);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const chatRef = useRef<HTMLDivElement | null>(null);
   const logoUrl = import.meta.env.VITE_SC_LOGO_URL as string | undefined;
   const workspaceClass = [
     'workspace-grid',
@@ -59,6 +61,8 @@ export function WorkbenchLayout() {
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
+
+  const unreadCount = aiChatHistory.filter((m) => m.role === 'assistant').length;
 
   return (
     <div className="workbench">
@@ -113,23 +117,16 @@ export function WorkbenchLayout() {
           >
             {showMinimap ? 'Hide map' : 'Show map'}
           </button>
-          <div className="ai-command-box">
-            <textarea
-              value={aiCommand}
-              onChange={(e) => setAiCommand(e.target.value)}
-              placeholder="Ask AI to modify the canvas (e.g. add stock inventory, flow inflow from cloud, connect to inventory)"
-              rows={1}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  void runAiCommand();
-                }
-              }}
-            />
-            <button className="purple-button" onClick={() => void runAiCommand()} disabled={isApplyingAi || !aiCommand.trim()}>
-              {isApplyingAi ? 'Applying…' : 'Apply with AI'}
-            </button>
-          </div>
+          <button
+            className={`purple-button ai-chat-toggle ${aiChatOpen ? 'is-active' : ''} ${isApplyingAi ? 'is-loading' : ''}`}
+            onClick={() => setAiChatOpen(!aiChatOpen)}
+            title={aiChatOpen ? 'Close AI chat' : 'Open AI chat'}
+          >
+            {isApplyingAi ? 'AI thinking...' : 'AI Chat'}
+            {!aiChatOpen && unreadCount > 0 && (
+              <span className="ai-chat-badge">{unreadCount}</span>
+            )}
+          </button>
           <button className="purple-button">+ New Diagram</button>
           <div className="hamburger-wrap" ref={menuRef}>
             <button
@@ -165,6 +162,12 @@ export function WorkbenchLayout() {
 
         <main className="canvas-column">
           <ModelCanvas />
+          {/* Floating AI chat panel */}
+          {aiChatOpen && (
+            <div className="ai-chat-floating" ref={chatRef}>
+              <AIChatPanel />
+            </div>
+          )}
         </main>
 
         <aside className={`right-rail ${rightRailCollapsed ? 'collapsed' : ''}`}>

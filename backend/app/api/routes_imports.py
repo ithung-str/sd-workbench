@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
 
+from app.converters.model_to_xmile import export_xmile
 from app.converters.xmile_to_insightmaker import convert_xmile_to_insightmaker
 from app.imports.cache import get_session
 from app.imports.errors import imported_http_error
 from app.imports.serializer import serialize_insightmaker_xml
 from app.imports.service import import_insightmaker_file
+from app.imports.spreadsheet_parser import parse_csv, parse_excel
 from app.imports.simulator import (
     diagnostics_for_import,
     readiness_for_import,
@@ -29,6 +33,7 @@ from app.schemas.imported import (
     ImportedSimulateRequest,
     ImportedSimulateResponse,
 )
+from app.schemas.model import ModelDocument, SimConfig
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
@@ -90,3 +95,61 @@ def convert_xmile_to_insightmaker_endpoint(request: XMILEConvertRequest) -> dict
     except ValueError as exc:
         raise imported_http_error(422, "XMILE_CONVERSION_ERROR", str(exc))
     return {"ok": True, "xml": xml, "diagnostics": diagnostics}
+
+
+# ---------------------------------------------------------------------------
+# CSV / Excel spreadsheet import
+# ---------------------------------------------------------------------------
+
+
+@router.post("/spreadsheet")
+async def import_spreadsheet_endpoint(file: UploadFile | None = File(default=None)) -> dict:
+    """Import stocks and flows from a CSV or Excel (.xlsx) file."""
+    if file is None:
+        raise imported_http_error(400, "SS_FILE_REQUIRED", "file upload is required")
+
+    filename = file.filename or "upload"
+    normalized = filename.lower()
+
+    if normalized.endswith(".csv"):
+        payload_bytes = await file.read()
+        payload = payload_bytes.decode("utf-8", errors="ignore")
+        try:
+            result = parse_csv(payload, filename)
+        except ValueError as exc:
+            raise imported_http_error(422, "SS_PARSE_ERROR", str(exc))
+    elif normalized.endswith(".xlsx"):
+        payload_bytes = await file.read()
+        try:
+            result = parse_excel(payload_bytes, filename)
+        except ValueError as exc:
+            raise imported_http_error(422, "SS_PARSE_ERROR", str(exc))
+    else:
+        raise imported_http_error(400, "SS_UNSUPPORTED_FILE", "Only .csv and .xlsx files are supported")
+
+    return {
+        "ok": True,
+        "model": result["model"].model_dump(),
+        "warnings": result["warnings"],
+        "node_count": result["node_count"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# XMILE export
+# ---------------------------------------------------------------------------
+
+
+class XMILEExportRequest(BaseModel):
+    model: ModelDocument
+    sim_config: Optional[SimConfig] = None
+
+
+@router.post("/export/xmile")
+def export_xmile_endpoint(request: XMILEExportRequest) -> dict:
+    """Export a ModelDocument to XMILE 1.0 XML."""
+    try:
+        xml = export_xmile(request.model, request.sim_config)
+    except Exception as exc:
+        raise imported_http_error(422, "XMILE_EXPORT_ERROR", str(exc))
+    return {"ok": True, "xml": xml}

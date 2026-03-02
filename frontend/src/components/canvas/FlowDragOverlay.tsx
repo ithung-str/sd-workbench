@@ -21,7 +21,7 @@ export function FlowDragOverlay({ sourceX, sourceY, cursorX, cursorY, isInfluenc
   const rightX = baseX + Math.cos(angle - Math.PI / 2) * arrowHalfWidth;
   const rightY = baseY + Math.sin(angle - Math.PI / 2) * arrowHalfWidth;
 
-  // Valve diamond at midpoint
+  // Bowtie valve at midpoint
   const valveSize = 10;
 
   const svgStyle = {
@@ -79,12 +79,20 @@ export function FlowDragOverlay({ sourceX, sourceY, cursorX, cursorY, isInfluenc
         strokeLinecap="round"
       />
 
-      {/* Valve diamond at midpoint */}
+      {/* Bowtie valve at midpoint */}
       <polygon
-        points={`${midX},${midY - valveSize} ${midX + valveSize},${midY} ${midX},${midY + valveSize} ${midX - valveSize},${midY}`}
+        points={`${midX - valveSize},${midY - valveSize} ${midX},${midY} ${midX - valveSize},${midY + valveSize}`}
         fill="#fff"
         stroke="#1c1c1f"
         strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+      <polygon
+        points={`${midX + valveSize},${midY - valveSize} ${midX},${midY} ${midX + valveSize},${midY + valveSize}`}
+        fill="#fff"
+        stroke="#1c1c1f"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
       />
 
       {/* Arrowhead */}

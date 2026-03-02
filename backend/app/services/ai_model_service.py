@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
+from app.schemas.ai import AIChatMessage
 from app.schemas.model import ModelDocument
 from app.services.model_service import validate_model
 
@@ -42,9 +43,11 @@ def _gemini_model() -> str:
 
 def _system_instructions() -> str:
     return (
-        "You are an SD-model editor engine. Return ONLY JSON and no prose.\n"
+        "You are an SD-model editor engine. You MUST return ONLY JSON and no prose.\n"
         "Task: apply the user's command to the provided model JSON.\n"
-        "Output format: {\"model\": <full model document>}.\n"
+        "Output format:\n"
+        '  If you can fulfil the request: {"model": <full model document>, "message": "<brief summary of changes>"}\n'
+        '  If you need clarification: {"clarification": "<your question to the user>"}\n'
         "Do not omit required fields. Keep IDs stable where possible.\n"
         "Supported node types: stock, flow, aux, lookup, text.\n"
         "Supported edge types: influence, flow_link.\n"
@@ -54,23 +57,57 @@ def _system_instructions() -> str:
         "- equations refer to variable names, not ids.\n"
         "- preserve existing unrelated nodes/edges.\n"
         "- if adding flow connections, use flow_link edges between stock and flow.\n"
-        "- never return commentary; JSON only.\n"
+        "- never return commentary outside the JSON structure.\n"
+        "- when the user's request is ambiguous or lacks crucial details (e.g. equation, initial values, variable names), ask a clarification question using the clarification format.\n"
     )
 
 
-def _gemini_request_body(prompt: str, model: ModelDocument) -> dict[str, Any]:
+def _gemini_request_body(prompt: str, model: ModelDocument, history: list[AIChatMessage] | None = None) -> dict[str, Any]:
+    contents: list[dict[str, Any]] = []
+
+    # System instructions as first user message
+    system_parts = [
+        {"text": _system_instructions()},
+        {"text": "Current model JSON:"},
+        {"text": json.dumps(model.model_dump(), ensure_ascii=True)},
+    ]
+
+    if history:
+        # Multi-turn: replay history
+        # First message includes system instructions + first user message
+        first_user_sent = False
+        for msg in history:
+            if msg.role == "user" and not first_user_sent:
+                contents.append({
+                    "role": "user",
+                    "parts": system_parts + [{"text": f"User command:\n{msg.content}"}],
+                })
+                first_user_sent = True
+            elif msg.role == "user":
+                contents.append({
+                    "role": "user",
+                    "parts": [{"text": f"User command:\n{msg.content}"}],
+                })
+            elif msg.role == "assistant":
+                contents.append({
+                    "role": "model",
+                    "parts": [{"text": msg.content}],
+                })
+
+        # Append current prompt as the latest user turn
+        contents.append({
+            "role": "user",
+            "parts": [{"text": f"User command:\n{prompt}"}],
+        })
+    else:
+        # Single-turn (backwards compatible)
+        contents.append({
+            "role": "user",
+            "parts": system_parts + [{"text": f"User command:\n{prompt}"}],
+        })
+
     return {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {"text": _system_instructions()},
-                    {"text": f"User command:\n{prompt}"},
-                    {"text": "Current model JSON:"},
-                    {"text": json.dumps(model.model_dump(), ensure_ascii=True)},
-                ],
-            }
-        ],
+        "contents": contents,
         "generationConfig": {
             "temperature": 0,
             "responseMimeType": "application/json",
@@ -78,11 +115,11 @@ def _gemini_request_body(prompt: str, model: ModelDocument) -> dict[str, Any]:
     }
 
 
-def _call_gemini(prompt: str, model: ModelDocument) -> dict[str, Any]:
+def _call_gemini(prompt: str, model: ModelDocument, history: list[AIChatMessage] | None = None) -> dict[str, Any]:
     key = _gemini_key()
     url = GEMINI_ENDPOINT.format(model=_gemini_model())
     params = {"key": key}
-    payload = _gemini_request_body(prompt, model)
+    payload = _gemini_request_body(prompt, model, history)
     try:
         with httpx.Client(timeout=45.0) as client:
             res = client.post(url, params=params, json=payload)
@@ -101,12 +138,22 @@ def _call_gemini(prompt: str, model: ModelDocument) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail={"ok": False, "errors": [{"code": "AI_BAD_RESPONSE", "message": f"Gemini did not return valid JSON: {exc}", "severity": "error"}]}) from exc
 
 
-def execute_ai_command(prompt: str, model: ModelDocument) -> tuple[ModelDocument, list]:
+def execute_ai_command(prompt: str, model: ModelDocument, history: list[AIChatMessage] | None = None) -> tuple[ModelDocument | None, list, str, bool]:
+    """Execute an AI command.
+
+    Returns (updated_model_or_None, warnings, assistant_message, needs_clarification).
+    """
     if not prompt.strip():
         raise HTTPException(status_code=400, detail={"ok": False, "errors": [{"code": "AI_PROMPT_REQUIRED", "message": "Prompt is required", "severity": "error"}]})
-    result = _call_gemini(prompt.strip(), model)
+    result = _call_gemini(prompt.strip(), model, history)
+
+    # Check if the AI is asking for clarification
+    if "clarification" in result and "model" not in result:
+        return None, [], str(result["clarification"]), True
+
     if "model" not in result:
         raise HTTPException(status_code=502, detail={"ok": False, "errors": [{"code": "AI_BAD_RESPONSE", "message": "Missing 'model' in Gemini JSON output", "severity": "error"}]})
+
     updated_model = ModelDocument.model_validate(result["model"])
     validation = validate_model(updated_model)
     if not validation.ok:
@@ -118,4 +165,5 @@ def execute_ai_command(prompt: str, model: ModelDocument) -> tuple[ModelDocument
                 "warnings": [w.model_dump() for w in validation.warnings],
             },
         )
-    return updated_model, validation.warnings
+    message = str(result.get("message", "Model updated successfully."))
+    return updated_model, validation.warnings, message, False

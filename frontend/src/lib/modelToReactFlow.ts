@@ -215,17 +215,17 @@ export function computeHandles(
 
   if (edge.type === 'flow_link') {
     if (sourceNode.type === 'flow') {
-      // flow → stock
+      // flow → stock/cloud: source from valve center, target on stock side
       return {
-        sourceHandle: dx >= 0 ? 'flow-right' : 'flow-left',
+        sourceHandle: 'flow-out',
         targetHandle: tgtDx >= 0 ? 'left' : 'right',
       };
     }
     if (targetNode.type === 'flow') {
-      // stock → flow
+      // stock/cloud → flow: source from stock side, target to valve center
       return {
         sourceHandle: dx >= 0 ? 'right' : 'left',
-        targetHandle: tgtDx >= 0 ? 'flow-left' : 'flow-right',
+        targetHandle: 'flow-in',
       };
     }
   }

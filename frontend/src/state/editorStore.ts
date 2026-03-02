@@ -18,6 +18,7 @@ import { computeAutoLayout } from '../lib/autoLayout';
 import { localValidate } from '../lib/modelValidation';
 import { blankModel, cloneModel, teacupModel } from '../lib/sampleModels';
 import type {
+  AIChatMessage,
   BatchSimulateResponse,
   CldSymbol,
   CldLoopDirection,
@@ -84,6 +85,8 @@ type EditorState = {
   oatResults: OATSensitivityResponse | null;
   monteCarloResults: MonteCarloResponse | null;
   aiCommand: string;
+  aiChatHistory: AIChatMessage[];
+  aiChatOpen: boolean;
   validation: ValidateResponse;
   localIssues: ValidationIssue[];
   results: SimulateResponse | null;
@@ -146,6 +149,8 @@ type EditorState = {
   setVensimParamOverride: (name: string, value: number | string | undefined) => void;
   setAiCommand: (value: string) => void;
   runAiCommand: () => Promise<void>;
+  clearAiChat: () => void;
+  setAiChatOpen: (open: boolean) => void;
   createScenario: () => void;
   updateScenario: (id: string, patch: Partial<ScenarioDefinition>) => void;
   deleteScenario: (id: string) => void;
@@ -496,6 +501,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
     oatResults: null,
     monteCarloResults: null,
     aiCommand: '',
+    aiChatHistory: [],
+    aiChatOpen: false,
     validation: defaultValidation(),
     localIssues: [],
     results: null,
@@ -988,16 +995,33 @@ export const useEditorStore = create<EditorState>((set, get) => {
       }
     },
     runAiCommand: async () => {
-      const { model, aiCommand, activeSimulationMode } = get();
+      const { model, aiCommand, activeSimulationMode, aiChatHistory } = get();
       if (activeSimulationMode === 'vensim') {
         set({ apiError: 'AI canvas editing is currently available for native JSON models only.' });
         return;
       }
       if (!aiCommand.trim()) return;
-      set({ isApplyingAi: true, apiError: null });
+      const userMessage = aiCommand.trim();
+      // Add user message to chat history immediately and open chat
+      const updatedHistory: AIChatMessage[] = [...aiChatHistory, { role: 'user', content: userMessage }];
+      set({ isApplyingAi: true, apiError: null, aiCommand: '', aiChatHistory: updatedHistory, aiChatOpen: true });
       try {
-        const response = await executeAiCommand(aiCommand.trim(), model);
-        const updated = cloneModel(response.model);
+        const response = await executeAiCommand(userMessage, model, aiChatHistory);
+
+        if (response.needs_clarification) {
+          // AI is asking a clarifying question — add to history, keep chat open
+          set({
+            isApplyingAi: false,
+            aiChatHistory: [...updatedHistory, { role: 'assistant', content: response.assistant_message }],
+          });
+          return;
+        }
+
+        // AI returned a model update
+        const assistantMsg = response.assistant_message || 'Model updated successfully.';
+        const finalHistory: AIChatMessage[] = [...updatedHistory, { role: 'assistant', content: assistantMsg }];
+
+        const updated = cloneModel(response.model!);
         const scenarioDefaults = defaultScenarios(updated);
         const dashboardDefaults = defaultDashboards(updated);
         const persisted = persistAnalysis(
@@ -1021,13 +1045,20 @@ export const useEditorStore = create<EditorState>((set, get) => {
           oatResults: null,
           monteCarloResults: null,
           isApplyingAi: false,
-          aiCommand: '',
+          aiChatHistory: finalHistory,
         });
         clearHistory();
       } catch (error: any) {
-        set({ isApplyingAi: false, apiError: error?.errors?.[0]?.message ?? 'AI command failed' });
+        const errMsg = error?.errors?.[0]?.message ?? 'AI command failed';
+        set({
+          isApplyingAi: false,
+          aiChatHistory: [...updatedHistory, { role: 'assistant', content: `Error: ${errMsg}` }],
+          apiError: errMsg,
+        });
       }
     },
+    clearAiChat: () => set({ aiChatHistory: [], aiChatOpen: false, aiCommand: '' }),
+    setAiChatOpen: (open) => set({ aiChatOpen: open }),
     loadModel: (model) => {
       const cloned = cloneModel({ ...model, global_variables: model.global_variables ?? [] });
       const scenarioDefaults = defaultScenarios(cloned);

@@ -505,24 +505,50 @@ def parse_insightmaker_xml(payload: str, filename: str) -> ParsedInsightMaker:
         import_gaps.unsupported_constructs.append(tag)
         roundtrip.unmapped_fragments.append(ET.tostring(elem, encoding="unicode"))
 
-    # Second pass: create flow_link edges now that all nodes are in id_map
+    # Second pass: create flow_link edges now that all nodes are in id_map.
+    # When a flow has no source or target stock, create a cloud node as a
+    # placeholder so the pipe renders correctly on the canvas.
+    cloud_counter = 0
     for flow_id, source_ref, target_ref in deferred_flow_edges:
         source_stock = id_map.get(source_ref) if source_ref else None
         target_stock = id_map.get(target_ref) if target_ref else None
+
+        # Find the flow node to read its position for cloud placement
+        flow_node = next((n for n in nodes if n["id"] == flow_id), None)
+        flow_pos = flow_node["position"] if flow_node else {"x": 0, "y": 0}
+
+        if not source_stock:
+            cloud_counter += 1
+            cloud_id = f"cloud_{flow_id}_src"
+            nodes.append({
+                "id": cloud_id,
+                "type": "cloud",
+                "position": {"x": flow_pos["x"] - 100, "y": flow_pos["y"]},
+            })
+            source_stock = cloud_id
+
+        if not target_stock:
+            cloud_counter += 1
+            cloud_id = f"cloud_{flow_id}_tgt"
+            nodes.append({
+                "id": cloud_id,
+                "type": "cloud",
+                "position": {"x": flow_pos["x"] + 100, "y": flow_pos["y"]},
+            })
+            target_stock = cloud_id
+
         # Update flow node with resolved stock IDs
-        for node in nodes:
-            if node["id"] == flow_id:
-                node["source_stock_id"] = source_stock
-                node["target_stock_id"] = target_stock
-                break
-        if source_stock:
-            eid = f"edge_{flow_id}_src"
-            edges.append({"id": eid, "type": "flow_link", "source": source_stock, "target": flow_id})
-            graph_edges.append((source_stock, flow_id))
-        if target_stock:
-            eid = f"edge_{flow_id}_tgt"
-            edges.append({"id": eid, "type": "flow_link", "source": flow_id, "target": target_stock})
-            graph_edges.append((flow_id, target_stock))
+        if flow_node:
+            flow_node["source_stock_id"] = source_stock
+            flow_node["target_stock_id"] = target_stock
+
+        eid_src = f"edge_{flow_id}_src"
+        edges.append({"id": eid_src, "type": "flow_link", "source": source_stock, "target": flow_id})
+        graph_edges.append((source_stock, flow_id))
+
+        eid_tgt = f"edge_{flow_id}_tgt"
+        edges.append({"id": eid_tgt, "type": "flow_link", "source": flow_id, "target": target_stock})
+        graph_edges.append((flow_id, target_stock))
 
     # Third pass: process deferred Links now that all nodes are in id_map
     for source_id, elem, mx_cell, style, layout in deferred_links:

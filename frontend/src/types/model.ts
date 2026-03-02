@@ -544,3 +544,16 @@ export type VensimMonteCarloRequest = {
   seed: number;
   parameters: MonteCarloParameter[];
 };
+
+export type AIChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+export type AIExecuteResponse = {
+  ok: boolean;
+  model: ModelDocument | null;
+  warnings: ValidationIssue[];
+  assistant_message: string;
+  needs_clarification: boolean;
+};
