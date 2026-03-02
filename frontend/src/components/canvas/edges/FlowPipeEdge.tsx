@@ -30,24 +30,19 @@ export function FlowPipeEdge(props: EdgeProps<EdgeData>) {
   const flowSign = props.data?.flowSign ?? 'positive';
   const role = props.data?.flowLinkRole;
 
-  // Determine arrow visibility based on the role of this specific edge segment.
-  // Inflow (stock → flow): no arrows — the pipe just enters the valve
-  // Outflow (flow → stock): arrow at the stock end (target) for positive,
-  //   arrow at the flow end (source) for negative, both for both.
-  // If no role info, fall back to legacy behavior.
+  // Arrow visibility:
+  // Inflow (stock → valve): no arrows — continuous pipe into valve
+  // Outflow (valve → stock): arrow at the stock end
   let showTargetArrow: boolean;
   let showSourceArrow: boolean;
 
   if (role === 'inflow') {
-    // stock → flow: no arrows at all, continuous pipe into valve
     showTargetArrow = false;
     showSourceArrow = false;
   } else if (role === 'outflow') {
-    // flow → stock: arrow at the stock (target) end
     showTargetArrow = flowSign === 'positive' || flowSign === 'both';
     showSourceArrow = flowSign === 'negative' || flowSign === 'both';
   } else {
-    // Legacy fallback
     showTargetArrow = flowSign === 'positive' || flowSign === 'both';
     showSourceArrow = flowSign === 'negative' || flowSign === 'both';
   }
@@ -101,7 +96,7 @@ export function FlowPipeEdge(props: EdgeProps<EdgeData>) {
     );
   }
 
-  // Default bezier path (no waypoints)
+  // Straight line path (no bezier curve for flow pipes — gives cleaner continuous look)
   const angle = Math.atan2(props.targetY - props.sourceY, props.targetX - props.sourceX);
   const reverseAngle = angle + Math.PI;
   const trimPadding = 1.5;
@@ -121,15 +116,7 @@ export function FlowPipeEdge(props: EdgeProps<EdgeData>) {
     ? props.sourceY + Math.sin(angle) * (arrowLength + trimPadding)
     : props.sourceY;
 
-  const [path] = getBezierPath({
-    sourceX: trimmedSourceX,
-    sourceY: trimmedSourceY,
-    sourcePosition: props.sourcePosition,
-    targetX: trimmedTargetX,
-    targetY: trimmedTargetY,
-    targetPosition: props.targetPosition,
-    curvature: 0.2,
-  });
+  const path = `M ${trimmedSourceX} ${trimmedSourceY} L ${trimmedTargetX} ${trimmedTargetY}`;
 
   return (
     <>

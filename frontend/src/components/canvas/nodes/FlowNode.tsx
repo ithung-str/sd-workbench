@@ -4,7 +4,37 @@ import type { LabelNodeData } from '../../../lib/modelToReactFlow';
 import { resolveNodeStyle, visualStyleToCss } from '../../../lib/visualStyleUtils';
 import { useEditorStore } from '../../../state/editorStore';
 
-const flowValveIcon = new URL('../../../../icons/Flow_valve.svg', import.meta.url).href;
+/**
+ * Bowtie / hourglass valve symbol — the standard SD flow regulator.
+ * Renders as two triangles meeting at the center, sitting on the flow pipe.
+ */
+function ValveSymbol() {
+  return (
+    <svg
+      className="flow-valve-bowtie"
+      width="22"
+      height="22"
+      viewBox="0 0 22 22"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <polygon
+        points="1,1 11,11 1,21"
+        fill="#fff"
+        stroke="#1c1c1f"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <polygon
+        points="21,1 11,11 21,21"
+        fill="#fff"
+        stroke="#1c1c1f"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export function FlowNodeView({
   data,
@@ -12,24 +42,31 @@ export function FlowNodeView({
   data: LabelNodeData;
 }) {
   const defaultStyles = useEditorStore((s) => s.model.metadata?.default_styles);
-  const direction = data.flowDirection ?? 'right';
   const resolvedCss = useMemo(
     () => visualStyleToCss(resolveNodeStyle('flow', defaultStyles, data.visualStyle)),
     [defaultStyles, data.visualStyle],
   );
   return (
     <div className="rf-node rf-node-flow rf-node-shape-flow" style={resolvedCss}>
-      {/* Handles for flow connections (left and right) */}
-      <Handle type="target" position={Position.Left} id="flow-left" style={{ top: '24px', left: '0px' }} />
-      <Handle type="source" position={Position.Right} id="flow-right" style={{ top: '24px', right: '0px' }} />
+      {/* Centered handles — both pipe segments converge to the middle of the valve */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="flow-in"
+        className="flow-center-handle"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="flow-out"
+        className="flow-center-handle"
+      />
 
-      {/* Handles for variable connections (top and bottom at center of valve) */}
-      <Handle type="target" position={Position.Top} id="var-top" style={{ left: '50%', top: '18px' }} />
-      <Handle type="target" position={Position.Bottom} id="var-bottom" style={{ left: '50%', top: '30px' }} />
+      {/* Handles for variable connections (influence edges from above/below) */}
+      <Handle type="target" position={Position.Top} id="var-top" className="flow-var-handle" />
+      <Handle type="target" position={Position.Bottom} id="var-bottom" className="flow-var-handle" />
 
-      <div className={`flow-symbol ${direction}`} aria-hidden="true">
-        <img className="flow-valve-icon" src={flowValveIcon} alt="" />
-      </div>
+      <ValveSymbol />
       <div className="rf-node-label">{data.label}</div>
       <div className="rf-node-subtitle">{data.subtitle}</div>
     </div>

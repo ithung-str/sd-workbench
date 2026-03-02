@@ -109,7 +109,7 @@ export function StockNodeView({ data }: { data: LabelNodeData }) {
       )}
       <Handle type="source" position={Position.Right} id="right" />
       <Handle type="source" position={Position.Bottom} id="bottom" />
-      {hovered && !data.selected && (
+      {(hovered || data.selected) && (
         <button
           className="stock-flow-plus"
           onMouseDown={onFlowDragStart}

@@ -159,18 +159,18 @@ describe('computeHandles', () => {
     expect(result).toEqual({ sourceHandle: 'right', targetHandle: 'left' });
   });
 
-  it('routes stock→flow with flow-specific handles', () => {
+  it('routes stock→flow with centered flow-in handle', () => {
     const edge: EdgeModel = { id: 'e1', type: 'flow_link', source: 's1', target: 'f1' };
     const result = computeHandles(edge, stock, flow);
     expect(result.sourceHandle).toBe('right');
-    expect(result.targetHandle).toBe('flow-left');
+    expect(result.targetHandle).toBe('flow-in');
   });
 
-  it('routes flow→stock with flow-specific handles', () => {
+  it('routes flow→stock with centered flow-out handle', () => {
     const edge: EdgeModel = { id: 'e1', type: 'flow_link', source: 'f1', target: 's1' };
     const stockRight: StockNode = { ...stock, position: { x: 500, y: 100 } };
     const result = computeHandles(edge, flow, stockRight);
-    expect(result.sourceHandle).toBe('flow-right');
+    expect(result.sourceHandle).toBe('flow-out');
     expect(result.targetHandle).toBe('left');
   });
 

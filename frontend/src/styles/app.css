@@ -771,18 +771,47 @@ button.danger {
 }
 
 .rf-node-shape-flow {
-  min-width: 62px;
-  width: 62px;
+  min-width: 28px;
+  width: 28px;
   background: transparent;
-  display: grid;
-  justify-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding: 2px 0 0;
+  padding: 0;
   position: relative;
+  z-index: 1;
 }
 
 .rf-node-shape-flow .rf-node-label {
-  margin-top: 3px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* Centered handles on flow node — invisible, at the center of the valve */
+.flow-center-handle {
+  background: transparent !important;
+  border: none !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  top: 11px !important;
+  left: 50% !important;
+  transform: translate(-50%, 0) !important;
+}
+
+/* Variable connection handles on flow node */
+.flow-var-handle {
+  background: transparent !important;
+  border: none !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.flow-valve-bowtie {
+  display: block;
+  pointer-events: none;
 }
 
 .rf-node-cloud {
@@ -847,25 +876,7 @@ button.danger {
   stroke-width: 1.8;
 }
 
-.flow-symbol {
-  width: 62px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-}
-
-.flow-valve-icon {
-  width: 84px;
-  height: 28px;
-  object-fit: contain;
-  display: block;
-  transform: translateX(-11px);
-}
-
-.flow-symbol.left .flow-valve-icon {
-  transform: translateX(11px) scaleX(-1);
-}
+/* Legacy flow-symbol classes removed — replaced by inline bowtie valve */
 
 .inspector-panel .field-grid {
   display: grid;
