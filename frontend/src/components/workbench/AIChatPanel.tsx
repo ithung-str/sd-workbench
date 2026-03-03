@@ -1,8 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ActionIcon,
+  Badge,
   Box,
+  Button,
+  Collapse,
   Group,
+  List,
   Paper,
   ScrollArea,
   Stack,
@@ -10,14 +14,70 @@ import {
   Textarea,
   Tooltip,
 } from '@mantine/core';
-import { IconSend, IconTrash, IconX } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronRight, IconCopy, IconSend, IconTrash, IconX } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
+import type { RetryLogEntry } from '../../types/model';
+
+const ACTION_COLORS: Record<string, string> = {
+  success: 'green',
+  retrying: 'yellow',
+  escalated: 'blue',
+  gave_up: 'red',
+};
+
+function RetryLogSection({ log }: { log: RetryLogEntry[] }) {
+  const [opened, setOpened] = useState(false);
+  const lastEntry = log[log.length - 1];
+  const resolved = lastEntry?.action === 'success';
+
+  return (
+    <Box mt={4}>
+      <Group
+        gap={6}
+        style={{ cursor: 'pointer' }}
+        onClick={() => setOpened((o) => !o)}
+      >
+        {opened ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+        <Text size="xs" c="dimmed">
+          {log.length} validation round{log.length !== 1 ? 's' : ''} ({resolved ? 'resolved' : 'failed'})
+        </Text>
+      </Group>
+      <Collapse in={opened}>
+        <Stack gap={4} mt={4} ml={16}>
+          {log.map((entry) => (
+            <Box key={entry.round}>
+              <Group gap={6}>
+                <Text size="xs" fw={500}>Round {entry.round}</Text>
+                <Badge size="xs" color={ACTION_COLORS[entry.action] ?? 'gray'} variant="light">
+                  {entry.action}
+                </Badge>
+                {entry.model_used && (
+                  <Text size="xs" c="dimmed">{entry.model_used}</Text>
+                )}
+              </Group>
+              {entry.errors.length > 0 && (
+                <List size="xs" ml={8} mt={2}>
+                  {entry.errors.map((err, i) => (
+                    <List.Item key={i} style={{ color: 'var(--mantine-color-red-7)', fontSize: '0.7rem' }}>
+                      {err}
+                    </List.Item>
+                  ))}
+                </List>
+              )}
+            </Box>
+          ))}
+        </Stack>
+      </Collapse>
+    </Box>
+  );
+}
 
 export function AIChatPanel() {
   const aiCommand = useEditorStore((s) => s.aiCommand);
   const setAiCommand = useEditorStore((s) => s.setAiCommand);
   const runAiCommand = useEditorStore((s) => s.runAiCommand);
   const isApplyingAi = useEditorStore((s) => s.isApplyingAi);
+  const aiStatusMessage = useEditorStore((s) => s.aiStatusMessage);
   const aiChatHistory = useEditorStore((s) => s.aiChatHistory);
   const clearAiChat = useEditorStore((s) => s.clearAiChat);
   const setAiChatOpen = useEditorStore((s) => s.setAiChatOpen);
@@ -31,7 +91,14 @@ export function AIChatPanel() {
     if (viewportRef.current) {
       viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' });
     }
-  }, [aiChatHistory.length, isApplyingAi]);
+  }, [aiChatHistory.length, isApplyingAi, aiStatusMessage]);
+
+  const copyChat = () => {
+    const text = aiChatHistory
+      .map((msg) => `${msg.role === 'user' ? 'You' : 'AI'}\n\n${msg.content}`)
+      .join('\n\n');
+    void navigator.clipboard.writeText(text);
+  };
 
   const isDisabled = activeSimulationMode === 'vensim';
 
@@ -42,7 +109,7 @@ export function AIChatPanel() {
       withBorder
       style={{
         width: 380,
-        maxHeight: 520,
+        maxHeight: '100%',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -64,11 +131,18 @@ export function AIChatPanel() {
         </Text>
         <Group gap={4}>
           {aiChatHistory.length > 0 && (
-            <Tooltip label="Clear conversation">
-              <ActionIcon size="sm" variant="subtle" color="gray" onClick={clearAiChat}>
-                <IconTrash size={14} />
-              </ActionIcon>
-            </Tooltip>
+            <>
+              <Tooltip label="Copy chat">
+                <ActionIcon size="sm" variant="subtle" color="gray" onClick={copyChat}>
+                  <IconCopy size={14} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="Clear conversation">
+                <ActionIcon size="sm" variant="subtle" color="gray" onClick={clearAiChat}>
+                  <IconTrash size={14} />
+                </ActionIcon>
+              </Tooltip>
+            </>
           )}
           <Tooltip label="Close">
             <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => setAiChatOpen(false)}>
@@ -120,13 +194,49 @@ export function AIChatPanel() {
                   {msg.content}
                 </Text>
               </Paper>
+              {msg.role === 'assistant' && msg.retryLog && msg.retryLog.length > 0 && (
+                <RetryLogSection log={msg.retryLog} />
+              )}
+              {msg.role === 'assistant' && msg.suggestions && msg.suggestions.length > 0 && idx === aiChatHistory.length - 1 && (
+                <Group gap={6} mt={6} wrap="wrap">
+                  {msg.suggestions.map((suggestion, sIdx) => (
+                    <Button
+                      key={sIdx}
+                      size="compact-xs"
+                      variant="outline"
+                      color="violet"
+                      radius="xl"
+                      onClick={() => {
+                        setAiCommand(suggestion);
+                        void runAiCommand();
+                      }}
+                      disabled={isApplyingAi}
+                      styles={{
+                        root: {
+                          fontWeight: 500,
+                          fontSize: '0.78rem',
+                          maxWidth: '100%',
+                          whiteSpace: 'normal',
+                          height: 'auto',
+                          padding: '4px 12px',
+                        },
+                      }}
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </Group>
+              )}
             </Box>
           ))}
           {isApplyingAi && (
             <Box style={{ alignSelf: 'flex-start', maxWidth: '85%' }}>
               <Paper p="xs" radius="md" style={{ background: 'var(--mantine-color-gray-1)' }}>
                 <Text size="xs" c="dimmed" mb={2}>AI</Text>
-                <Text size="sm" c="dimmed">Thinking...</Text>
+                <Group gap={8} align="center">
+                  <div className="ai-spinner" />
+                  <Text size="sm" c="dimmed">{aiStatusMessage || 'Thinking...'}</Text>
+                </Group>
               </Paper>
             </Box>
           )}

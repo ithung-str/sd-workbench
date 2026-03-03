@@ -1,7 +1,0 @@
-{UTF-8}
-INITIAL TIME = 0 ~~|
-FINAL TIME = 5 ~~|
-TIME STEP = 1 ~~|
-SAVEPER = TIME STEP ~~|
-x = 2 ~~|
-y = x + 1 ~~|

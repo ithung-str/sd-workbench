@@ -306,6 +306,12 @@ button:hover,
   border-color: #e5daf8;
 }
 
+.hamburger-menu-actions hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 2px 0;
+}
+
 .menu-field-row {
   display: grid;
   gap: 4px;
@@ -816,12 +822,15 @@ button.danger {
   transform: translate(-50%, 0) !important;
 }
 
-/* Variable connection handles on flow node — oversized invisible hit area */
+/* Variable connection handles on flow node — invisible anchor points for edge routing.
+   pointer-events disabled so they don't intercept drag-to-move on the valve;
+   ReactFlow's connectionRadius handles proximity-based connection snapping. */
 .flow-var-handle {
   background: transparent !important;
   border: none !important;
-  width: 24px !important;
-  height: 24px !important;
+  width: 10px !important;
+  height: 10px !important;
+  pointer-events: none !important;
 }
 
 .flow-valve-bowtie {
@@ -1800,6 +1809,20 @@ button.danger {
 .validation-item.error { border-color: #efc5c1; }
 .validation-item.warning { border-color: #eddba5; }
 .validation-code { font-weight: 700; font-size: 0.72rem; color: var(--accent); }
+.validation-fix-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.validation-fix-btn {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: #f4f3f8;
+  cursor: pointer;
+  margin-top: 2px;
+}
+.validation-fix-btn:hover { background: var(--accent); color: #fff; }
 
 .chart-wrap { width: 100%; min-height: 240px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
 .chart-canvas { width: 100%; height: 220px; }
@@ -1949,6 +1972,32 @@ button.danger {
   border-color: #7c3aed;
 }
 
+/* Stock influence-arrow + button (bottom-right, dashed border) */
+.stock-influence-plus {
+  position: absolute;
+  right: -12px;
+  bottom: -12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px dashed #9ca8c6;
+  background: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: crosshair;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  padding: 0;
+  color: #9ca8c6;
+}
+.stock-influence-plus:hover {
+  background: #e0e8f0;
+  border-color: #4a7ccc;
+  color: #4a7ccc;
+}
+
 /* ── Node popover (double-click to edit) ── */
 
 .node-popover {
@@ -2062,4 +2111,19 @@ button.danger {
   width: 100%;
   height: 60px;
   display: block;
+}
+
+/* AI thinking spinner */
+.ai-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--mantine-color-gray-3);
+  border-top-color: var(--mantine-color-violet-5);
+  border-radius: 50%;
+  animation: ai-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes ai-spin {
+  to { transform: rotate(360deg); }
 }

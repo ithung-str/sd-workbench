@@ -20,6 +20,7 @@ type UIState = {
   toggleMinimap: () => void;
   toggleXmlModel: () => void;
   toggleBottomTray: () => void;
+  expandBottomTray: () => void;
   setBottomTrayHeight: (height: number) => void;
   setSelectedMfaTimestamp: (timestamp: number | null) => void;
   setMfaTimeAnchorDate: (anchorDate: string) => void;
@@ -46,6 +47,7 @@ export const useUIStore = create<UIState>((set) => ({
   toggleMinimap: () => set((s) => ({ showMinimap: !s.showMinimap })),
   toggleXmlModel: () => set((s) => ({ showXmlModel: !s.showXmlModel })),
   toggleBottomTray: () => set((s) => ({ bottomTrayExpanded: !s.bottomTrayExpanded })),
+  expandBottomTray: () => set({ bottomTrayExpanded: true }),
   setBottomTrayHeight: (height) =>
     set(() => ({ bottomTrayHeight: Math.max(160, Math.min(560, Math.round(height))) })),
   setSelectedMfaTimestamp: (timestamp) => set(() => ({ selectedMfaTimestamp: timestamp })),

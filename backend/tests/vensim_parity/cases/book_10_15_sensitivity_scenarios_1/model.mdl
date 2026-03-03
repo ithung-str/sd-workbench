@@ -1,8 +1,0 @@
-{UTF-8}
-INITIAL TIME = 0 ~~|
-FINAL TIME = 20 ~~|
-TIME STEP = 1 ~~|
-SAVEPER = TIME STEP ~~|
-base_growth = 0.05 ~~|
-scenario_multiplier = 1 ~~|
-stock = INTEG(stock*base_growth*scenario_multiplier, 100) ~~|

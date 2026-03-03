@@ -1,7 +1,0 @@
-{UTF-8}
-INITIAL TIME = 0 ~~|
-FINAL TIME = 20 ~~|
-TIME STEP = 1 ~~|
-SAVEPER = TIME STEP ~~|
-shock = STEP(10,10) ~~|
-response = INTEG(shock - 0.2*response, 0) ~~|

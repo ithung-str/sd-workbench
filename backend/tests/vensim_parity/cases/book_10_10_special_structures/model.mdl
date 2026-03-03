@@ -1,8 +1,0 @@
-{UTF-8}
-INITIAL TIME = 0 ~~|
-FINAL TIME = 10 ~~|
-TIME STEP = 1 ~~|
-SAVEPER = TIME STEP ~~|
-x = STEP(1,2) ~~|
-y = GET TIME VALUE(x, TIME) ~~|
-z = SHIFT IF TRUE(x, 1, 1) ~~|

@@ -1,7 +1,0 @@
-{UTF-8}
-INITIAL TIME = 0 ~~|
-FINAL TIME = 10 ~~|
-TIME STEP = 1 ~~|
-SAVEPER = TIME STEP ~~|
-x = TIME ~~|
-y = WITH LOOKUP(x, ([(0,0)-(10,10)], (0,0), (5,2), (10,8))) ~~|

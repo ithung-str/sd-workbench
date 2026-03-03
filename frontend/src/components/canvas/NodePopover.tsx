@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useEditorStore } from '../../state/editorStore';
 import { getConnectedNames, getEquationVariableNames, getStockFlowEquation, toIdentifier } from '../../lib/modelHelpers';
 import { buildContextFunctions } from '../inspector/functionCatalog';
@@ -57,6 +57,16 @@ export function NodePopover({ nodeId, screenX, screenY, onClose }: Props) {
     };
   }, [onClose]);
 
+  // Close on Enter (unless the EquationEditor consumed it for autocomplete)
+  const onPopoverKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.defaultPrevented) {
+        onClose();
+      }
+    },
+    [onClose],
+  );
+
   if (!node) return null;
   if (node.type === 'text' || node.type === 'cloud' || node.type === 'cld_symbol' || node.type === 'phantom') {
     return null;
@@ -77,6 +87,7 @@ export function NodePopover({ nodeId, screenX, screenY, onClose }: Props) {
       ref={ref}
       className="node-popover"
       style={{ left, top, width: popW }}
+      onKeyDown={onPopoverKeyDown}
     >
       <div className="node-popover-header">
         <span className="node-popover-title">{node.label || node.name}</span>

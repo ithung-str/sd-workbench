@@ -262,14 +262,17 @@ export function computeHandles(
     };
   }
 
-  // Influence edges from a flow node use var-top/var-bottom as source
+  // Influence edges from a flow node use source var-handles
   if (edge.type === 'influence' && sourceNode.type === 'flow') {
     const isMoreHorizontal = Math.abs(tgtDx) >= Math.abs(tgtDy);
     const tgtHandle = isMoreHorizontal
       ? (tgtDx >= 0 ? 'left' : 'right')
       : (tgtDy >= 0 ? 'top' : 'bottom');
+    const srcHandle = isMoreHorizontal
+      ? (tgtDx >= 0 ? 'var-right-src' : 'var-left-src')
+      : (dy >= 0 ? 'var-bottom-src' : 'var-top-src');
     return {
-      sourceHandle: dy >= 0 ? 'var-bottom' : 'var-top',
+      sourceHandle: srcHandle,
       targetHandle: tgtHandle,
     };
   }
@@ -303,7 +306,7 @@ export function toReactFlowNodes(
   return nodes.map((node) => {
     const data = buildNodeData(node, showFunctionInternals, flowDirectionById);
     const isSelected = selected?.kind === 'node' && selected.id === node.id;
-    if (node.type === 'stock' || node.type === 'aux' || node.type === 'lookup') {
+    if (node.type === 'stock' || node.type === 'aux' || node.type === 'lookup' || node.type === 'flow') {
       (data as LabelNodeData).nodeId = node.id;
     }
     if (node.type === 'lookup' && node.points?.length >= 2) {

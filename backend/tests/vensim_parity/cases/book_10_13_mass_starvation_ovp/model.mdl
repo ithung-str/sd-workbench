@@ -1,9 +1,0 @@
-{UTF-8}
-INITIAL TIME = 0 ~~|
-FINAL TIME = 40 ~~|
-TIME STEP = 1 ~~|
-SAVEPER = TIME STEP ~~|
-food_supply = 100 ~~|
-population = INTEG(births - deaths, 50) ~~|
-births = population*0.03 ~~|
-deaths = MAX(0, population - food_supply)*0.05 ~~|

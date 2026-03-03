@@ -28,7 +28,6 @@ _load_repo_env()
 from app.api.routes_ai import router as ai_router
 from app.api.routes_imports import router as imports_router
 from app.api.routes_models import router as models_router
-from app.api.routes_vensim import router as vensim_router
 
 app = FastAPI(title="SD Model Builder Backend", version="0.1.0")
 
@@ -41,6 +40,5 @@ app.add_middleware(
 )
 
 app.include_router(models_router)
-app.include_router(vensim_router)
 app.include_router(ai_router)
 app.include_router(imports_router)

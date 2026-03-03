@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import {
-  executeAiCommand,
+  executeAiCommandStream,
   getVensimDiagnostics,
   importVensimFile,
   runMonteCarlo,
@@ -15,6 +15,7 @@ import {
 } from '../lib/api';
 import { firstFreeRect, resolveCardRect } from '../lib/dashboardLayout';
 import { computeAutoLayout } from '../lib/autoLayout';
+import { syncInfluenceEdgesForNode } from '../lib/modelHelpers';
 import { localValidate } from '../lib/modelValidation';
 import { blankModel, cloneModel, teacupModel } from '../lib/sampleModels';
 import type {
@@ -42,7 +43,7 @@ import type {
 } from '../types/model';
 import type { VensimPresetDescriptor } from '../lib/vensimPresets';
 
-export type DockTab = 'validation' | 'chart' | 'table' | 'compare' | 'sensitivity';
+export type DockTab = 'validation' | 'chart' | 'table' | 'compare';
 export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity';
 
 type Selection =
@@ -99,6 +100,7 @@ type EditorState = {
   isValidating: boolean;
   isSimulating: boolean;
   isApplyingAi: boolean;
+  aiStatusMessage: string;
   isRunningBatch: boolean;
   isRunningSensitivity: boolean;
   isCanvasLocked: boolean;
@@ -551,6 +553,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     isValidating: false,
     isSimulating: false,
     isApplyingAi: false,
+    aiStatusMessage: '',
     isRunningBatch: false,
     isRunningSensitivity: false,
     isCanvasLocked: false,
@@ -656,7 +659,17 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const before = snapshotFromState(get().model, get().selected);
       set((state) => {
         const nodes = state.model.nodes.map((node) => (node.id === id ? ({ ...node, ...patch } as NodeModel) : node));
-        const model = { ...state.model, nodes };
+        let edges = state.model.edges;
+
+        // Auto-create influence edges when equation references unconnected variables
+        if ('equation' in patch) {
+          const updatedNode = nodes.find((n) => n.id === id);
+          if (updatedNode) {
+            edges = syncInfluenceEdgesForNode(id, updatedNode, nodes, edges);
+          }
+        }
+
+        const model = { ...state.model, nodes, edges };
         return { model, localIssues: localValidate(model) };
       });
       const afterState = get();
@@ -1011,7 +1024,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
                 metric,
                 parameters,
               });
-        set({ oatResults, monteCarloResults: null, isRunningSensitivity: false, activeDockTab: 'sensitivity' });
+        set({ oatResults, monteCarloResults: null, isRunningSensitivity: false });
       } catch (error) {
         set({ isRunningSensitivity: false, apiError: 'OAT sensitivity failed' });
       }
@@ -1049,13 +1062,13 @@ export const useEditorStore = create<EditorState>((set, get) => {
                 seed,
                 parameters,
               });
-        set({ monteCarloResults, oatResults: null, isRunningSensitivity: false, activeDockTab: 'sensitivity' });
+        set({ monteCarloResults, oatResults: null, isRunningSensitivity: false });
       } catch (error) {
         set({ isRunningSensitivity: false, apiError: 'Monte Carlo analysis failed' });
       }
     },
     runAiCommand: async () => {
-      const { model, aiCommand, activeSimulationMode, aiChatHistory } = get();
+      const { model, aiCommand, activeSimulationMode, aiChatHistory, simConfig } = get();
       if (activeSimulationMode === 'vensim') {
         set({ apiError: 'AI canvas editing is currently available for native JSON models only.' });
         return;
@@ -1064,24 +1077,71 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const userMessage = aiCommand.trim();
       // Add user message to chat history immediately and open chat
       const updatedHistory: AIChatMessage[] = [...aiChatHistory, { role: 'user', content: userMessage }];
-      set({ isApplyingAi: true, apiError: null, aiCommand: '', aiChatHistory: updatedHistory, aiChatOpen: true });
+      set({ isApplyingAi: true, aiStatusMessage: 'Sending to AI...', apiError: null, aiCommand: '', aiChatHistory: updatedHistory, aiChatOpen: true });
+
       try {
-        const response = await executeAiCommand(userMessage, model, aiChatHistory);
+        const response = await executeAiCommandStream(
+          userMessage, model, aiChatHistory, simConfig,
+          (msg) => set({ aiStatusMessage: msg }),
+        );
 
         if (response.needs_clarification) {
-          // AI is asking a clarifying question — add to history, keep chat open
+          // AI is asking a clarifying question — add to history with suggestions, keep chat open
           set({
             isApplyingAi: false,
-            aiChatHistory: [...updatedHistory, { role: 'assistant', content: response.assistant_message }],
+            aiStatusMessage: '',
+            aiChatHistory: [
+              ...updatedHistory,
+              {
+                role: 'assistant',
+                content: response.assistant_message,
+                suggestions: response.suggestions?.length ? response.suggestions : undefined,
+              },
+            ],
           });
           return;
         }
 
-        // AI returned a model update
-        const assistantMsg = response.assistant_message || 'Model updated successfully.';
-        const finalHistory: AIChatMessage[] = [...updatedHistory, { role: 'assistant', content: assistantMsg }];
+        let assistantMsg = response.assistant_message || 'Model updated successfully.';
+        const retryLog = response.retry_log?.length ? response.retry_log : undefined;
+        const finalHistory: AIChatMessage[] = [...updatedHistory, { role: 'assistant', content: assistantMsg, retryLog }];
 
-        const updated = cloneModel(response.model!);
+        // --- Patch mode: apply patches individually via updateNode for undo support ---
+        if (response.patches && response.patches.length > 0) {
+          const { updateNode } = get();
+          for (const patch of response.patches) {
+            // Resolve node by name → id
+            const node = get().model.nodes.find((n) => 'name' in n && (n as any).name === patch.node_name);
+            if (node) {
+              updateNode(node.id, { [patch.field]: patch.value } as any);
+            }
+          }
+        }
+
+        // --- Actions: dispatch to store ---
+        if (response.actions && response.actions.length > 0) {
+          const { dispatchAiActions } = await import('../lib/aiActionDispatcher');
+          const result = await dispatchAiActions(response.actions, get);
+          if (result.errors.length > 0) {
+            assistantMsg += `\n\nAction errors: ${result.errors.join('; ')}`;
+            finalHistory[finalHistory.length - 1] = { role: 'assistant', content: assistantMsg };
+          }
+        }
+
+        // If patches or actions were handled (but no full model), we're done
+        if ((response.patches && response.patches.length > 0) || (response.actions && response.actions.length > 0 && !response.model)) {
+          set({ isApplyingAi: false, aiStatusMessage: '', aiChatHistory: finalHistory });
+          return;
+        }
+
+        // --- Actions-only with no model/patches ---
+        if (!response.model) {
+          set({ isApplyingAi: false, aiStatusMessage: '', aiChatHistory: finalHistory });
+          return;
+        }
+
+        // --- Full model mode: replace entire model ---
+        const updated = cloneModel(response.model);
         const scenarioDefaults = defaultScenarios(updated);
         const dashboardDefaults = defaultDashboards(updated);
         const sensitivityDefaults = defaultSensitivityConfigs(updated);
@@ -1110,14 +1170,17 @@ export const useEditorStore = create<EditorState>((set, get) => {
           oatResults: null,
           monteCarloResults: null,
           isApplyingAi: false,
+          aiStatusMessage: '',
           aiChatHistory: finalHistory,
         });
         clearHistory();
       } catch (error: any) {
-        const errMsg = error?.errors?.[0]?.message ?? 'AI command failed';
+        const errMsg = error?.errors?.[0]?.message ?? error?.message ?? 'AI command failed';
+        const errorRetryLog = error?.retry_log?.length ? error.retry_log : undefined;
         set({
           isApplyingAi: false,
-          aiChatHistory: [...updatedHistory, { role: 'assistant', content: `Error: ${errMsg}` }],
+          aiStatusMessage: '',
+          aiChatHistory: [...updatedHistory, { role: 'assistant', content: `Error: ${errMsg}`, retryLog: errorRetryLog }],
           apiError: errMsg,
         });
       }

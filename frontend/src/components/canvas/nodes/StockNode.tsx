@@ -75,6 +75,20 @@ export function StockNodeView({ data }: { data: LabelNodeData }) {
     [data.nodeId],
   );
 
+  const onEdgeDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!data.nodeId) return;
+      window.dispatchEvent(
+        new CustomEvent(EDGE_DRAG_START_EVENT, {
+          detail: { nodeId: data.nodeId, clientX: e.clientX, clientY: e.clientY },
+        }),
+      );
+    },
+    [data.nodeId],
+  );
+
   return (
     <div
       className="rf-node rf-node-stock rf-node-shape-stock"
@@ -114,13 +128,24 @@ export function StockNodeView({ data }: { data: LabelNodeData }) {
       <Handle type="source" position={Position.Bottom} id="bottom" />
       <Handle type="target" position={Position.Bottom} id="bottom" />
       {(hovered || data.selected) && (
-        <button
-          className="stock-flow-plus nodrag"
-          onMouseDown={onFlowDragStart}
-          tabIndex={-1}
-        >
-          +
-        </button>
+        <>
+          <button
+            className="stock-flow-plus nodrag"
+            onMouseDown={onFlowDragStart}
+            tabIndex={-1}
+            title="Create flow"
+          >
+            +
+          </button>
+          <button
+            className="stock-influence-plus nodrag"
+            onMouseDown={onEdgeDragStart}
+            tabIndex={-1}
+            title="Create influence"
+          >
+            +
+          </button>
+        </>
       )}
     </div>
   );

@@ -9,6 +9,7 @@ import type {
   OATSensitivityResponse,
   AuxNode,
   ModelDocument,
+  SimConfig,
   SimulateRequest,
   SimulateResponse,
   ValidateResponse,
@@ -196,14 +197,75 @@ export async function getVensimParityReadiness(importId: string): Promise<Vensim
   return parseJson(res);
 }
 
-export async function executeAiCommand(prompt: string, model: ModelDocument, history?: AIChatMessage[]): Promise<AIExecuteResponse> {
+export async function executeAiCommand(prompt: string, model: ModelDocument, history?: AIChatMessage[], simConfig?: SimConfig): Promise<AIExecuteResponse> {
   const normalized = modelForBackend(model);
+  // Strip frontend-only fields (suggestions) before sending history to backend
+  const cleanHistory = (history ?? []).map(({ role, content }) => ({ role, content }));
   const res = await fetch(`${API_BASE}/api/ai/execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, model: normalized, history: history ?? [] }),
+    body: JSON.stringify({ prompt, model: normalized, history: cleanHistory, sim_config: simConfig ?? null }),
   });
   return parseJson(res);
+}
+
+export async function executeAiCommandStream(
+  prompt: string,
+  model: ModelDocument,
+  history: AIChatMessage[] | undefined,
+  simConfig: SimConfig | undefined,
+  onStatus: (message: string) => void,
+): Promise<AIExecuteResponse> {
+  const normalized = modelForBackend(model);
+  const cleanHistory = (history ?? []).map(({ role, content }) => ({ role, content }));
+  const res = await fetch(`${API_BASE}/api/ai/execute-stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, model: normalized, history: cleanHistory, sim_config: simConfig ?? null }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json();
+    if (body?.detail) throw body.detail;
+    throw body;
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw { errors: [{ message: 'Streaming not supported' }] };
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result: AIExecuteResponse | null = null;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE events from buffer
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    let eventType = '';
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        eventType = line.slice(7).trim();
+      } else if (line.startsWith('data: ')) {
+        const data = JSON.parse(line.slice(6));
+        if (eventType === 'status') {
+          onStatus(data.message ?? '');
+        } else if (eventType === 'complete') {
+          result = data as AIExecuteResponse;
+        } else if (eventType === 'error') {
+          throw data;
+        }
+        eventType = '';
+      }
+    }
+  }
+
+  if (!result) throw { errors: [{ message: 'Stream ended without a complete event' }] };
+  return result;
 }
 
 export async function importSpreadsheet(file: File): Promise<{ ok: boolean; model: ModelDocument; warnings: { code: string; message: string; severity: string }[]; node_count: number }> {

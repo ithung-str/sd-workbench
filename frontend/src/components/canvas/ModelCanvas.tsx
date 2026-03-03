@@ -267,7 +267,7 @@ function ModelCanvasInner() {
       const hitNode = nodes.find((n) => {
         if (n.id === edgeDrag.sourceNodeId) return false;
         const rfType = n.type ?? '';
-        if (rfType === 'textNode' || rfType === 'cloudNode' || rfType === 'cldSymbolNode' || rfType === 'phantomNode') return false;
+        if (rfType === 'textNode' || rfType === 'cloudNode' || rfType === 'cldSymbolNode' || rfType === 'phantomNode' || rfType === 'stockNode') return false;
         const w = n.width ?? 120;
         const h = n.height ?? 50;
         return (
@@ -372,7 +372,7 @@ function ModelCanvasInner() {
         edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.16 }}
-        connectionRadius={30}
+        connectionRadius={40}
         onInit={setFlowInstance}
         nodesDraggable={!isCanvasLocked}
         nodesConnectable={!isCanvasLocked}

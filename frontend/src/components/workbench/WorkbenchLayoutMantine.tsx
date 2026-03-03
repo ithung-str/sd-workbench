@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AppShell, Group, Select, Tabs, Text, Title, ActionIcon, Menu, ScrollArea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconMenu2, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
@@ -10,6 +11,7 @@ import { FormulaPage } from '../formulas/FormulaPage';
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ScenarioPage } from '../scenarios/ScenarioPage';
 import { SensitivityPage } from '../sensitivity/SensitivityPage';
+import { AIChatPanel } from './AIChatPanel';
 import { ImportExportControls } from '../io/ImportExportControls';
 import { useUIStore } from '../../state/uiStore';
 import { modelPresets, type ModelPresetKey } from '../../lib/sampleModels';
@@ -27,6 +29,7 @@ export function WorkbenchLayout() {
   const loadModel = useEditorStore((s) => s.loadModel);
   const activeTab = useEditorStore((s) => s.activeTab);
   const setActiveTab = useEditorStore((s) => s.setActiveTab);
+  const aiChatOpen = useEditorStore((s) => s.aiChatOpen);
   const logoUrl = (import.meta.env.VITE_SC_LOGO_URL as string | undefined) || defaultLogoUrl;
   const bottomTrayExpanded = useUIStore((s) => s.bottomTrayExpanded);
   const bottomTrayHeight = useUIStore((s) => s.bottomTrayHeight);
@@ -202,6 +205,21 @@ export function WorkbenchLayout() {
         {activeTab === 'canvas' && (
           <>
             <ModelCanvas />
+
+            {aiChatOpen && createPortal(
+              <div style={{
+                position: 'fixed',
+                bottom: bottomTrayExpanded ? bottomTrayHeight + 12 : 68 + 12,
+                right: 12,
+                zIndex: 9000,
+                transition: 'bottom 180ms ease',
+                maxHeight: `calc(100vh - ${WORKBENCH_HEADER_HEIGHT}px - ${bottomTrayExpanded ? bottomTrayHeight : 68}px - 24px)`,
+                display: 'flex',
+              }}>
+                <AIChatPanel />
+              </div>,
+              document.body,
+            )}
 
             {!leftOpened && (
               <ActionIcon

@@ -8,6 +8,7 @@ import {
   Group,
   Paper,
   ScrollArea,
+  SegmentedControl,
   Stack,
   Switch,
   Text,
@@ -16,15 +17,15 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import {
-  IconAdjustments,
   IconAlertCircle,
   IconCheck,
   IconCode,
+  IconEye,
   IconFlask,
+  IconList,
   IconPaint,
   IconPencil,
   IconPlus,
-  IconSettings,
   IconSparkles,
   IconTrash,
   IconX,
@@ -33,11 +34,22 @@ import { ColorInput } from '@mantine/core';
 import { collectGlobalVariableUsage } from '../../lib/globalVariableUsage';
 import { useEditorStore } from '../../state/editorStore';
 import { useUIStore } from '../../state/uiStore';
-import { ScenarioStudio } from '../scenarios/ScenarioStudioMantine';
 
 type PalettePanelProps = {
   onSelectOutlineNode?: () => void;
 };
+
+const NODE_TYPE_COLORS: Record<string, string> = {
+  stock: 'blue',
+  flow: 'violet',
+  aux: 'green',
+  lookup: 'orange',
+  text: 'gray',
+  cloud: 'cyan',
+  cld_symbol: 'indigo',
+};
+
+const STYLE_NODE_TYPES = ['stock', 'flow', 'aux', 'lookup'] as const;
 
 export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
   const addGlobalVariable = useEditorStore((s) => s.addGlobalVariable);
@@ -56,6 +68,7 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
   const isApplyingAi = useEditorStore((s) => s.isApplyingAi);
   const [editingGlobalId, setEditingGlobalId] = useState<string | null>(null);
   const [editingGlobalValue, setEditingGlobalValue] = useState('');
+  const [styleTab, setStyleTab] = useState<string>('stock');
 
   const showFunctionInternals = useUIStore((s) => s.showFunctionInternals);
   const showMinimap = useUIStore((s) => s.showMinimap);
@@ -64,27 +77,6 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
   const toggleMinimap = useUIStore((s) => s.toggleMinimap);
   const toggleXmlModel = useUIStore((s) => s.toggleXmlModel);
   const globalUsage = useMemo(() => collectGlobalVariableUsage(model), [model]);
-
-  const getNodeColor = (type: string) => {
-    switch (type) {
-      case 'stock':
-        return 'blue';
-      case 'flow':
-        return 'violet';
-      case 'aux':
-        return 'green';
-      case 'lookup':
-        return 'orange';
-      case 'text':
-        return 'gray';
-      case 'cloud':
-        return 'cyan';
-      case 'cld_symbol':
-        return 'indigo';
-      default:
-        return 'gray';
-    }
-  };
 
   const startGlobalValueEdit = (id: string, value: string) => {
     setEditingGlobalId(id);
@@ -104,120 +96,33 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
     return node.label;
   };
 
+  const currentStyleType = styleTab as (typeof STYLE_NODE_TYPES)[number];
+  const currentStyles = defaultStyles?.[currentStyleType];
+
   return (
     <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
       <Stack gap="md">
       <Accordion
         className="settings-accordion"
-        defaultValue={[]}
+        defaultValue={['model-outline']}
         multiple
         variant="default"
         chevronPosition="right"
+        styles={{
+          control: { paddingBlock: 0, paddingInline: 12 },
+          label: { paddingBlock: 0 },
+          chevron: { marginBlock: 0 },
+        }}
       >
-        <Accordion.Item value="view-settings">
-          <Accordion.Control>
-            <Group gap={8} wrap="nowrap">
-              <IconAdjustments size={16} />
-              <Text size="sm" fw={500}>Diagram Settings</Text>
-            </Group>
-          </Accordion.Control>
-          <Accordion.Panel>
-            <Stack gap="sm">
-              <Group justify="space-between" wrap="nowrap">
-                <div style={{ flex: 1 }}>
-                  <Text size="sm" fw={500}>
-                    Show function arguments
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    Display function internals in node labels
-                  </Text>
-                </div>
-                <Switch checked={showFunctionInternals} onChange={toggleFunctionInternals} size="md" color="deepPurple" />
-              </Group>
-              <Group justify="space-between" wrap="nowrap">
-                <div style={{ flex: 1 }}>
-                  <Text size="sm" fw={500}>
-                    Show minimap
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    Display navigation minimap
-                  </Text>
-                </div>
-                <Switch checked={showMinimap} onChange={toggleMinimap} size="md" color="deepPurple" />
-              </Group>
-              <Group justify="space-between" wrap="nowrap">
-                <div style={{ flex: 1 }}>
-                  <Text size="sm" fw={500}>
-                    Show XML model
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    Display XML representation on canvas
-                  </Text>
-                </div>
-                <Switch checked={showXmlModel} onChange={toggleXmlModel} size="md" color="deepPurple" />
-              </Group>
-            </Stack>
-          </Accordion.Panel>
-        </Accordion.Item>
-
-        <Accordion.Item value="global-styles">
-          <Accordion.Control>
-            <Group gap={8} wrap="nowrap">
-              <IconPaint size={16} />
-              <Text size="sm" fw={500}>Global Styles</Text>
-            </Group>
-          </Accordion.Control>
-          <Accordion.Panel>
-            <Stack gap="md">
-              {(['stock', 'flow', 'aux', 'lookup'] as const).map((nodeType) => (
-                <Paper key={nodeType} withBorder p="xs">
-                  <Text size="sm" fw={600} mb={6} tt="capitalize">{nodeType}</Text>
-                  <Stack gap="xs">
-                    <ColorInput
-                      label="Fill"
-                      size="xs"
-                      placeholder="Default"
-                      value={defaultStyles?.[nodeType]?.fill ?? ''}
-                      onChange={(value) => updateDefaultStyle(nodeType, { fill: value || undefined })}
-                    />
-                    <ColorInput
-                      label="Stroke"
-                      size="xs"
-                      placeholder="Default"
-                      value={defaultStyles?.[nodeType]?.stroke ?? ''}
-                      onChange={(value) => updateDefaultStyle(nodeType, { stroke: value || undefined })}
-                    />
-                    <ColorInput
-                      label="Text Color"
-                      size="xs"
-                      placeholder="Default"
-                      value={defaultStyles?.[nodeType]?.text_color ?? ''}
-                      onChange={(value) => updateDefaultStyle(nodeType, { text_color: value || undefined })}
-                    />
-                  </Stack>
-                </Paper>
-              ))}
-            </Stack>
-          </Accordion.Panel>
-        </Accordion.Item>
-
-        <Accordion.Item value="scenarios">
-          <Accordion.Control>
-            <Group gap={8} wrap="nowrap">
-              <IconSettings size={16} />
-              <Text size="sm" fw={500}>Scenarios</Text>
-            </Group>
-          </Accordion.Control>
-          <Accordion.Panel>
-            <ScenarioStudio showHeading={false} />
-          </Accordion.Panel>
-        </Accordion.Item>
-
+        {/* ── Model Outline ── */}
         <Accordion.Item value="model-outline">
           <Accordion.Control>
             <Group gap={8} wrap="nowrap">
-              <IconFlask size={16} />
-              <Text size="sm" fw={500}>Model</Text>
+              <IconList size={16} />
+              <Text size="sm" fw={500}>Model Outline</Text>
+              <Badge size="xs" variant="light" color="gray" ml="auto">
+                {model.nodes.filter((n) => n.type !== 'phantom' && n.type !== 'cloud').length}
+              </Badge>
             </Group>
           </Accordion.Control>
           <Accordion.Panel>
@@ -237,9 +142,7 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
                           setSelected({ kind: 'node', id: node.id });
                           onSelectOutlineNode?.();
                         }}
-                        aria-label={`Select ${node.type} ${
-                          nodeOutlineLabel(node)
-                        }`}
+                        aria-label={`Select ${node.type} ${nodeOutlineLabel(node)}`}
                         style={{ display: 'block', width: '100%' }}
                       >
                         <Paper
@@ -251,12 +154,10 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
                           }}
                         >
                           <Group gap="xs">
-                            <Badge size="sm" color={getNodeColor(node.type)}>
+                            <Badge size="sm" color={NODE_TYPE_COLORS[node.type] ?? 'gray'}>
                               {node.type}
                             </Badge>
-                            <Text size="sm">
-                              {nodeOutlineLabel(node)}
-                            </Text>
+                            <Text size="sm">{nodeOutlineLabel(node)}</Text>
                           </Group>
                         </Paper>
                       </UnstyledButton>
@@ -268,12 +169,18 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
           </Accordion.Panel>
         </Accordion.Item>
 
+        {/* ── Global Variables ── */}
         {activeSimulationMode !== 'vensim' && (
           <Accordion.Item value="global-vars">
             <Accordion.Control>
               <Group gap={8} wrap="nowrap">
                 <IconCode size={16} />
-                <Text size="sm" fw={500}>Globals</Text>
+                <Text size="sm" fw={500}>Global Variables</Text>
+                {(model.global_variables ?? []).length > 0 && (
+                  <Badge size="xs" variant="light" color="gray" ml="auto">
+                    {(model.global_variables ?? []).length}
+                  </Badge>
+                )}
               </Group>
             </Accordion.Control>
             <Accordion.Panel>
@@ -315,13 +222,9 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
                             style={{ display: 'block', flex: 1, minWidth: 0 }}
                           >
                             <Group gap={6} wrap="nowrap">
-                              <Badge size="xs" color="blue">
-                                global
-                              </Badge>
+                              <Badge size="xs" color="blue">global</Badge>
                               <div style={{ minWidth: 0 }}>
-                                <Text size="sm" fw={600} truncate>
-                                  {variable.name}
-                                </Text>
+                                <Text size="sm" fw={600} truncate>{variable.name}</Text>
                                 <Text size="xs" c="dimmed">
                                   {globalUsage[variable.id]?.total ?? 0} uses
                                 </Text>
@@ -427,12 +330,129 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
           </Accordion.Item>
         )}
 
+        {/* ── Global Styles ── */}
+        <Accordion.Item value="global-styles">
+          <Accordion.Control>
+            <Group gap={8} wrap="nowrap">
+              <IconPaint size={16} />
+              <Text size="sm" fw={500}>Default Styles</Text>
+            </Group>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <Stack gap="xs">
+              <SegmentedControl
+                value={styleTab}
+                onChange={setStyleTab}
+                size="xs"
+                fullWidth
+                data={STYLE_NODE_TYPES.map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
+              />
+              <Stack gap={6}>
+                <ColorInput
+                  label="Fill"
+                  size="xs"
+                  placeholder="Default"
+                  value={currentStyles?.fill ?? ''}
+                  onChange={(value) => updateDefaultStyle(currentStyleType, { fill: value || undefined })}
+                />
+                <ColorInput
+                  label="Stroke"
+                  size="xs"
+                  placeholder="Default"
+                  value={currentStyles?.stroke ?? ''}
+                  onChange={(value) => updateDefaultStyle(currentStyleType, { stroke: value || undefined })}
+                />
+                <ColorInput
+                  label="Text"
+                  size="xs"
+                  placeholder="Default"
+                  value={currentStyles?.text_color ?? ''}
+                  onChange={(value) => updateDefaultStyle(currentStyleType, { text_color: value || undefined })}
+                />
+              </Stack>
+            </Stack>
+          </Accordion.Panel>
+        </Accordion.Item>
+
+        {/* ── View Options ── */}
+        <Accordion.Item value="view-settings">
+          <Accordion.Control>
+            <Group gap={8} wrap="nowrap">
+              <IconEye size={16} />
+              <Text size="sm" fw={500}>View Options</Text>
+            </Group>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <Stack gap={8}>
+              <Group justify="space-between" wrap="nowrap">
+                <Text size="sm">Show function arguments</Text>
+                <Switch checked={showFunctionInternals} onChange={toggleFunctionInternals} size="sm" color="deepPurple" />
+              </Group>
+              <Group justify="space-between" wrap="nowrap">
+                <Text size="sm">Show minimap</Text>
+                <Switch checked={showMinimap} onChange={toggleMinimap} size="sm" color="deepPurple" />
+              </Group>
+              <Group justify="space-between" wrap="nowrap">
+                <Text size="sm">Show XML model</Text>
+                <Switch checked={showXmlModel} onChange={toggleXmlModel} size="sm" color="deepPurple" />
+              </Group>
+            </Stack>
+          </Accordion.Panel>
+        </Accordion.Item>
+
+        {/* ── AI Assistant ── */}
+        <Accordion.Item value="ai-command">
+          <Accordion.Control>
+            <Group gap={8} wrap="nowrap">
+              <IconSparkles size={16} />
+              <Text size="sm" fw={500}>AI Assistant</Text>
+            </Group>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <Stack gap="xs">
+              <Textarea
+                placeholder="Ask AI to modify the canvas..."
+                value={aiCommand}
+                onChange={(e) => setAiCommand(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void runAiCommand();
+                  }
+                }}
+                minRows={2}
+                maxRows={5}
+                size="sm"
+              />
+              <Button
+                onClick={() => void runAiCommand()}
+                disabled={isApplyingAi || !aiCommand.trim() || activeSimulationMode === 'vensim'}
+                variant="light"
+                color="deepPurple"
+                size="sm"
+              >
+                {isApplyingAi ? 'Applying...' : 'Send to AI'}
+              </Button>
+              {activeSimulationMode === 'vensim' ? (
+                <Text size="xs" c="dimmed">
+                  AI canvas edits are available in native JSON mode.
+                </Text>
+              ) : (
+                <Text size="xs" c="dimmed">
+                  AI will ask clarifying questions if your request is ambiguous.
+                </Text>
+              )}
+            </Stack>
+          </Accordion.Panel>
+        </Accordion.Item>
+
+        {/* ── Vensim Compatibility (conditional) ── */}
         {activeSimulationMode === 'vensim' && importedVensim && (
           <Accordion.Item value="vensim-compat">
             <Accordion.Control>
               <Group gap="xs">
-                <IconAlertCircle size={18} />
-                <Text fw={600}>Vensim Compatibility</Text>
+                <IconAlertCircle size={16} />
+                <Text size="sm" fw={500}>Vensim Compatibility</Text>
               </Group>
             </Accordion.Control>
             <Accordion.Panel>
@@ -471,7 +491,7 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
                   {importedVensim.capabilities.detected_functions.length > 0 && (
                     <Text size="sm">
                       <strong>Detected functions:</strong> {importedVensim.capabilities.detected_functions.slice(0, 8).join(', ')}
-                      {importedVensim.capabilities.detected_functions.length > 8 && '…'}
+                      {importedVensim.capabilities.detected_functions.length > 8 && '...'}
                     </Text>
                   )}
                   {importedVensim.model_view.dependency_graph && (
@@ -485,12 +505,13 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
           </Accordion.Item>
         )}
 
+        {/* ── Vensim Variables (conditional) ── */}
         {activeSimulationMode === 'vensim' && importedVensim && (
           <Accordion.Item value="vensim-vars">
             <Accordion.Control>
               <Group gap="xs">
-                <IconCode size={18} />
-                <Text fw={600}>Vensim Variables</Text>
+                <IconCode size={16} />
+                <Text size="sm" fw={500}>Vensim Variables</Text>
                 <Badge size="sm" variant="light" color="gray">
                   {importedVensim.model_view.variables.length}
                 </Badge>
@@ -502,9 +523,7 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
                   {importedVensim.model_view.variables.slice(0, 40).map((v) => (
                     <Paper key={v.name} p="xs" withBorder>
                       <Group gap="xs" mb={v.equation ? 4 : 0}>
-                        <Badge size="sm" color="green">
-                          {v.kind ?? 'var'}
-                        </Badge>
+                        <Badge size="sm" color="green">{v.kind ?? 'var'}</Badge>
                         <Text size="sm">{v.name}</Text>
                       </Group>
                       {v.equation && <Code block style={{ fontSize: '0.75rem' }}>{v.equation}</Code>}
@@ -515,52 +534,6 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
             </Accordion.Panel>
           </Accordion.Item>
         )}
-
-        <Accordion.Item value="ai-command">
-          <Accordion.Control>
-            <Group gap={8} wrap="nowrap">
-              <IconSparkles size={16} />
-              <Text size="sm" fw={500}>AI Assistant</Text>
-            </Group>
-          </Accordion.Control>
-          <Accordion.Panel>
-            <Stack gap="xs">
-              <Textarea
-                placeholder="Ask AI to modify the canvas..."
-                value={aiCommand}
-                onChange={(e) => setAiCommand(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void runAiCommand();
-                  }
-                }}
-                minRows={2}
-                maxRows={5}
-                size="sm"
-              />
-              <Button
-                onClick={() => void runAiCommand()}
-                disabled={isApplyingAi || !aiCommand.trim() || activeSimulationMode === 'vensim'}
-                variant="light"
-                color="deepPurple"
-                size="sm"
-              >
-                {isApplyingAi ? 'Applying…' : 'Send to AI'}
-              </Button>
-              {activeSimulationMode === 'vensim' ? (
-                <Text size="xs" c="dimmed">
-                  AI canvas edits are available in native JSON mode.
-                </Text>
-              ) : null}
-              {activeSimulationMode !== 'vensim' ? (
-                <Text size="xs" c="dimmed">
-                  AI will ask clarifying questions if your request is ambiguous. See the AI Chat panel in the header for conversation history.
-                </Text>
-              ) : null}
-            </Stack>
-          </Accordion.Panel>
-        </Accordion.Item>
       </Accordion>
       </Stack>
     </div>

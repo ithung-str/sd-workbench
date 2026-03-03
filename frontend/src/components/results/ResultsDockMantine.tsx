@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { Tabs, Stack, Group, NumberInput, Button, MultiSelect, Alert, Paper, Text, Badge, Code, ScrollArea, Box, Select, TextInput } from '@mantine/core';
+import { Tabs, Stack, Group, NumberInput, Button, MultiSelect, Alert, Paper, Text, Badge, Code, ScrollArea, Box, Select, TextInput, Popover, Accordion } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconAlertCircle, IconPlayerPlay, IconCheck, IconChevronUp, IconChevronDown, IconFileDownload, IconInfoCircle } from '@tabler/icons-react';
+import { IconAlertCircle, IconPlayerPlay, IconCheck, IconChevronUp, IconChevronDown, IconFileDownload, IconInfoCircle, IconSettings } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
 import { useUIStore } from '../../state/uiStore';
 import { ResultsChart } from './ResultsChart';
 import { ResultsTable } from './ResultsTable';
 import { ValidationList } from '../validation/ValidationList';
 import { buildMfaYamlDocument, mfaYamlString, type MfaMissingValueRule, type MfaTimeUnit } from '../../lib/mfaExport';
-import { SensitivityPanel } from './SensitivityPanelMantine';
 import { VensimDiagnosticsPanel } from './VensimDiagnosticsPanelMantine';
 
 export function ResultsDock() {
   const bottomTrayExpanded = useUIStore((s) => s.bottomTrayExpanded);
   const toggleBottomTray = useUIStore((s) => s.toggleBottomTray);
+  const expandBottomTray = useUIStore((s) => s.expandBottomTray);
   const bottomTrayHeight = useUIStore((s) => s.bottomTrayHeight);
   const setBottomTrayHeight = useUIStore((s) => s.setBottomTrayHeight);
   const selectedMfaTimestamp = useUIStore((s) => s.selectedMfaTimestamp);
@@ -55,6 +55,19 @@ export function ResultsDock() {
   const hasFlowNodes = model.nodes.some((n) => n.type === 'flow');
   const importedTime = importedVensim?.model_view.time_settings;
 
+  // Tab indicator counts
+  const validationIssueCount = validation.errors.length + validation.warnings.length + localIssues.length;
+  const hasCompareRuns = (compareResults?.runs?.length ?? 0) > 0;
+
+  // Auto-expand tray when active tab changes (e.g. after simulate/validate)
+  const prevTab = useRef(activeDockTab);
+  useEffect(() => {
+    if (prevTab.current !== activeDockTab) {
+      prevTab.current = activeDockTab;
+      if (!bottomTrayExpanded) expandBottomTray();
+    }
+  }, [activeDockTab, bottomTrayExpanded, expandBottomTray]);
+
   const scalarDialCandidates = useMemo(
     () =>
       activeSimulationMode === 'vensim' && importedVensim
@@ -73,6 +86,16 @@ export function ResultsDock() {
             .slice(0, 24)
         : [],
     [activeSimulationMode, importedVensim],
+  );
+
+  const detectedFunctions = useMemo(
+    () =>
+      importedVensim
+        ? importedVensim.model_view.variables
+            .filter((v) => /\b(step|ramp|pulse|delay\d*|smooth\d*|random|get time value|lookup)\b/i.test(v.equation ?? ''))
+            .slice(0, 12)
+        : [],
+    [importedVensim],
   );
 
   const onExportMfaYaml = (mode: 'full_series' | 'time_slice') => {
@@ -157,96 +180,125 @@ export function ResultsDock() {
     };
   }, [setBottomTrayHeight]);
 
+  const handleResizeDoubleClick = () => {
+    if (!bottomTrayExpanded) {
+      expandBottomTray();
+      setBottomTrayHeight(420);
+    } else {
+      setBottomTrayHeight(bottomTrayHeight > 300 ? 230 : 420);
+    }
+  };
+
   return (
     <Stack gap={0} h="100%" style={{ overflow: 'hidden', background: 'transparent' }}>
-      {bottomTrayExpanded && (
+      {/* Resize handle — always visible */}
+      <Box
+        className="dock-resize-handle"
+        onMouseDown={() => {
+          resizing.current = true;
+          document.body.style.cursor = 'ns-resize';
+          document.body.style.userSelect = 'none';
+        }}
+        onDoubleClick={handleResizeDoubleClick}
+        title={`Drag to resize tray (current: ${bottomTrayHeight}px) · Double-click to toggle size`}
+        style={{
+          height: 20,
+          marginTop: 0,
+          marginBottom: 2,
+          cursor: 'ns-resize',
+          display: 'grid',
+          placeItems: 'center',
+          background: 'transparent',
+        }}
+      >
         <Box
-          onMouseDown={() => {
-            resizing.current = true;
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-          }}
-          title={`Drag to resize tray (current: ${bottomTrayHeight}px)`}
+          className="dock-resize-pill"
           style={{
-            height: 16,
-            marginTop: 0,
-            marginBottom: 4,
-            cursor: 'ns-resize',
-            display: 'grid',
-            placeItems: 'center',
-            background: 'transparent',
+            width: 60,
+            height: 5,
+            borderRadius: 999,
+            background: '#c5c9d4',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
           }}
-        >
-          <Box
-            style={{
-              width: 40,
-              height: 4,
-              borderRadius: 999,
-              background: '#c5c9d4',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
-            }}
-          />
-        </Box>
-      )}
+        />
+      </Box>
+
+      {/* Control bar */}
       <Group
         justify="flex-start"
-        align="flex-end"
+        align="center"
         wrap="nowrap"
+        gap="xs"
         style={{
-          padding: bottomTrayExpanded ? '8px 8px' : '4px 8px',
+          padding: '4px 8px',
           background: 'transparent',
           position: 'relative',
         }}
       >
-        <NumberInput
-          label={activeSimulationMode === 'vensim' ? 'INITIAL TIME' : 'Start'}
-          value={simConfig.start}
-          onChange={(val) => setSimConfig({ start: Number(val) })}
-          size="xs"
-          style={{ width: 100, flex: '0 0 auto' }}
-        />
-        <NumberInput
-          label={activeSimulationMode === 'vensim' ? 'FINAL TIME' : 'Stop'}
-          value={simConfig.stop}
-          onChange={(val) => setSimConfig({ stop: Number(val) })}
-          size="xs"
-          style={{ width: 100, flex: '0 0 auto' }}
-        />
-        <NumberInput
-          label={activeSimulationMode === 'vensim' ? 'TIME STEP' : 'dt'}
-          value={simConfig.dt}
-          onChange={(val) => setSimConfig({ dt: Number(val) })}
-          step={0.1}
-          size="xs"
-          style={{ width: 100, flex: '0 0 auto' }}
-        />
-        {activeSimulationMode === 'vensim' ? (
-          <NumberInput
-            label="SAVEPER"
-            value={simConfig.return_step ?? ''}
-            onChange={(val) => setSimConfig({ return_step: val === '' ? undefined : Number(val) })}
-            step={0.1}
-            size="xs"
-            style={{ width: 100, flex: '0 0 auto' }}
-          />
-        ) : null}
-        {activeSimulationMode === 'vensim' && importedTime ? (
-          <Button
-            variant="subtle"
-            size="xs"
-            onClick={() =>
-              setSimConfig({
-                start: importedTime.initial_time ?? simConfig.start,
-                stop: importedTime.final_time ?? simConfig.stop,
-                dt: importedTime.time_step ?? simConfig.dt,
-                return_step: importedTime.saveper ?? importedTime.time_step ?? simConfig.return_step,
-              })
-            }
-            style={{ flex: '0 0 auto' }}
-          >
-            Reset MDL Settings
-          </Button>
-        ) : null}
+        {/* Sim config popover */}
+        <Popover width={420} position="top-start" shadow="md">
+          <Popover.Target>
+            <Button
+              variant="subtle"
+              size="xs"
+              leftSection={<IconSettings size={14} />}
+              style={{ flex: '0 0 auto' }}
+            >
+              Time: {simConfig.start}–{simConfig.stop} dt={simConfig.dt}
+            </Button>
+          </Popover.Target>
+          <Popover.Dropdown>
+            <Stack gap="sm">
+              <Group grow>
+                <NumberInput
+                  label={activeSimulationMode === 'vensim' ? 'INITIAL TIME' : 'Start'}
+                  value={simConfig.start}
+                  onChange={(val) => setSimConfig({ start: Number(val) })}
+                  size="xs"
+                />
+                <NumberInput
+                  label={activeSimulationMode === 'vensim' ? 'FINAL TIME' : 'Stop'}
+                  value={simConfig.stop}
+                  onChange={(val) => setSimConfig({ stop: Number(val) })}
+                  size="xs"
+                />
+                <NumberInput
+                  label={activeSimulationMode === 'vensim' ? 'TIME STEP' : 'dt'}
+                  value={simConfig.dt}
+                  onChange={(val) => setSimConfig({ dt: Number(val) })}
+                  step={0.1}
+                  size="xs"
+                />
+                {activeSimulationMode === 'vensim' && (
+                  <NumberInput
+                    label="SAVEPER"
+                    value={simConfig.return_step ?? ''}
+                    onChange={(val) => setSimConfig({ return_step: val === '' ? undefined : Number(val) })}
+                    step={0.1}
+                    size="xs"
+                  />
+                )}
+              </Group>
+              {activeSimulationMode === 'vensim' && importedTime && (
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  onClick={() =>
+                    setSimConfig({
+                      start: importedTime.initial_time ?? simConfig.start,
+                      stop: importedTime.final_time ?? simConfig.stop,
+                      dt: importedTime.time_step ?? simConfig.dt,
+                      return_step: importedTime.saveper ?? importedTime.time_step ?? simConfig.return_step,
+                    })
+                  }
+                >
+                  Reset MDL Settings
+                </Button>
+              )}
+            </Stack>
+          </Popover.Dropdown>
+        </Popover>
+
         <Button
           leftSection={<IconCheck size={16} />}
           onClick={() => void runValidate()}
@@ -291,45 +343,75 @@ export function ResultsDock() {
 
       {!bottomTrayExpanded ? null : (
         <Box style={{ overflowY: 'auto', minHeight: 0, paddingBottom: 4 }}>
-      {activeSimulationMode === 'vensim' && importedVensim && (
-        <MultiSelect
-          label="Outputs"
-          placeholder="Select outputs"
-          data={importedVensim.model_view.variables.map((v) => ({ value: v.name, label: v.name }))}
-          value={vensimSelectedOutputs}
-          onChange={setVensimSelectedOutputs}
-          searchable
-          size="xs"
-        />
-      )}
-
       {apiError && (
-        <Alert icon={<IconAlertCircle size={16} />} color="red" variant="filled">
+        <Alert icon={<IconAlertCircle size={16} />} color="red" variant="filled" mb="xs" mx="xs">
           {apiError}
         </Alert>
       )}
 
       {activeSimulationMode === 'vensim' && results?.metadata.execution_mode === 'mixed' ? (
-        <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
+        <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light" mb="xs" mx="xs">
           Mixed execution mode: fallback kernels active ({(results.metadata.fallback_activations ?? []).join(', ') || 'unknown'}).
         </Alert>
       ) : null}
 
+      {/* Vensim sections as Accordion */}
       {activeSimulationMode === 'vensim' && importedVensim && (
-        <Stack gap="sm">
-          <VensimDiagnosticsPanel
-            imported={importedVensim}
-            executionMode={results?.metadata.execution_mode}
-            fallbackActivations={results?.metadata.fallback_activations}
-          />
-          <Paper p="sm" withBorder>
-            <Text size="sm" fw={600} mb="xs">Detected Functions</Text>
-            <ScrollArea h={150}>
-              <Stack gap="xs">
-                {importedVensim.model_view.variables
-                  .filter((v) => /\b(step|ramp|pulse|delay\d*|smooth\d*|random|get time value|lookup)\b/i.test(v.equation ?? ''))
-                  .slice(0, 12)
-                  .map((v) => (
+        <Accordion multiple variant="separated" defaultValue={[]} mx="xs" mb="xs">
+          <Accordion.Item value="outputs">
+            <Accordion.Control>
+              <Group gap="xs">
+                <Text size="sm" fw={600}>Output Variables</Text>
+                {vensimSelectedOutputs.length > 0 && (
+                  <Badge size="xs" color="violet">{vensimSelectedOutputs.length}</Badge>
+                )}
+              </Group>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <MultiSelect
+                placeholder="Select outputs"
+                data={importedVensim.model_view.variables.map((v) => ({ value: v.name, label: v.name }))}
+                value={vensimSelectedOutputs}
+                onChange={setVensimSelectedOutputs}
+                searchable
+                size="xs"
+              />
+            </Accordion.Panel>
+          </Accordion.Item>
+
+          <Accordion.Item value="diagnostics">
+            <Accordion.Control>
+              <Group gap="xs">
+                <Text size="sm" fw={600}>Compatibility Diagnostics</Text>
+                {results?.metadata.execution_mode && (
+                  <Badge size="xs" color={results.metadata.execution_mode === 'mixed' ? 'yellow' : 'green'}>
+                    {results.metadata.execution_mode}
+                  </Badge>
+                )}
+              </Group>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <VensimDiagnosticsPanel
+                imported={importedVensim}
+                executionMode={results?.metadata.execution_mode}
+                fallbackActivations={results?.metadata.fallback_activations}
+              />
+            </Accordion.Panel>
+          </Accordion.Item>
+
+          <Accordion.Item value="functions">
+            <Accordion.Control>
+              <Group gap="xs">
+                <Text size="sm" fw={600}>Detected Functions</Text>
+                {detectedFunctions.length > 0 && (
+                  <Badge size="xs" color="violet">{detectedFunctions.length}</Badge>
+                )}
+              </Group>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <ScrollArea h={150}>
+                <Stack gap="xs">
+                  {detectedFunctions.map((v) => (
                     <Paper key={v.name} p="xs" withBorder>
                       <Group gap="xs">
                         <Badge size="sm" color="violet">{v.name}</Badge>
@@ -337,74 +419,110 @@ export function ResultsDock() {
                       </Group>
                     </Paper>
                   ))}
+                </Stack>
+              </ScrollArea>
+            </Accordion.Panel>
+          </Accordion.Item>
+
+          <Accordion.Item value="dials">
+            <Accordion.Control>
+              <Group gap="xs">
+                <Text size="sm" fw={600}>Curated Dials</Text>
+                {(policyDialCandidates.length + scalarDialCandidates.length) > 0 && (
+                  <Badge size="xs" color="violet">{policyDialCandidates.length + scalarDialCandidates.length}</Badge>
+                )}
+              </Group>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap="xs">
+                <Text size="xs" c="dimmed">Policy knobs (`GAME`, `SWITCH TIME`) and scalar constants can be overridden for simulation runs.</Text>
+                {policyDialCandidates.length > 0 ? (
+                  <Stack gap={6}>
+                    <Text size="xs" fw={600}>Policy knobs</Text>
+                    {policyDialCandidates.map((v) => (
+                      <Group key={`policy-${v.name}`} wrap="nowrap">
+                        <Badge size="xs" color="yellow" variant="light">Policy</Badge>
+                        <Text size="xs" style={{ minWidth: 180 }} lineClamp={1}>
+                          {v.name}
+                        </Text>
+                        <NumberInput
+                          size="xs"
+                          step={1}
+                          placeholder="override"
+                          value={typeof vensimParamOverrides[v.name] === 'number' ? Number(vensimParamOverrides[v.name]) : ''}
+                          onChange={(value) => setVensimParamOverride(v.name, value === '' ? undefined : Number(value))}
+                          style={{ maxWidth: 120 }}
+                          rightSection={<IconAlertCircle size={12} />}
+                          rightSectionPointerEvents="none"
+                        />
+                      </Group>
+                    ))}
+                  </Stack>
+                ) : null}
+                {scalarDialCandidates.length > 0 ? (
+                  <Stack gap={6}>
+                    <Text size="xs" fw={600}>Scalar constants</Text>
+                    <ScrollArea h={180}>
+                      <Stack gap={6}>
+                        {scalarDialCandidates.map((v) => (
+                          <Group key={`scalar-${v.name}`} wrap="nowrap">
+                            <Text size="xs" style={{ minWidth: 180 }} lineClamp={1}>
+                              {v.name}
+                            </Text>
+                            <NumberInput
+                              size="xs"
+                              step={0.1}
+                              placeholder={v.equation}
+                              value={typeof vensimParamOverrides[v.name] === 'number' ? Number(vensimParamOverrides[v.name]) : ''}
+                              onChange={(value) => setVensimParamOverride(v.name, value === '' ? undefined : Number(value))}
+                              style={{ maxWidth: 140 }}
+                            />
+                          </Group>
+                        ))}
+                      </Stack>
+                    </ScrollArea>
+                  </Stack>
+                ) : (
+                  <Text size="xs" c="dimmed">No curated dials detected in imported variables.</Text>
+                )}
               </Stack>
-            </ScrollArea>
-          </Paper>
-          <Paper p="sm" withBorder>
-            <Text size="sm" fw={600} mb="xs">Curated Dials</Text>
-            <Stack gap="xs">
-              <Text size="xs" c="dimmed">Policy knobs (`GAME`, `SWITCH TIME`) and scalar constants can be overridden for simulation runs.</Text>
-              {policyDialCandidates.length > 0 ? (
-                <Stack gap={6}>
-                  <Text size="xs" fw={600}>Policy knobs</Text>
-                  {policyDialCandidates.map((v) => (
-                    <Group key={`policy-${v.name}`} wrap="nowrap">
-                      <Badge size="xs" color="yellow" variant="light">Policy</Badge>
-                      <Text size="xs" style={{ minWidth: 180 }} lineClamp={1}>
-                        {v.name}
-                      </Text>
-                      <NumberInput
-                        size="xs"
-                        step={1}
-                        placeholder="override"
-                        value={typeof vensimParamOverrides[v.name] === 'number' ? Number(vensimParamOverrides[v.name]) : ''}
-                        onChange={(value) => setVensimParamOverride(v.name, value === '' ? undefined : Number(value))}
-                        style={{ maxWidth: 120 }}
-                        rightSection={<IconAlertCircle size={12} />}
-                        rightSectionPointerEvents="none"
-                      />
-                    </Group>
-                  ))}
-                </Stack>
-              ) : null}
-              {scalarDialCandidates.length > 0 ? (
-                <Stack gap={6}>
-                  <Text size="xs" fw={600}>Scalar constants</Text>
-                  <ScrollArea h={180}>
-                    <Stack gap={6}>
-                      {scalarDialCandidates.map((v) => (
-                        <Group key={`scalar-${v.name}`} wrap="nowrap">
-                          <Text size="xs" style={{ minWidth: 180 }} lineClamp={1}>
-                            {v.name}
-                          </Text>
-                          <NumberInput
-                            size="xs"
-                            step={0.1}
-                            placeholder={v.equation}
-                            value={typeof vensimParamOverrides[v.name] === 'number' ? Number(vensimParamOverrides[v.name]) : ''}
-                            onChange={(value) => setVensimParamOverride(v.name, value === '' ? undefined : Number(value))}
-                            style={{ maxWidth: 140 }}
-                          />
-                        </Group>
-                      ))}
-                    </Stack>
-                  </ScrollArea>
-                </Stack>
-              ) : (
-                <Text size="xs" c="dimmed">No curated dials detected in imported variables.</Text>
-              )}
-            </Stack>
-          </Paper>
-        </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
       )}
 
+      {/* Tabs with smart indicators */}
       <Tabs value={activeDockTab} onChange={(value) => setActiveDockTab(value as typeof activeDockTab)}>
         <Tabs.List>
-          <Tabs.Tab value="validation">Validation</Tabs.Tab>
-          <Tabs.Tab value="chart">Chart</Tabs.Tab>
+          <Tabs.Tab
+            value="validation"
+            rightSection={
+              validationIssueCount > 0 ? (
+                <Badge size="xs" color="red" variant="filled" circle>{validationIssueCount}</Badge>
+              ) : undefined
+            }
+          >
+            Validation
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="chart"
+            rightSection={
+              results ? (
+                <Box style={{ width: 8, height: 8, borderRadius: '50%', background: '#40c057' }} />
+              ) : undefined
+            }
+          >
+            Chart
+          </Tabs.Tab>
           <Tabs.Tab value="table">Table</Tabs.Tab>
-          <Tabs.Tab value="compare">Compare</Tabs.Tab>
-          <Tabs.Tab value="sensitivity">Sensitivity</Tabs.Tab>
+          <Tabs.Tab
+            value="compare"
+            rightSection={
+              <Box style={{ width: 8, height: 8, borderRadius: '50%', background: hasCompareRuns ? '#40c057' : '#dee2e6', opacity: hasCompareRuns ? 1 : 0.5 }} />
+            }
+          >
+            Compare
+          </Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="validation" pt="md">
@@ -489,9 +607,6 @@ export function ResultsDock() {
             <ResultsChart results={null} compareRuns={compareResults?.runs ?? []} />
             <ResultsTable results={null} compareRuns={compareResults?.runs ?? []} />
           </Stack>
-        </Tabs.Panel>
-        <Tabs.Panel value="sensitivity" pt="md">
-          <SensitivityPanel />
         </Tabs.Panel>
       </Tabs>
     </Box>

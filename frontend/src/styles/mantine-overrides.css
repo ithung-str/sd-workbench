@@ -157,13 +157,13 @@
   border-bottom: 1px solid #d7dbe4;
   border-radius: 0;
   margin: 0;
+  padding: 0;
   font-size: 0.85rem;
 }
 
 .settings-accordion .mantine-Accordion-control {
-  height: 42px;
-  min-height: 42px;
-  padding: 0 12px !important;
+  height: 44px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   background: #ffffff;
@@ -176,11 +176,11 @@
 .settings-accordion .mantine-Accordion-label {
   display: flex;
   align-items: center;
-  line-height: 1.2;
+  line-height: 1;
 }
 
 .settings-accordion .mantine-Accordion-chevron {
-  margin-top: 0;
+  margin: 0;
 }
 
 .settings-accordion .mantine-Accordion-panel {
@@ -472,4 +472,14 @@
 .table-wrap {
   border: 1px solid #dee2e6;
   border-radius: 8px;
+}
+
+/* Bottom tray resize handle */
+.dock-resize-handle:hover .dock-resize-pill {
+  background: #9ca3b0;
+  width: 72px;
+}
+
+.dock-resize-pill {
+  transition: background 120ms ease, width 120ms ease;
 }

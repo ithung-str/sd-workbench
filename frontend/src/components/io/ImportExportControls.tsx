@@ -1,6 +1,7 @@
 import { useRef, type ChangeEvent } from 'react';
 import { useEditorStore } from '../../state/editorStore';
 import { importSpreadsheet, exportXmile } from '../../lib/api';
+import { blankModel } from '../../lib/sampleModels';
 import type { ModelDocument } from '../../types/model';
 
 export function ImportExportControls({
@@ -75,9 +76,16 @@ export function ImportExportControls({
     onActionComplete?.();
   };
 
+  const onNewModel = () => {
+    loadModel(blankModel);
+    onActionComplete?.();
+  };
+
   if (mode === 'menu') {
     return (
       <div className="hamburger-menu-actions">
+        <button type="button" onClick={onNewModel}>New Model</button>
+        <hr />
         <button type="button" onClick={onExportJson}>Export JSON</button>
         <button type="button" onClick={onExportXmile}>Export XMILE</button>
         <button type="button" onClick={() => jsonInputRef.current?.click()}>Import JSON</button>

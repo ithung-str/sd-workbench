@@ -1,4 +1,5 @@
-import type { ModelDocument } from '../types/model';
+import { tokenizeEquation, DEFAULT_FUNCTION_NAMES, DEFAULT_RESERVED_NAMES } from '../components/inspector/equationEditorUtils';
+import type { EdgeModel, ModelDocument, NodeModel } from '../types/model';
 
 /** Convert an arbitrary string to a valid equation identifier (lowercase, underscores, no leading digits). */
 export function toIdentifier(value: string): string {
@@ -73,7 +74,7 @@ export function getStockFlowEquation(stockId: string, model: ModelDocument): str
   let eq = terms[0];
   for (let i = 1; i < terms.length; i++) {
     const t = terms[i];
-    eq += t.startsWith('-') ? ` ${t}` : ` + ${t}`;
+    eq += t.startsWith('-') ? ` - ${t.slice(1)}` : ` + ${t}`;
   }
   return eq;
 }
@@ -84,4 +85,88 @@ export function getEquationVariableNames(model: ModelDocument): string[] {
     .flatMap((n) => (n.type === 'text' || n.type === 'cloud' || n.type === 'cld_symbol' || n.type === 'phantom' ? [] : [n.name]))
     .concat((model.global_variables ?? []).map((v) => v.name))
     .filter(Boolean);
+}
+
+// ---------------------------------------------------------------------------
+// Auto-sync influence edges from equation references
+// ---------------------------------------------------------------------------
+
+const BUILTIN_NAMES = new Set<string>(
+  [...DEFAULT_RESERVED_NAMES, ...DEFAULT_FUNCTION_NAMES].map((n) => n.toLowerCase()),
+);
+
+/** Extract deduplicated variable-name references from an equation, excluding builtins. */
+export function extractEquationRefs(equation: string): string[] {
+  if (!equation) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const segment of tokenizeEquation(equation)) {
+    if (segment.kind !== 'identifier') continue;
+    const text = segment.text;
+    if (BUILTIN_NAMES.has(text.toLowerCase())) continue;
+    if (seen.has(text)) continue;
+    seen.add(text);
+    result.push(text);
+  }
+  return result;
+}
+
+/**
+ * Compute missing influence edges for a node based on its equation references.
+ * Returns the edges array with any new edges appended (never removes edges).
+ */
+export function syncInfluenceEdgesForNode(
+  nodeId: string,
+  node: NodeModel,
+  allNodes: NodeModel[],
+  currentEdges: EdgeModel[],
+): EdgeModel[] {
+  // Only aux, flow, and lookup trigger auto-edges (not stock — its equation is derived)
+  if (node.type !== 'aux' && node.type !== 'flow' && node.type !== 'lookup') {
+    return currentEdges;
+  }
+
+  const equation = node.equation;
+  if (!equation) return currentEdges;
+
+  const referencedNames = extractEquationRefs(equation);
+  if (referencedNames.length === 0) return currentEdges;
+
+  // Build name → node map for variable nodes only
+  const nodeByName = new Map<string, NodeModel>();
+  for (const n of allNodes) {
+    if (n.type === 'text' || n.type === 'cloud' || n.type === 'cld_symbol' || n.type === 'phantom') continue;
+    nodeByName.set(n.name, n);
+  }
+
+  // Track source IDs that already have any edge targeting this node
+  const existingSourceIds = new Set<string>();
+  for (const edge of currentEdges) {
+    if (edge.target === nodeId) {
+      existingSourceIds.add(edge.source);
+    }
+  }
+
+  const validSourceTypes = new Set(['stock', 'aux', 'flow', 'lookup']);
+  const newEdges: EdgeModel[] = [];
+  const timestamp = Date.now();
+
+  for (const refName of referencedNames) {
+    const sourceNode = nodeByName.get(refName);
+    if (!sourceNode) continue;
+    if (sourceNode.id === nodeId) continue;
+    if (existingSourceIds.has(sourceNode.id)) continue;
+    if (!validSourceTypes.has(sourceNode.type)) continue;
+
+    newEdges.push({
+      id: `e_auto_${timestamp}_${newEdges.length}`,
+      type: 'influence',
+      source: sourceNode.id,
+      target: nodeId,
+    });
+    existingSourceIds.add(sourceNode.id);
+  }
+
+  if (newEdges.length === 0) return currentEdges;
+  return [...currentEdges, ...newEdges];
 }

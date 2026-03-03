@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 from bisect import bisect_right
+from collections import deque
 
 from app.equations.evaluator import evaluate_expression
 from app.schemas.model import FlowNode, LookupNode, StockNode
@@ -46,12 +48,62 @@ def simulate_euler(executable: ExecutableModel, start: float, stop: float, dt: f
             stock_state[stock.name] = float(initial)
         series[stock.name] = []
 
+    # initialize delay stocks at equilibrium (initial input value)
+    # We need to evaluate transients once to get the initial input values
+    delay_state: dict[str, float] = {}
+    if executable.delay_stocks or executable.delay_fixed_specs:
+        init_context: dict[str, float] = dict(stock_state)
+        init_context["TIME"] = start
+        # Evaluate transients to get initial values for delay inputs
+        for name in executable.transient_order:
+            node = executable.node_by_name[name]
+            if isinstance(node, LookupNode):
+                x_input = float(evaluate_expression(node.equation, init_context))
+                init_context[name] = _lookup_interpolate(node, x_input)
+            else:
+                try:
+                    init_context[name] = float(evaluate_expression(node.equation, init_context))
+                except KeyError:
+                    init_context[name] = 0.0
+        for ds in executable.delay_stocks:
+            try:
+                val = float(evaluate_expression(ds.input_expr, init_context))
+            except (KeyError, ValueError):
+                val = 0.0
+            delay_state[ds.name] = val
+            init_context[ds.name] = val
+
+    # Initialize delay_fixed circular buffers
+    delay_fixed_buffers: dict[str, deque[float]] = {}
+    delay_fixed_outputs: dict[str, float] = {}
+    for dfspec in executable.delay_fixed_specs:
+        delay_time = float(evaluate_expression(dfspec.delay_time_expr, init_context if (executable.delay_stocks or executable.delay_fixed_specs) else stock_state))
+        buf_len = max(1, int(round(delay_time / dt)))
+        try:
+            init_val = float(evaluate_expression(dfspec.initial_expr, init_context if (executable.delay_stocks or executable.delay_fixed_specs) else stock_state))
+        except (KeyError, ValueError):
+            init_val = 0.0
+        delay_fixed_buffers[dfspec.name] = deque([init_val] * buf_len, maxlen=buf_len)
+        delay_fixed_outputs[dfspec.name] = init_val
+
     transient_names = [*executable.transient_order]
     for name in transient_names:
         series[name] = []
 
     for _idx, _t in enumerate(times):
         context: dict[str, float] = dict(stock_state)
+        context["TIME"] = _t
+
+        # inject delay stock values into context so rewritten equations can reference them
+        context.update(delay_state)
+
+        # Read delay_fixed outputs from buffer (oldest entry)
+        for dfspec in executable.delay_fixed_specs:
+            buf = delay_fixed_buffers[dfspec.name]
+            delay_fixed_outputs[dfspec.name] = buf[0]
+
+        # inject delay_fixed output values
+        context.update(delay_fixed_outputs)
 
         # evaluate transients (aux + flow) in topological order
         for name in executable.transient_order:
@@ -91,6 +143,25 @@ def simulate_euler(executable: ExecutableModel, start: float, stop: float, dt: f
             if stock.max_value is not None:
                 next_stock_state[stock.name] = min(next_stock_state[stock.name], stock.max_value)
         stock_state = next_stock_state
+
+        # advance delay stocks using Euler integration
+        if executable.delay_stocks:
+            next_delay_state = dict(delay_state)
+            for ds in executable.delay_stocks:
+                input_val = float(evaluate_expression(ds.input_expr, context))
+                delay_time = float(evaluate_expression(ds.delay_time_expr, context))
+                if delay_time <= 0:
+                    next_delay_state[ds.name] = input_val
+                else:
+                    derivative = (input_val - delay_state[ds.name]) / delay_time
+                    next_delay_state[ds.name] = delay_state[ds.name] + derivative * dt
+            delay_state = next_delay_state
+
+        # Advance delay_fixed buffers: push current input, pop oldest
+        for dfspec in executable.delay_fixed_specs:
+            input_val = float(evaluate_expression(dfspec.input_expr, context))
+            buf = delay_fixed_buffers[dfspec.name]
+            buf.append(input_val)  # deque with maxlen auto-pops leftmost
 
     # include requested outputs only + time, but retain dependency vars if explicitly requested
     requested = set(executable.outputs)

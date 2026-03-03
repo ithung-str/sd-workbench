@@ -1,9 +1,0 @@
-{UTF-8}
-INITIAL TIME = 0 ~~|
-FINAL TIME = 10 ~~|
-TIME STEP = 1 ~~|
-SAVEPER = TIME STEP ~~|
-a = MIN(3,5) ~~|
-b = MAX(3,5) ~~|
-c = MIN(a+4,b+10) ~~|
-d = MAX(a-1,b-2) ~~|

@@ -8,6 +8,7 @@ from app.schemas.model import AuxNode, FlowNode, LookupNode, ModelDocument, Stoc
 
 
 VARIABLE_NODE_TYPES = {"stock", "aux", "flow", "lookup"}
+BUILTIN_SYMBOLS = {"TIME"}
 
 
 
@@ -32,6 +33,51 @@ def _allowed_edge(edge_type: str, source_type: str, target_type: str) -> bool:
         return pair == {"stock", "flow"} or pair == {"cloud", "flow"}
     return False
 
+
+
+def _derive_stock_equations(model: ModelDocument) -> dict[str, str]:
+    """Derive stock derivative equations from flow_link edges: sum(inflows) - sum(outflows)."""
+    node_by_id: dict[str, object] = {}
+    flow_ids: set[str] = set()
+    for node in model.nodes:
+        node_by_id[node.id] = node
+        if isinstance(node, FlowNode):
+            flow_ids.add(node.id)
+
+    stock_eq: dict[str, str] = {}
+    inflows: dict[str, list[str]] = {}
+    outflows: dict[str, list[str]] = {}
+
+    for edge in model.edges:
+        if edge.type != "flow_link":
+            continue
+        src = node_by_id.get(edge.source)
+        tgt = node_by_id.get(edge.target)
+        if src is None or tgt is None:
+            continue
+        if isinstance(src, FlowNode) and isinstance(tgt, StockNode):
+            inflows.setdefault(tgt.id, []).append(src.name)
+        if isinstance(src, StockNode) and isinstance(tgt, FlowNode):
+            outflows.setdefault(src.id, []).append(tgt.name)
+
+    for node in model.nodes:
+        if not isinstance(node, StockNode):
+            continue
+        inf = inflows.get(node.id, [])
+        outf = outflows.get(node.id, [])
+        if not inf and not outf:
+            continue
+        terms: list[str] = []
+        for f in inf:
+            terms.append(f)
+        for f in outf:
+            terms.append(f"-{f}")
+        eq = terms[0]
+        for t in terms[1:]:
+            eq += f" - {t[1:]}" if t.startswith("-") else f" + {t}"
+        stock_eq[node.id] = eq
+
+    return stock_eq
 
 
 def _topo_sort_dependencies(dependencies: dict[str, set[str]]) -> tuple[list[str], set[str]]:
@@ -119,6 +165,7 @@ def validate_semantics(model: ModelDocument) -> tuple[list[ValidationIssue], lis
                             code="UNIT_MISMATCH_FLOW_STOCK",
                             message=f"Flow '{flow_node.name}' units '{flow_units}' differ from linked stock '{stock_node.name}' units '{stock_units}'",
                             severity="warning",
+                            node_id=flow_node.id,
                             edge_id=edge.id,
                         )
                     )
@@ -143,10 +190,18 @@ def validate_semantics(model: ModelDocument) -> tuple[list[ValidationIssue], lis
                         )
                     )
 
+    # Derive stock equations from flow_link edges so stocks with connected flows
+    # are validated against the derived equation rather than their stored equation
+    # (which may be empty or stale).
+    derived_stock_eqs = _derive_stock_equations(model)
+
     dependencies: dict[str, set[str]] = {}
     for node in variable_nodes:
+        equation = node.equation
+        if isinstance(node, StockNode) and node.id in derived_stock_eqs:
+            equation = derived_stock_eqs[node.id]
         try:
-            parsed = parse_equation(node.equation)
+            parsed = parse_equation(equation)
         except EquationSyntaxError as exc:
             errors.append(
                 ValidationIssue(
@@ -174,6 +229,8 @@ def validate_semantics(model: ModelDocument) -> tuple[list[ValidationIssue], lis
         refs.discard(node.name)
         dependencies[node.name] = refs
         for symbol in sorted(refs):
+            if symbol in BUILTIN_SYMBOLS:
+                continue
             if symbol not in name_index:
                 errors.append(
                     ValidationIssue(

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import * as mfaExport from '../../lib/mfaExport';
 import { bathtubInventoryModel, cloneModel } from '../../lib/sampleModels';
@@ -131,7 +131,7 @@ describe('ResultsDock MFA yaml export', () => {
     );
   });
 
-  it('shows Vensim time controls including SAVEPER and reset action', () => {
+  it('shows Vensim time controls including SAVEPER and reset action', async () => {
     useEditorStore.setState((state) => ({
       ...state,
       activeSimulationMode: 'vensim',
@@ -172,7 +172,13 @@ describe('ResultsDock MFA yaml export', () => {
       </MantineProvider>,
     );
 
-    expect(screen.getByLabelText('SAVEPER')).toBeInTheDocument();
+    // Sim config is now inside a Popover — open it first
+    const configButton = screen.getByRole('button', { name: /Time:.*dt=/ });
+    fireEvent.click(configButton);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('SAVEPER')).toBeInTheDocument();
+    });
     expect(screen.getByRole('button', { name: 'Reset MDL Settings' })).toBeInTheDocument();
   });
 });

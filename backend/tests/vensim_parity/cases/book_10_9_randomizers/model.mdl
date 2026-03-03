@@ -1,7 +1,0 @@
-{UTF-8}
-INITIAL TIME = 0 ~~|
-FINAL TIME = 20 ~~|
-TIME STEP = 1 ~~|
-SAVEPER = TIME STEP ~~|
-rand_n = RANDOM NORMAL(0,1,0.95,0,1,0) ~~|
-rand_e = RANDOM EXPONENTIAL(1,0) ~~|

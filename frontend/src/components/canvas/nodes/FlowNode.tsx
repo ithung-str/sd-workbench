@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { LabelNodeData } from '../../../lib/modelToReactFlow';
 import { resolveNodeStyle, visualStyleToCss } from '../../../lib/visualStyleUtils';
 import { useEditorStore } from '../../../state/editorStore';
+import { EDGE_DRAG_START_EVENT } from './StockNode';
 
 /**
  * Bowtie / hourglass valve symbol — the standard SD flow regulator.
@@ -43,13 +44,34 @@ export function FlowNodeView({
   data: LabelNodeData;
 }) {
   const defaultStyles = useEditorStore((s) => s.model.metadata?.default_styles);
+  const [hovered, setHovered] = useState(false);
   const resolvedCss = useMemo(
     () => visualStyleToCss(resolveNodeStyle('flow', defaultStyles, data.visualStyle)),
     [defaultStyles, data.visualStyle],
   );
   const isVertical = data.flowDirection === 'up' || data.flowDirection === 'down';
+
+  const onEdgeDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!data.nodeId) return;
+      window.dispatchEvent(
+        new CustomEvent(EDGE_DRAG_START_EVENT, {
+          detail: { nodeId: data.nodeId, clientX: e.clientX, clientY: e.clientY },
+        }),
+      );
+    },
+    [data.nodeId],
+  );
+
   return (
-    <div className="rf-node rf-node-flow rf-node-shape-flow" style={resolvedCss}>
+    <div
+      className="rf-node rf-node-flow rf-node-shape-flow"
+      style={resolvedCss}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       {/* Horizontal pipe handles */}
       <Handle
         type="target"
@@ -90,15 +112,31 @@ export function FlowNodeView({
         className="flow-center-handle"
       />
 
-      {/* Handles for variable connections (influence edges from above/below or left/right) */}
+      {/* Handles for variable connections — target (influence edges arriving) */}
       <Handle type="target" position={Position.Top} id="var-top" className="flow-var-handle" />
       <Handle type="target" position={Position.Bottom} id="var-bottom" className="flow-var-handle" />
       <Handle type="target" position={Position.Left} id="var-left" className="flow-var-handle" />
       <Handle type="target" position={Position.Right} id="var-right" className="flow-var-handle" />
 
+      {/* Source handles for influence edges leaving this flow node */}
+      <Handle type="source" position={Position.Top} id="var-top-src" className="flow-var-handle" />
+      <Handle type="source" position={Position.Bottom} id="var-bottom-src" className="flow-var-handle" />
+      <Handle type="source" position={Position.Left} id="var-left-src" className="flow-var-handle" />
+      <Handle type="source" position={Position.Right} id="var-right-src" className="flow-var-handle" />
+
       <ValveSymbol vertical={isVertical} />
       <div className="rf-node-label">{data.label}</div>
       <div className="rf-node-subtitle">{data.subtitle}</div>
+      {hovered && (
+        <button
+          className="stock-flow-plus nodrag"
+          onMouseDown={onEdgeDragStart}
+          tabIndex={-1}
+          title="Create influence"
+        >
+          +
+        </button>
+      )}
     </div>
   );
 }

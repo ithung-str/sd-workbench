@@ -562,15 +562,49 @@ export type VensimMonteCarloRequest = {
   parameters: MonteCarloParameter[];
 };
 
+export type RetryLogEntry = {
+  round: number;
+  errors: string[];
+  action: string;
+  model_used?: string;
+};
+
 export type AIChatMessage = {
   role: 'user' | 'assistant';
   content: string;
+  suggestions?: string[];
+  retryLog?: RetryLogEntry[];
+};
+
+export type AIPatch = {
+  node_name: string;
+  field: string;
+  value: string | number | boolean | null;
+};
+
+export type AIActionType =
+  | 'update_sim_config'
+  | 'create_scenario' | 'update_scenario' | 'delete_scenario'
+  | 'create_sensitivity_config' | 'update_sensitivity_config' | 'delete_sensitivity_config'
+  | 'create_dashboard' | 'update_dashboard' | 'delete_dashboard'
+  | 'add_dashboard_card' | 'delete_dashboard_card'
+  | 'update_default_style'
+  | 'run_simulate' | 'run_validate' | 'run_scenario_batch' | 'run_sensitivity'
+  | 'navigate';
+
+export type AIAction = {
+  type: AIActionType;
+  params: Record<string, unknown>;
 };
 
 export type AIExecuteResponse = {
   ok: boolean;
   model: ModelDocument | null;
+  patches: AIPatch[];
+  actions: AIAction[];
   warnings: ValidationIssue[];
   assistant_message: string;
   needs_clarification: boolean;
+  suggestions: string[];
+  retry_log: RetryLogEntry[];
 };

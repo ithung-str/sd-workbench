@@ -15,6 +15,55 @@ SAFE_FUNCTIONS = {
 }
 
 
+def _if_then_else(cond: float, a: float, b: float) -> float:
+    return a if cond != 0.0 else b
+
+
+# Context-aware functions: receive the evaluation context dict as first arg.
+# The remaining args come from the equation call.
+
+def _step(ctx: Mapping[str, float], height: float, step_time: float) -> float:
+    return height if ctx["TIME"] >= step_time else 0.0
+
+
+def _ramp(ctx: Mapping[str, float], slope: float, start: float, end: float = float("inf")) -> float:
+    t = ctx["TIME"]
+    if t < start:
+        return 0.0
+    if t > end:
+        return slope * (end - start)
+    return slope * (t - start)
+
+
+def _pulse(ctx: Mapping[str, float], height: float, start: float, width: float = 0.0) -> float:
+    t = ctx["TIME"]
+    if width <= 0.0:
+        # Single-point pulse: active only at the exact start time step
+        # In discrete simulation, match when TIME is within one dt of start
+        return height if t == start else 0.0
+    return height if start <= t < start + width else 0.0
+
+
+def _pulse_train(ctx: Mapping[str, float], height: float, first: float, interval: float, last: float = float("inf")) -> float:
+    t = ctx["TIME"]
+    if t < first or t > last or interval <= 0:
+        return 0.0
+    # Check if we're at a pulse point (within floating point tolerance)
+    elapsed = t - first
+    remainder = elapsed % interval
+    if remainder < 1e-10 or abs(remainder - interval) < 1e-10:
+        return height
+    return 0.0
+
+
+CONTEXT_FUNCTIONS = {
+    "step": _step,
+    "ramp": _ramp,
+    "pulse": _pulse,
+    "pulse_train": _pulse_train,
+}
+
+
 class _Evaluator(ast.NodeVisitor):
     def __init__(self, context: Mapping[str, float]) -> None:
         self.context = context
@@ -29,6 +78,29 @@ class _Evaluator(ast.NodeVisitor):
         if node.id not in self.context:
             raise KeyError(node.id)
         return float(self.context[node.id])
+
+    def visit_Compare(self, node: ast.Compare) -> float:
+        left = self.visit(node.left)
+        for op, comparator in zip(node.ops, node.comparators):
+            right = self.visit(comparator)
+            if isinstance(op, ast.Gt):
+                result = left > right
+            elif isinstance(op, ast.GtE):
+                result = left >= right
+            elif isinstance(op, ast.Lt):
+                result = left < right
+            elif isinstance(op, ast.LtE):
+                result = left <= right
+            elif isinstance(op, ast.Eq):
+                result = left == right
+            elif isinstance(op, ast.NotEq):
+                result = left != right
+            else:
+                raise TypeError(f"Unsupported comparison: {type(op).__name__}")
+            if not result:
+                return 0.0
+            left = right
+        return 1.0
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> float:
         value = self.visit(node.operand)
@@ -54,7 +126,18 @@ class _Evaluator(ast.NodeVisitor):
         raise TypeError(f"Unsupported binary op: {type(node.op).__name__}")
 
     def visit_Call(self, node: ast.Call) -> float:
-        func = SAFE_FUNCTIONS[node.func.id]
+        func_name = node.func.id
+        # if_then_else: evaluate condition, then only the selected branch
+        if func_name == "if_then_else":
+            cond = self.visit(node.args[0])
+            a = self.visit(node.args[1])
+            b = self.visit(node.args[2])
+            return _if_then_else(cond, a, b)
+        # Context-aware functions (step, ramp, pulse, pulse_train)
+        if func_name in CONTEXT_FUNCTIONS:
+            args = [self.visit(arg) for arg in node.args]
+            return float(CONTEXT_FUNCTIONS[func_name](self.context, *args))
+        func = SAFE_FUNCTIONS[func_name]
         args = [self.visit(arg) for arg in node.args]
         return float(func(*args))
 

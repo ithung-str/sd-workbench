@@ -4,13 +4,24 @@ import ast
 from dataclasses import dataclass
 from typing import Iterable
 
-ALLOWED_FUNCTIONS = {"min", "max", "abs", "exp", "log"}
+DELAY_FUNCTIONS = {"delay1", "delay3", "delayn"}
+SMOOTH_FUNCTIONS = {"smooth", "smooth3"}
+TIME_FUNCTIONS = {"step", "ramp", "pulse", "pulse_train"}
+ALLOWED_FUNCTIONS = (
+    {"min", "max", "abs", "exp", "log", "if_then_else"}
+    | DELAY_FUNCTIONS
+    | SMOOTH_FUNCTIONS
+    | TIME_FUNCTIONS
+    | {"delay_fixed"}
+)
 ALLOWED_BINOPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)
 ALLOWED_UNARYOPS = (ast.UAdd, ast.USub)
+ALLOWED_CMPOPS = (ast.Gt, ast.GtE, ast.Lt, ast.LtE, ast.Eq, ast.NotEq)
 ALLOWED_NODE_TYPES = (
     ast.Expression,
     ast.BinOp,
     ast.UnaryOp,
+    ast.Compare,
     ast.Call,
     ast.Name,
     ast.Load,
@@ -47,6 +58,14 @@ class _Validator(ast.NodeVisitor):
             raise UnsupportedExpressionError(f"Unsupported operator: {type(node.op).__name__}")
         self.visit(node.left)
         self.visit(node.right)
+
+    def visit_Compare(self, node: ast.Compare) -> None:
+        for op in node.ops:
+            if not isinstance(op, ALLOWED_CMPOPS):
+                raise UnsupportedExpressionError(f"Unsupported comparison: {type(op).__name__}")
+        self.visit(node.left)
+        for comparator in node.comparators:
+            self.visit(comparator)
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> None:
         if not isinstance(node.op, ALLOWED_UNARYOPS):

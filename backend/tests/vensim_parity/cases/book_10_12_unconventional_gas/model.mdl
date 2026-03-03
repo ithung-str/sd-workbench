@@ -1,8 +1,0 @@
-{UTF-8}
-INITIAL TIME = 0 ~~|
-FINAL TIME = 30 ~~|
-TIME STEP = 1 ~~|
-SAVEPER = TIME STEP ~~|
-demand = STEP(10,5) ~~|
-production = SMOOTH3(demand,4) ~~|
-reserves = INTEG(-production, 500) ~~|
