@@ -26,6 +26,10 @@ vi.mock('../io/ImportExportControls', () => ({
   ImportExportControls: () => <div data-testid="import-export-controls" />,
 }));
 
+vi.mock('./AIChatSidebar', () => ({
+  AIChatSidebar: () => <div data-testid="ai-chat-sidebar" />,
+}));
+
 describe('WorkbenchLayoutMantine model picker', () => {
   beforeEach(() => {
     useEditorStore.getState().loadModel(cloneModel(teacupModel));
