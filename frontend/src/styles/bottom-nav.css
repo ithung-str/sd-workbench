@@ -1,0 +1,37 @@
+.bottom-nav {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  background: #f3f3f8;
+  border-top: 1px solid #e7e7ee;
+  flex-shrink: 0;
+}
+
+.bottom-nav-tabs {
+  display: flex;
+  gap: 0;
+}
+
+.bottom-nav-tab {
+  padding: 4px 12px;
+  border-radius: 4px;
+  color: #7b7a87;
+  font-size: 0.78rem;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.bottom-nav-tab:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #212027;
+}
+
+.bottom-nav-tab-active {
+  color: #4b1b78;
+  font-weight: 600;
+}
+
+.bottom-nav-status {
+  font-size: 0.72rem;
+}
