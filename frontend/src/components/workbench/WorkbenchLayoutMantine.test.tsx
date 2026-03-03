@@ -10,16 +10,8 @@ vi.mock('../canvas/ModelCanvas', () => ({
   ModelCanvas: () => <div data-testid="model-canvas" />,
 }));
 
-vi.mock('../palette/PalettePanelMantine', () => ({
-  PalettePanel: () => <div data-testid="palette-panel" />,
-}));
-
 vi.mock('../inspector/InspectorPanelMantine', () => ({
   InspectorPanel: () => <div data-testid="inspector-panel" />,
-}));
-
-vi.mock('../results/ResultsDockMantine', () => ({
-  ResultsDock: () => <div data-testid="results-dock" />,
 }));
 
 vi.mock('../io/ImportExportControls', () => ({
@@ -28,6 +20,22 @@ vi.mock('../io/ImportExportControls', () => ({
 
 vi.mock('./AIChatSidebar', () => ({
   AIChatSidebar: () => <div data-testid="ai-chat-sidebar" />,
+}));
+
+vi.mock('./IconStrip', () => ({
+  IconStrip: () => <div data-testid="icon-strip" />,
+}));
+
+vi.mock('./FlyoutPanel', () => ({
+  FlyoutPanel: () => <div data-testid="flyout-panel" />,
+}));
+
+vi.mock('./BottomNavBar', () => ({
+  BottomNavBar: () => <div data-testid="bottom-nav-bar" />,
+}));
+
+vi.mock('./SimulationPanel', () => ({
+  SimulationPanel: () => <div data-testid="simulation-panel" />,
 }));
 
 describe('WorkbenchLayoutMantine model picker', () => {
