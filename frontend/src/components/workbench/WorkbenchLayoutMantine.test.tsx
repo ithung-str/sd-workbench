@@ -70,3 +70,36 @@ describe('WorkbenchLayoutMantine model picker', () => {
     expect(useEditorStore.getState().model.name).toBe(modelPresets.bathtub.name);
   });
 });
+
+describe('Right sidebar toggle', () => {
+  beforeEach(() => {
+    useEditorStore.getState().loadModel(cloneModel(teacupModel));
+    useEditorStore.getState().setRightSidebarMode('inspector');
+  });
+
+  it('shows inspector panel by default', () => {
+    render(
+      <MantineProvider>
+        <WorkbenchLayout />
+      </MantineProvider>,
+    );
+    expect(screen.getByTestId('inspector-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('ai-chat-sidebar')).not.toBeInTheDocument();
+  });
+
+  it('switches to AI chat when chat mode is selected', async () => {
+    const user = userEvent.setup();
+    render(
+      <MantineProvider>
+        <WorkbenchLayout />
+      </MantineProvider>,
+    );
+
+    // Click the "AI Chat" segment in the SegmentedControl
+    const chatToggle = screen.getByText('AI Chat');
+    await user.click(chatToggle);
+
+    expect(screen.getByTestId('ai-chat-sidebar')).toBeInTheDocument();
+    expect(screen.queryByTestId('inspector-panel')).not.toBeInTheDocument();
+  });
+});
