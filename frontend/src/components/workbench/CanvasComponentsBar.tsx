@@ -5,16 +5,14 @@ import { useEditorStore } from '../../state/editorStore';
 
 export function CanvasComponentsBar() {
   const reactFlow = useReactFlow();
-  const addNode = useEditorStore((s) => s.addNode);
   const addCldSymbol = useEditorStore((s) => s.addCldSymbol);
-  const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
   const isCanvasLocked = useEditorStore((s) => s.isCanvasLocked);
   const setCanvasLocked = useEditorStore((s) => s.setCanvasLocked);
   const autoOrganize = useEditorStore((s) => s.autoOrganize);
   const alignNodes = useEditorStore((s) => s.alignNodes);
   const cleanPhantoms = useEditorStore((s) => s.cleanPhantoms);
   const hasPhantoms = useEditorStore((s) => s.model.nodes.some((n) => n.type === 'phantom'));
-  const isReadOnly = activeSimulationMode === 'vensim';
+  const isReadOnly = false;
 
   const getSelectedNodeIds = () =>
     (reactFlow.getNodes?.() ?? []).filter((n) => n.selected).map((n) => n.id);
@@ -62,21 +60,6 @@ export function CanvasComponentsBar() {
             {isCanvasLocked ? <IconLock size={14} /> : <IconLockOpen size={14} />}
           </ActionIcon>
         </Tooltip>
-
-        <div className="canvas-components-divider" />
-
-        <Button variant="light" color="blue" size="xs" onClick={() => addNode('stock')} disabled={isReadOnly}>
-          Stock
-        </Button>
-        <Button variant="light" color="green" size="xs" onClick={() => addNode('aux')} disabled={isReadOnly}>
-          Variable
-        </Button>
-        <Button variant="light" color="orange" size="xs" onClick={() => addNode('lookup')} disabled={isReadOnly}>
-          Look-up
-        </Button>
-        <Button variant="light" color="gray" size="xs" onClick={() => addNode('text')} disabled={isReadOnly}>
-          Text
-        </Button>
 
         <div className="canvas-components-divider" />
 

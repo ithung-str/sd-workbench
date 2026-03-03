@@ -22,7 +22,6 @@ describe('CanvasComponentsBar', () => {
     vi.clearAllMocks();
     useEditorStore.setState((state) => ({
       ...state,
-      activeSimulationMode: 'native_json',
       isCanvasLocked: false,
     }));
   });

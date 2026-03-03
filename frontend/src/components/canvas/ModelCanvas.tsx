@@ -394,7 +394,7 @@ function ModelCanvasInner() {
         onNodeDragStop={onNodeDragStop}
         style={{ width: '100%', height: '100%', background: '#f7f8fb' }}
       >
-        <Panel position="top-center" className="canvas-components-panel">
+        <Panel position="bottom-center" className="canvas-components-panel">
           <CanvasComponentsBar />
         </Panel>
         {showMinimap && <MiniMap pannable zoomable />}
