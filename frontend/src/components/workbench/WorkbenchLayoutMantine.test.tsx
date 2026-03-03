@@ -110,4 +110,19 @@ describe('Right sidebar toggle', () => {
     expect(screen.getByTestId('ai-chat-sidebar')).toBeInTheDocument();
     expect(screen.queryByTestId('inspector-panel')).not.toBeInTheDocument();
   });
+
+  it('switches to simulation when simulate mode is selected', async () => {
+    const user = userEvent.setup();
+    render(
+      <MantineProvider>
+        <WorkbenchLayout />
+      </MantineProvider>,
+    );
+
+    const simToggle = screen.getByText('Simulate');
+    await user.click(simToggle);
+
+    expect(screen.getByTestId('simulation-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('inspector-panel')).not.toBeInTheDocument();
+  });
 });
