@@ -1,0 +1,29 @@
+.flyout-panel {
+  width: 240px;
+  height: 100%;
+  background: #ffffff;
+  border-right: 1px solid #e7e7ee;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  z-index: 5;
+}
+
+.flyout-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e7e7ee;
+  min-height: 40px;
+}
+
+.flyout-panel-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.flyout-panel-body {
+  padding: 8px;
+}
