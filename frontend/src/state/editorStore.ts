@@ -1,14 +1,8 @@
 import { create } from 'zustand';
 import {
   executeAiCommandStream,
-  getVensimDiagnostics,
-  importVensimFile,
   runMonteCarlo,
   runOATSensitivity,
-  runVensimMonteCarlo,
-  runVensimOATSensitivity,
-  simulateImportedVensim,
-  simulateImportedVensimBatch,
   simulateModel,
   simulateScenarioBatch,
   validateModel,
@@ -36,15 +30,14 @@ import type {
   SensitivityConfig,
   SimConfig,
   SimulateResponse,
+  StreamChunk,
   ValidateResponse,
   ValidationIssue,
-  VensimImportResponse,
-  VensimPresetLoadStatus,
 } from '../types/model';
-import type { VensimPresetDescriptor } from '../lib/vensimPresets';
 
 export type DockTab = 'validation' | 'chart' | 'table' | 'compare';
 export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity';
+export type RightSidebarMode = 'inspector' | 'chat';
 
 type Selection =
   | { kind: 'node'; id: string }
@@ -64,22 +57,10 @@ type PendingCommit = {
 const HISTORY_LIMIT = 100;
 const GROUPED_COMMIT_DEBOUNCE_MS = 350;
 
-type VensimPresetStatus = {
-  status: VensimPresetLoadStatus;
-  summary: string;
-  import_id?: string;
-};
-
 type EditorState = {
   model: ModelDocument;
   selected: Selection;
   simConfig: SimConfig;
-  activeSimulationMode: 'native_json' | 'vensim';
-  importedVensim: VensimImportResponse | null;
-  vensimSelectedOutputs: string[];
-  vensimParamOverrides: Record<string, number | string>;
-  vensimPresetCache: Record<string, VensimImportResponse>;
-  vensimPresetStatus: Record<string, VensimPresetStatus>;
   scenarios: ScenarioDefinition[];
   activeScenarioId: string;
   dashboards: DashboardDefinition[];
@@ -91,7 +72,7 @@ type EditorState = {
   monteCarloResults: MonteCarloResponse | null;
   aiCommand: string;
   aiChatHistory: AIChatMessage[];
-  aiChatOpen: boolean;
+  rightSidebarMode: RightSidebarMode;
   validation: ValidateResponse;
   localIssues: ValidationIssue[];
   results: SimulateResponse | null;
@@ -101,13 +82,13 @@ type EditorState = {
   isSimulating: boolean;
   isApplyingAi: boolean;
   aiStatusMessage: string;
+  aiStreamingRaw: string;
+  aiStreamingChunks: StreamChunk[];
   isRunningBatch: boolean;
   isRunningSensitivity: boolean;
   isCanvasLocked: boolean;
   activeTab: WorkbenchTab;
   backendHealthy: boolean | null;
-  isLoadingVensimPreset: boolean;
-  loadingVensimPresetId: string | null;
   undoStack: HistoryEntry[];
   redoStack: HistoryEntry[];
   historyLimit: number;
@@ -151,14 +132,11 @@ type EditorState = {
     parameters: MonteCarloParameter[];
   }) => Promise<void>;
   loadModel: (model: ModelDocument) => void;
-  importVensim: (file: File) => Promise<void>;
-  loadVensimPreset: (preset: VensimPresetDescriptor) => Promise<void>;
-  setVensimSelectedOutputs: (outputs: string[]) => void;
-  setVensimParamOverride: (name: string, value: number | string | undefined) => void;
+  startNewModel: () => void;
   setAiCommand: (value: string) => void;
   runAiCommand: () => Promise<void>;
   clearAiChat: () => void;
-  setAiChatOpen: (open: boolean) => void;
+  setRightSidebarMode: (mode: RightSidebarMode) => void;
   createScenario: () => void;
   duplicateScenario: (id: string) => void;
   updateScenario: (id: string, patch: Partial<ScenarioDefinition>) => void;
@@ -383,34 +361,6 @@ function snapshotsEqual(a: HistoryEntry, b: HistoryEntry): boolean {
   return JSON.stringify(a.model) === JSON.stringify(b.model);
 }
 
-function summarizeImportStatus(imported: VensimImportResponse): VensimPresetStatus {
-  const gaps = imported.model_view.import_gaps;
-  const hasWarnings = imported.warnings.length > 0;
-  const hasErrors = imported.errors.length > 0;
-  const hasGaps =
-    (gaps?.dropped_variables ?? 0) > 0 ||
-    (gaps?.dropped_edges ?? 0) > 0 ||
-    (gaps?.unparsed_equations ?? 0) > 0 ||
-    (gaps?.unsupported_constructs?.length ?? 0) > 0;
-  if (hasWarnings || hasErrors || hasGaps) {
-    const parts: string[] = [];
-    if ((gaps?.dropped_variables ?? 0) > 0) parts.push(`${gaps?.dropped_variables} variable gaps`);
-    if ((gaps?.dropped_edges ?? 0) > 0) parts.push(`${gaps?.dropped_edges} edge gaps`);
-    if ((gaps?.unsupported_constructs?.length ?? 0) > 0) parts.push(`${gaps?.unsupported_constructs.length} unsupported constructs`);
-    if (parts.length === 0 && hasWarnings) parts.push(`${imported.warnings.length} warning(s)`);
-    return {
-      status: 'partial',
-      summary: parts.join(', ') || 'Partial import',
-      import_id: imported.import_id,
-    };
-  }
-  return {
-    status: 'ok',
-    summary: 'Import successful',
-    import_id: imported.import_id,
-  };
-}
-
 export const useEditorStore = create<EditorState>((set, get) => {
   const initialModel = cloneModel(teacupModel);
   const initialScenarios = defaultScenarios(initialModel);
@@ -465,56 +415,6 @@ export const useEditorStore = create<EditorState>((set, get) => {
     if (pending?.timerId) clearTimeout(pending.timerId);
     set({ undoStack: [], redoStack: [], pendingCommit: null });
   };
-  const applyImportedVensimState = (
-    importedVensim: VensimImportResponse,
-    extra?: Partial<Pick<EditorState, 'vensimPresetCache' | 'vensimPresetStatus'>>,
-  ) => {
-    const canonical = importedVensim.model_view.canonical ?? cloneModel(blankModel);
-    const scenarioDefaults = defaultScenarios(canonical);
-    const dashboardDefaults = defaultDashboards(canonical);
-    const sensitivityDefaults = defaultSensitivityConfigs(canonical);
-    const persisted = persistAnalysis(
-      canonical,
-      scenarioDefaults.scenarios,
-      scenarioDefaults.activeScenarioId,
-      dashboardDefaults.dashboards,
-      dashboardDefaults.activeDashboardId,
-      sensitivityDefaults.sensitivityConfigs,
-      sensitivityDefaults.activeSensitivityConfigId,
-    );
-    const time = importedVensim.model_view.time_settings;
-    set({
-      importedVensim,
-      activeSimulationMode: 'vensim',
-      model: cloneModel(persisted),
-      scenarios: scenarioDefaults.scenarios,
-      activeScenarioId: scenarioDefaults.activeScenarioId,
-      dashboards: dashboardDefaults.dashboards,
-      activeDashboardId: dashboardDefaults.activeDashboardId,
-      sensitivityConfigs: sensitivityDefaults.sensitivityConfigs,
-      activeSensitivityConfigId: sensitivityDefaults.activeSensitivityConfigId,
-      selected: null,
-      results: null,
-      compareResults: null,
-      oatResults: null,
-      monteCarloResults: null,
-      validation: { ok: importedVensim.errors.length === 0, errors: importedVensim.errors, warnings: importedVensim.warnings },
-      localIssues: [],
-      isValidating: false,
-      activeDockTab: 'validation',
-      vensimSelectedOutputs: importedVensim.model_view.variables.slice(0, 20).map((v) => v.name),
-      vensimParamOverrides: {},
-      simConfig: {
-        start: time?.initial_time ?? 0,
-        stop: time?.final_time ?? 30,
-        dt: time?.time_step ?? 1,
-        return_step: time?.saveper ?? time?.time_step ?? 1,
-        method: 'euler',
-      },
-      ...extra,
-    });
-    clearHistory();
-  };
   return {
     model: persistAnalysis(
       initialModel,
@@ -527,12 +427,6 @@ export const useEditorStore = create<EditorState>((set, get) => {
     ),
     selected: null,
     simConfig: { start: 0, stop: 30, dt: 1, method: 'euler' },
-    activeSimulationMode: 'native_json',
-    importedVensim: null,
-    vensimSelectedOutputs: [],
-    vensimParamOverrides: {},
-    vensimPresetCache: {},
-    vensimPresetStatus: {},
     scenarios: initialScenarios.scenarios,
     activeScenarioId: initialScenarios.activeScenarioId,
     dashboards: initialDashboards.dashboards,
@@ -544,7 +438,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     monteCarloResults: null,
     aiCommand: '',
     aiChatHistory: [],
-    aiChatOpen: false,
+    rightSidebarMode: 'inspector' as RightSidebarMode,
     validation: defaultValidation(),
     localIssues: [],
     results: null,
@@ -554,13 +448,13 @@ export const useEditorStore = create<EditorState>((set, get) => {
     isSimulating: false,
     isApplyingAi: false,
     aiStatusMessage: '',
+    aiStreamingRaw: '',
+    aiStreamingChunks: [],
     isRunningBatch: false,
     isRunningSensitivity: false,
     isCanvasLocked: false,
     activeTab: 'canvas',
     backendHealthy: null,
-    isLoadingVensimPreset: false,
-    loadingVensimPresetId: null,
     undoStack: [],
     redoStack: [],
     historyLimit: HISTORY_LIMIT,
@@ -892,25 +786,10 @@ export const useEditorStore = create<EditorState>((set, get) => {
     canUndo: () => get().undoStack.length > 0,
     canRedo: () => get().redoStack.length > 0,
     setActiveDockTab: (activeDockTab) => set({ activeDockTab }),
-    setVensimSelectedOutputs: (vensimSelectedOutputs) => set({ vensimSelectedOutputs }),
-    setVensimParamOverride: (name, value) =>
-      set((state) => {
-        const next = { ...state.vensimParamOverrides };
-        if (value === undefined || value === '') {
-          delete next[name];
-        } else {
-          next[name] = value;
-        }
-        return { vensimParamOverrides: next };
-      }),
     setAiCommand: (aiCommand) => set({ aiCommand }),
     setSimConfig: (patch) => set((state) => ({ simConfig: { ...state.simConfig, ...patch } })),
     runValidate: async () => {
-      const { model, activeSimulationMode } = get();
-      if (activeSimulationMode === 'vensim') {
-        set({ validation: defaultValidation(), localIssues: [], isValidating: false });
-        return;
-      }
+      const { model } = get();
       set({ isValidating: true, apiError: null, localIssues: localValidate(model) });
       try {
         const validation = await validateModel(model);
@@ -924,23 +803,10 @@ export const useEditorStore = create<EditorState>((set, get) => {
       }
     },
     runSimulate: async () => {
-      const { model, simConfig, activeSimulationMode, importedVensim, vensimSelectedOutputs, vensimParamOverrides } = get();
+      const { model, simConfig } = get();
       set({ isSimulating: true, apiError: null });
       try {
-        const results =
-          activeSimulationMode === 'vensim' && importedVensim
-            ? await simulateImportedVensim({
-                import_id: importedVensim.import_id,
-                sim_config: {
-                  start: simConfig.start,
-                  stop: simConfig.stop,
-                  dt: simConfig.dt,
-                  saveper: simConfig.return_step,
-                },
-                outputs: vensimSelectedOutputs,
-                params: vensimParamOverrides,
-              })
-            : await simulateModel({ model, sim_config: simConfig });
+        const results = await simulateModel({ model, sim_config: simConfig });
         set({ results, isSimulating: false, activeDockTab: 'chart' });
       } catch (error: any) {
         const detail = error?.errors ? error : error?.detail ?? error;
@@ -959,9 +825,6 @@ export const useEditorStore = create<EditorState>((set, get) => {
         model,
         simConfig,
         scenarios,
-        activeSimulationMode,
-        importedVensim,
-        vensimSelectedOutputs,
       } = get();
       const hasBaselineScenario = scenarios.some(
         (scenario) =>
@@ -970,119 +833,74 @@ export const useEditorStore = create<EditorState>((set, get) => {
       );
       set({ isRunningBatch: true, apiError: null, compareResults: null });
       try {
-        const compareResults =
-          activeSimulationMode === 'vensim' && importedVensim
-            ? await simulateImportedVensimBatch({
-                import_id: importedVensim.import_id,
-                sim_config: {
-                  start: simConfig.start,
-                  stop: simConfig.stop,
-                  dt: simConfig.dt,
-                  saveper: simConfig.return_step,
-                },
-                scenarios,
-                include_baseline: !hasBaselineScenario,
-                outputs: vensimSelectedOutputs,
-              })
-            : await simulateScenarioBatch({
-                model,
-                sim_config: simConfig,
-                scenarios,
-                include_baseline: !hasBaselineScenario,
-              });
+        const compareResults = await simulateScenarioBatch({
+          model,
+          sim_config: simConfig,
+          scenarios,
+          include_baseline: !hasBaselineScenario,
+        });
         set({ compareResults, isRunningBatch: false, activeDockTab: 'compare' });
       } catch (error) {
         set({ isRunningBatch: false, apiError: 'Batch simulation failed' });
       }
     },
     runOATSensitivity: async ({ output, metric, parameters }) => {
-      const { model, simConfig, scenarios, activeScenarioId, activeSimulationMode, importedVensim } = get();
+      const { model, simConfig, scenarios, activeScenarioId } = get();
       set({ isRunningSensitivity: true, apiError: null, oatResults: null });
       try {
-        const oatResults =
-          activeSimulationMode === 'vensim' && importedVensim
-            ? await runVensimOATSensitivity({
-                import_id: importedVensim.import_id,
-                sim_config: {
-                  start: simConfig.start,
-                  stop: simConfig.stop,
-                  dt: simConfig.dt,
-                  saveper: simConfig.return_step,
-                },
-                scenarios,
-                scenario_id: activeScenarioId,
-                output,
-                metric,
-                parameters,
-              })
-            : await runOATSensitivity({
-                model,
-                sim_config: simConfig,
-                scenarios,
-                scenario_id: activeScenarioId,
-                output,
-                metric,
-                parameters,
-              });
+        const oatResults = await runOATSensitivity({
+          model,
+          sim_config: simConfig,
+          scenarios,
+          scenario_id: activeScenarioId,
+          output,
+          metric,
+          parameters,
+        });
         set({ oatResults, monteCarloResults: null, isRunningSensitivity: false });
       } catch (error) {
         set({ isRunningSensitivity: false, apiError: 'OAT sensitivity failed' });
       }
     },
     runMonteCarlo: async ({ output, metric, runs, seed, parameters }) => {
-      const { model, simConfig, scenarios, activeScenarioId, activeSimulationMode, importedVensim } = get();
+      const { model, simConfig, scenarios, activeScenarioId } = get();
       set({ isRunningSensitivity: true, apiError: null, monteCarloResults: null });
       try {
-        const monteCarloResults =
-          activeSimulationMode === 'vensim' && importedVensim
-            ? await runVensimMonteCarlo({
-                import_id: importedVensim.import_id,
-                sim_config: {
-                  start: simConfig.start,
-                  stop: simConfig.stop,
-                  dt: simConfig.dt,
-                  saveper: simConfig.return_step,
-                },
-                scenarios,
-                scenario_id: activeScenarioId,
-                output,
-                metric,
-                runs,
-                seed,
-                parameters,
-              })
-            : await runMonteCarlo({
-                model,
-                sim_config: simConfig,
-                scenarios,
-                scenario_id: activeScenarioId,
-                output,
-                metric,
-                runs,
-                seed,
-                parameters,
-              });
+        const monteCarloResults = await runMonteCarlo({
+          model,
+          sim_config: simConfig,
+          scenarios,
+          scenario_id: activeScenarioId,
+          output,
+          metric,
+          runs,
+          seed,
+          parameters,
+        });
         set({ monteCarloResults, oatResults: null, isRunningSensitivity: false });
       } catch (error) {
         set({ isRunningSensitivity: false, apiError: 'Monte Carlo analysis failed' });
       }
     },
     runAiCommand: async () => {
-      const { model, aiCommand, activeSimulationMode, aiChatHistory, simConfig } = get();
-      if (activeSimulationMode === 'vensim') {
-        set({ apiError: 'AI canvas editing is currently available for native JSON models only.' });
-        return;
-      }
+      const { model, aiCommand, aiChatHistory, simConfig } = get();
       if (!aiCommand.trim()) return;
       const userMessage = aiCommand.trim();
       // Add user message to chat history immediately and open chat
       const updatedHistory: AIChatMessage[] = [...aiChatHistory, { role: 'user', content: userMessage }];
-      set({ isApplyingAi: true, aiStatusMessage: 'Sending to AI...', apiError: null, aiCommand: '', aiChatHistory: updatedHistory, aiChatOpen: true });
+      set({ isApplyingAi: true, aiStatusMessage: 'Sending to AI...', aiStreamingRaw: '', aiStreamingChunks: [], apiError: null, aiCommand: '', aiChatHistory: updatedHistory, rightSidebarMode: 'chat' as RightSidebarMode });
 
       try {
         const response = await executeAiCommandStream(
           userMessage, model, aiChatHistory, simConfig,
           (msg) => set({ aiStatusMessage: msg }),
+          (chunk) => set((s) => ({ aiStreamingRaw: s.aiStreamingRaw + chunk })),
+          (chunk) => set((s) => ({ aiStreamingChunks: [...s.aiStreamingChunks, chunk] })),
+          (update) => set((s) => ({
+            aiStreamingChunks: s.aiStreamingChunks.map((c, i) =>
+              i === update.index ? { ...c, status: update.status, errors: update.errors } : c
+            ),
+          })),
         );
 
         if (response.needs_clarification) {
@@ -1090,12 +908,14 @@ export const useEditorStore = create<EditorState>((set, get) => {
           set({
             isApplyingAi: false,
             aiStatusMessage: '',
+            aiStreamingRaw: '',
             aiChatHistory: [
               ...updatedHistory,
               {
                 role: 'assistant',
                 content: response.assistant_message,
                 suggestions: response.suggestions?.length ? response.suggestions : undefined,
+                debugRawResponse: response.debug_raw_response ?? undefined,
               },
             ],
           });
@@ -1104,7 +924,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
         let assistantMsg = response.assistant_message || 'Model updated successfully.';
         const retryLog = response.retry_log?.length ? response.retry_log : undefined;
-        const finalHistory: AIChatMessage[] = [...updatedHistory, { role: 'assistant', content: assistantMsg, retryLog }];
+        const debugRawResponse = response.debug_raw_response ?? undefined;
+        const finalHistory: AIChatMessage[] = [...updatedHistory, { role: 'assistant', content: assistantMsg, retryLog, debugRawResponse }];
 
         // --- Patch mode: apply patches individually via updateNode for undo support ---
         if (response.patches && response.patches.length > 0) {
@@ -1130,18 +951,27 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
         // If patches or actions were handled (but no full model), we're done
         if ((response.patches && response.patches.length > 0) || (response.actions && response.actions.length > 0 && !response.model)) {
-          set({ isApplyingAi: false, aiStatusMessage: '', aiChatHistory: finalHistory });
+          set({ isApplyingAi: false, aiStatusMessage: '', aiStreamingRaw: '', aiChatHistory: finalHistory });
           return;
         }
 
         // --- Actions-only with no model/patches ---
         if (!response.model) {
-          set({ isApplyingAi: false, aiStatusMessage: '', aiChatHistory: finalHistory });
+          set({ isApplyingAi: false, aiStatusMessage: '', aiStreamingRaw: '', aiChatHistory: finalHistory });
           return;
         }
 
         // --- Full model mode: replace entire model ---
-        const updated = cloneModel(response.model);
+        // Apply auto-layout so AI-generated models have readable node positions
+        const rawUpdated = cloneModel(response.model);
+        const layoutPositions = computeAutoLayout(rawUpdated);
+        const updated = {
+          ...rawUpdated,
+          nodes: rawUpdated.nodes.map((n) => {
+            const pos = layoutPositions.find((p) => p.id === n.id);
+            return pos ? { ...n, position: { x: pos.x, y: pos.y } } : n;
+          }),
+        };
         const scenarioDefaults = defaultScenarios(updated);
         const dashboardDefaults = defaultDashboards(updated);
         const sensitivityDefaults = defaultSensitivityConfigs(updated);
@@ -1171,22 +1001,54 @@ export const useEditorStore = create<EditorState>((set, get) => {
           monteCarloResults: null,
           isApplyingAi: false,
           aiStatusMessage: '',
+          aiStreamingRaw: '',
           aiChatHistory: finalHistory,
         });
         clearHistory();
       } catch (error: any) {
         const errMsg = error?.errors?.[0]?.message ?? error?.message ?? 'AI command failed';
         const errorRetryLog = error?.retry_log?.length ? error.retry_log : undefined;
+        const streamedText = get().aiStreamingRaw;
+        const debugRawResponse = error?.debug_raw_response || streamedText || undefined;
         set({
           isApplyingAi: false,
           aiStatusMessage: '',
-          aiChatHistory: [...updatedHistory, { role: 'assistant', content: `Error: ${errMsg}`, retryLog: errorRetryLog }],
+          aiStreamingRaw: '',
+          aiChatHistory: [...updatedHistory, { role: 'assistant', content: `Error: ${errMsg}`, retryLog: errorRetryLog, debugRawResponse }],
           apiError: errMsg,
         });
       }
     },
-    clearAiChat: () => set({ aiChatHistory: [], aiChatOpen: false, aiCommand: '' }),
-    setAiChatOpen: (open) => set({ aiChatOpen: open }),
+    clearAiChat: () => set({ aiChatHistory: [], aiStreamingChunks: [], rightSidebarMode: 'inspector' as RightSidebarMode, aiCommand: '' }),
+    setRightSidebarMode: (mode) => set({ rightSidebarMode: mode }),
+    startNewModel: () => {
+      const fresh = cloneModel(blankModel);
+      const scenarioDefaults = defaultScenarios(fresh);
+      const dashboardDefaults = defaultDashboards(fresh);
+      const sensitivityDefaults = defaultSensitivityConfigs(fresh);
+      set({
+        model: fresh,
+        scenarios: scenarioDefaults.scenarios,
+        activeScenarioId: scenarioDefaults.activeScenarioId,
+        dashboards: dashboardDefaults.dashboards,
+        activeDashboardId: dashboardDefaults.activeDashboardId,
+        sensitivityConfigs: sensitivityDefaults.sensitivityConfigs,
+        activeSensitivityConfigId: sensitivityDefaults.activeSensitivityConfigId,
+        selected: null,
+        results: null,
+        compareResults: null,
+        oatResults: null,
+        monteCarloResults: null,
+        validation: defaultValidation(),
+        localIssues: [],
+        aiChatHistory: [],
+        aiStreamingChunks: [],
+        aiStreamingRaw: '',
+        aiCommand: '',
+        apiError: null,
+      });
+      clearHistory();
+    },
     loadModel: (model) => {
       const cloned = cloneModel({ ...model, global_variables: model.global_variables ?? [] });
       const scenarioDefaults = defaultScenarios(cloned);
@@ -1216,72 +1078,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
         monteCarloResults: null,
         validation: defaultValidation(),
         localIssues: localValidate(persisted),
-        activeSimulationMode: 'native_json',
-        importedVensim: null,
-        vensimSelectedOutputs: [],
-        vensimParamOverrides: {},
-        isLoadingVensimPreset: false,
-        loadingVensimPresetId: null,
       });
       clearHistory();
-    },
-    importVensim: async (file) => {
-      set({ apiError: null, isValidating: true });
-      try {
-        const importedVensim = await importVensimFile(file);
-        applyImportedVensimState(importedVensim);
-      } catch (error: any) {
-        set({ isValidating: false, apiError: error?.errors?.[0]?.message ?? error?.message ?? 'Vensim import failed' });
-      }
-    },
-    loadVensimPreset: async (preset) => {
-      set({
-        apiError: null,
-        isValidating: true,
-        isLoadingVensimPreset: true,
-        loadingVensimPresetId: preset.id,
-      });
-      const state = get();
-      const cached = state.vensimPresetCache[preset.id];
-      if (cached) {
-        try {
-          await getVensimDiagnostics(cached.import_id);
-          applyImportedVensimState(cached);
-          return;
-        } catch {
-          // Session expired; fallback to fresh import below.
-        }
-      }
-      try {
-        const file = new File([preset.source], preset.filename, { type: 'text/plain' });
-        const importedVensim = await importVensimFile(file);
-        const status = summarizeImportStatus(importedVensim);
-        applyImportedVensimState(importedVensim, {
-          vensimPresetCache: {
-            ...get().vensimPresetCache,
-            [preset.id]: importedVensim,
-          },
-          vensimPresetStatus: {
-            ...get().vensimPresetStatus,
-            [preset.id]: status,
-          },
-        });
-      } catch (error: any) {
-        const message = error?.errors?.[0]?.message ?? error?.message ?? `Vensim preset import failed: ${preset.filename}`;
-        set((current) => ({
-          isValidating: false,
-          apiError: message,
-          vensimPresetStatus: {
-            ...current.vensimPresetStatus,
-            [preset.id]: {
-              status: 'failed',
-              summary: message,
-            },
-          },
-        }));
-      } finally {
-        set({ isLoadingVensimPreset: false, loadingVensimPresetId: null });
-      }
     },
     createScenario: () => {
       set((state) => {
