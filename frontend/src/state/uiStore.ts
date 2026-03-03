@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { MfaMissingValueRule, MfaTimeUnit } from '../lib/mfaExport';
 
+export type FlyoutPanel = 'components' | 'outline' | 'variables' | 'settings' | 'search' | null;
+
 type UIState = {
   leftRailCollapsed: boolean;
   rightRailCollapsed: boolean;
@@ -13,6 +15,7 @@ type UIState = {
   mfaTimeAnchorDate: string;
   mfaTimeUnit: MfaTimeUnit;
   mfaMissingValueRule: MfaMissingValueRule;
+  activeFlyout: FlyoutPanel;
   toggleLeftRail: () => void;
   toggleRightRail: () => void;
   openRightRail: () => void;
@@ -26,6 +29,8 @@ type UIState = {
   setMfaTimeAnchorDate: (anchorDate: string) => void;
   setMfaTimeUnit: (timeUnit: MfaTimeUnit) => void;
   setMfaMissingValueRule: (rule: MfaMissingValueRule) => void;
+  setActiveFlyout: (panel: FlyoutPanel) => void;
+  toggleFlyout: (panel: FlyoutPanel) => void;
 };
 
 export const useUIStore = create<UIState>((set) => ({
@@ -40,6 +45,7 @@ export const useUIStore = create<UIState>((set) => ({
   mfaTimeAnchorDate: '',
   mfaTimeUnit: 'day',
   mfaMissingValueRule: 'carry_forward',
+  activeFlyout: null,
   toggleLeftRail: () => set((s) => ({ leftRailCollapsed: !s.leftRailCollapsed })),
   toggleRightRail: () => set((s) => ({ rightRailCollapsed: !s.rightRailCollapsed })),
   openRightRail: () => set(() => ({ rightRailCollapsed: false })),
@@ -54,4 +60,6 @@ export const useUIStore = create<UIState>((set) => ({
   setMfaTimeAnchorDate: (anchorDate) => set(() => ({ mfaTimeAnchorDate: anchorDate })),
   setMfaTimeUnit: (timeUnit) => set(() => ({ mfaTimeUnit: timeUnit })),
   setMfaMissingValueRule: (rule) => set(() => ({ mfaMissingValueRule: rule })),
+  setActiveFlyout: (panel) => set({ activeFlyout: panel }),
+  toggleFlyout: (panel) => set((s) => ({ activeFlyout: s.activeFlyout === panel ? null : panel })),
 }));

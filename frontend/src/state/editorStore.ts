@@ -37,7 +37,7 @@ import type {
 
 export type DockTab = 'validation' | 'chart' | 'table' | 'compare';
 export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity';
-export type RightSidebarMode = 'inspector' | 'chat';
+export type RightSidebarMode = 'inspector' | 'chat' | 'simulation';
 
 type Selection =
   | { kind: 'node'; id: string }
