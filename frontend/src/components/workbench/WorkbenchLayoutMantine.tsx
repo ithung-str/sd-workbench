@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { AppShell, Group, Select, Tabs, Text, Title, ActionIcon, Menu, ScrollArea } from '@mantine/core';
+import { AppShell, Button, Group, SegmentedControl, Select, Tabs, Text, Title, Tooltip, ActionIcon, Menu, ScrollArea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconMenu2, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+import { IconMenu2, IconChevronLeft, IconChevronRight, IconPlus, IconSettings, IconMessageCircle } from '@tabler/icons-react';
 import { ModelCanvas } from '../canvas/ModelCanvas';
 import { PalettePanel } from '../palette/PalettePanelMantine';
 import { InspectorPanel } from '../inspector/InspectorPanelMantine';
@@ -11,10 +10,11 @@ import { FormulaPage } from '../formulas/FormulaPage';
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ScenarioPage } from '../scenarios/ScenarioPage';
 import { SensitivityPage } from '../sensitivity/SensitivityPage';
-import { AIChatPanel } from './AIChatPanel';
+import { AIChatSidebar } from './AIChatSidebar';
 import { ImportExportControls } from '../io/ImportExportControls';
 import { useUIStore } from '../../state/uiStore';
 import { modelPresets, type ModelPresetKey } from '../../lib/sampleModels';
+import { specEntries, specGroups, loadSpecContent } from '../../lib/specCatalog';
 import { useEditorStore, type WorkbenchTab } from '../../state/editorStore';
 
 const defaultLogoUrl = new URL('../../../icons/logo.c8183304f1fb39b2784238e3b10258dd.svg', import.meta.url).href;
@@ -27,9 +27,12 @@ export function WorkbenchLayout() {
 
   const model = useEditorStore((s) => s.model);
   const loadModel = useEditorStore((s) => s.loadModel);
+  const startNewModel = useEditorStore((s) => s.startNewModel);
+  const isApplyingAi = useEditorStore((s) => s.isApplyingAi);
   const activeTab = useEditorStore((s) => s.activeTab);
   const setActiveTab = useEditorStore((s) => s.setActiveTab);
-  const aiChatOpen = useEditorStore((s) => s.aiChatOpen);
+  const rightSidebarMode = useEditorStore((s) => s.rightSidebarMode);
+  const setRightSidebarMode = useEditorStore((s) => s.setRightSidebarMode);
   const logoUrl = (import.meta.env.VITE_SC_LOGO_URL as string | undefined) || defaultLogoUrl;
   const bottomTrayExpanded = useUIStore((s) => s.bottomTrayExpanded);
   const bottomTrayHeight = useUIStore((s) => s.bottomTrayHeight);
@@ -46,12 +49,41 @@ export function WorkbenchLayout() {
 
   const selectedNative = presetOptions.find((option) => model.name === modelPresets[option.key].name)?.key ?? 'blank';
 
+  const pickerData = [
+    { group: 'Presets', items: presetOptions.map((opt) => ({ value: opt.key, label: opt.label })) },
+    ...specGroups().map((group) => ({
+      group: `Spec: ${group}`,
+      items: specEntries
+        .filter((e) => e.group === group)
+        .map((e) => ({ value: `spec:${e.id}`, label: `${e.chapter}.${e.id.split('_')[1]} ${e.title}` })),
+    })),
+  ];
+
+  const handlePickerChange = (value: string | null) => {
+    if (!value) return;
+    if (value.startsWith('spec:')) {
+      const specId = value.replace('spec:', '');
+      const entry = specEntries.find((e) => e.id === specId);
+      if (!entry) return;
+      const content = loadSpecContent(entry);
+      if (!content) return;
+      // Open AI chat sidebar and send the spec as a prompt
+      const store = useEditorStore.getState();
+      store.setRightSidebarMode('chat');
+      openRight();
+      store.setAiCommand(`Build a complete SD model from this specification:\n\n${content}`);
+      void store.runAiCommand();
+    } else {
+      loadModel(modelPresets[value as ModelPresetKey]);
+    }
+  };
+
   return (
     <AppShell
       header={{ height: WORKBENCH_HEADER_HEIGHT }}
       footer={{ height: isCanvas ? (bottomTrayExpanded ? bottomTrayHeight : 68) : 0 }}
       navbar={{ width: 320, breakpoint: 'sm', collapsed: { mobile: !isCanvas || !leftOpened, desktop: !isCanvas || !leftOpened } }}
-      aside={{ width: 300, breakpoint: 'md', collapsed: { mobile: !isCanvas || !rightOpened, desktop: !isCanvas || !rightOpened } }}
+      aside={{ width: 300, breakpoint: 'md', collapsed: { mobile: !rightOpened, desktop: !rightOpened } }}
       padding="0"
     >
       <AppShell.Header>
@@ -91,13 +123,13 @@ export function WorkbenchLayout() {
             <Select
               aria-label="Model picker"
               value={selectedNative}
-              onChange={(value) => {
-                if (!value) return;
-                loadModel(modelPresets[value as ModelPresetKey]);
-              }}
-              data={presetOptions.map((opt) => ({ value: opt.key, label: opt.label }))}
-              w={220}
+              onChange={handlePickerChange}
+              data={pickerData}
+              w={280}
               size="xs"
+              searchable
+              maxDropdownHeight={400}
+              placeholder="Select a model or specification..."
             />
           </Group>
 
@@ -126,6 +158,19 @@ export function WorkbenchLayout() {
                 <Tabs.Tab value="sensitivity">Sensitivity</Tabs.Tab>
               </Tabs.List>
             </Tabs>
+
+            <Tooltip label="Start a new blank model">
+              <Button
+                size="compact-xs"
+                variant="light"
+                color="violet"
+                leftSection={<IconPlus size={14} />}
+                onClick={() => { startNewModel(); setRightSidebarMode('chat'); openRight(); }}
+                disabled={isApplyingAi}
+              >
+                New
+              </Button>
+            </Tooltip>
 
             <Menu opened={menuOpened} onChange={setMenuOpened}>
               <Menu.Target>
@@ -170,9 +215,34 @@ export function WorkbenchLayout() {
       <AppShell.Aside p={0}>
         <div className="sidebar-panel">
           <div className="sidebar-panel-header">
-            <Text size="sm" fw={700} className="sidebar-panel-title">
-              Inspector
-            </Text>
+            <SegmentedControl
+              size="xs"
+              value={rightSidebarMode}
+              onChange={(v) => setRightSidebarMode(v as 'inspector' | 'chat')}
+              data={[
+                {
+                  value: 'inspector',
+                  label: (
+                    <Group gap={4}>
+                      <IconSettings size={14} />
+                      <span>Inspector</span>
+                    </Group>
+                  ),
+                },
+                {
+                  value: 'chat',
+                  label: (
+                    <Group gap={4}>
+                      <IconMessageCircle size={14} />
+                      <span>AI Chat</span>
+                    </Group>
+                  ),
+                },
+              ]}
+              styles={{
+                root: { flex: 1 },
+              }}
+            />
             <ActionIcon
               size="sm"
               variant="subtle"
@@ -185,11 +255,16 @@ export function WorkbenchLayout() {
               <IconChevronRight size={16} />
             </ActionIcon>
           </div>
-          <ScrollArea className="sidebar-panel-scroll">
-            <div className="sidebar-panel-body sidebar-panel-body-right">
-              <InspectorPanel />
-            </div>
-          </ScrollArea>
+
+          {rightSidebarMode === 'inspector' ? (
+            <ScrollArea className="sidebar-panel-scroll">
+              <div className="sidebar-panel-body sidebar-panel-body-right">
+                <InspectorPanel />
+              </div>
+            </ScrollArea>
+          ) : (
+            <AIChatSidebar />
+          )}
         </div>
       </AppShell.Aside>
 
@@ -206,21 +281,6 @@ export function WorkbenchLayout() {
           <>
             <ModelCanvas />
 
-            {aiChatOpen && createPortal(
-              <div style={{
-                position: 'fixed',
-                bottom: bottomTrayExpanded ? bottomTrayHeight + 12 : 68 + 12,
-                right: 12,
-                zIndex: 9000,
-                transition: 'bottom 180ms ease',
-                maxHeight: `calc(100vh - ${WORKBENCH_HEADER_HEIGHT}px - ${bottomTrayExpanded ? bottomTrayHeight : 68}px - 24px)`,
-                display: 'flex',
-              }}>
-                <AIChatPanel />
-              </div>,
-              document.body,
-            )}
-
             {!leftOpened && (
               <ActionIcon
                 className="sidebar-reopen-tab sidebar-reopen-tab-left"
@@ -236,21 +296,23 @@ export function WorkbenchLayout() {
               </ActionIcon>
             )}
 
-            {!rightOpened && (
-              <ActionIcon
-                className="sidebar-reopen-tab sidebar-reopen-tab-right"
-                variant="filled"
-                color="deepPurple"
-                size="lg"
-                data-testid="right-expand"
-                aria-label="Expand right sidebar"
-                title="Expand right sidebar"
-                onClick={openRight}
-              >
-                <IconChevronLeft size={18} />
-              </ActionIcon>
-            )}
           </>
+        )}
+
+        {!rightOpened && (
+          <ActionIcon
+            className="sidebar-reopen-tab sidebar-reopen-tab-right"
+            variant="filled"
+            color="deepPurple"
+            size="lg"
+            data-testid="right-expand"
+            aria-label="Expand right sidebar"
+            title="Expand right sidebar"
+            onClick={openRight}
+            style={{ position: 'fixed', right: 0, top: '50%', zIndex: 100 }}
+          >
+            <IconChevronLeft size={18} />
+          </ActionIcon>
         )}
 
         {activeTab === 'formulas' && <FormulaPage />}
