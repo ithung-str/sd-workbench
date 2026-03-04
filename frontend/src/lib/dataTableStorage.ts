@@ -61,6 +61,7 @@ export async function listDataTables(): Promise<DataTableMeta[]> {
       rowCount: t.rows.length,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
+      googleSheets: t.googleSheets,
     }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

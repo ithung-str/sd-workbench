@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from 'react';
 import { MantineProvider, createTheme, MantineColorsTuple } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 
@@ -29,11 +30,19 @@ const theme = createTheme({
   },
 });
 
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
 export function AppProviders({ children }: PropsWithChildren) {
-  return (
+  const content = (
     <MantineProvider theme={theme}>
       <Notifications position="top-right" zIndex={2000} />
       {children}
     </MantineProvider>
   );
+
+  if (googleClientId) {
+    return <GoogleOAuthProvider clientId={googleClientId}>{content}</GoogleOAuthProvider>;
+  }
+
+  return content;
 }

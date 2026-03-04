@@ -324,11 +324,13 @@ export type AnalysisNodeType = 'data_source' | 'code' | 'output';
 export type AnalysisNode = {
   id: string;
   type: AnalysisNodeType;
+  name?: string;
   x: number;
   y: number;
   w?: number;
   h?: number;
   code?: string;
+  description?: string;
   data_table_id?: string;
 };
 

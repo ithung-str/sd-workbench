@@ -230,9 +230,28 @@ export type ExecutePipelineRequest = {
   edges: Array<{ source: string; target: string }>;
 };
 
+export type ColumnStats = {
+  dtype: string;
+  count: number;
+  nulls: number;
+  mean?: number | null;
+  std?: number | null;
+  min?: number | null;
+  max?: number | null;
+  '25%'?: number | null;
+  '50%'?: number | null;
+  '75%'?: number | null;
+  unique?: number;
+};
+
 export type NodeResultResponse = {
   ok: boolean;
-  preview?: { columns: Array<{ key: string; label: string; type: string }>; rows: unknown[][] };
+  preview?: {
+    columns: Array<{ key: string; label: string; type: string }>;
+    rows: unknown[][];
+    dtypes?: Record<string, string>;
+    stats?: Record<string, ColumnStats>;
+  };
   shape?: number[];
   logs?: string;
   error?: string;

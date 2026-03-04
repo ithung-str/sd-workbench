@@ -1,0 +1,49 @@
+.analysis-node .node-controls {
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.analysis-node:hover .node-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Zoom level transitions */
+.analysis-node .node-zoom-content {
+  transition: opacity 150ms ease, max-height 150ms ease;
+}
+
+/* Status stripe - left border on the card */
+.analysis-node .node-card {
+  transition: border-color 150ms ease;
+}
+
+.analysis-node .node-card--ok {
+  border-left: 4px solid #2f9e44;
+}
+
+.analysis-node .node-card--error {
+  border-left: 4px solid #e03131;
+}
+
+.analysis-node .node-card--none {
+  border-left: 4px solid #dee2e6;
+}
+
+/* Mini zoom level */
+.analysis-node .node-zoom-mini {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Summary zoom level */
+.analysis-node .node-zoom-summary {
+  padding: 8px 12px;
+  overflow: hidden;
+}

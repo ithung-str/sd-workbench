@@ -215,7 +215,7 @@ type EditorState = {
   updatePipeline: (id: string, patch: Partial<AnalysisPipeline>) => void;
   deletePipeline: (id: string) => void;
   setActivePipeline: (id: string) => void;
-  runPipeline: (runFrom?: string) => Promise<void>;
+  runPipeline: (nodeIds?: string[]) => Promise<void>;
   analysisComponents: AnalysisComponent[];
   saveAnalysisComponent: (name: string, code: string) => void;
   deleteAnalysisComponent: (id: string) => void;
@@ -1811,16 +1811,23 @@ export const useEditorStore = create<EditorState>((set, get) => {
         model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, id, state.analysisComponents),
       }));
     },
-    runPipeline: async (runFrom) => {
+    runPipeline: async (nodeIds) => {
       const { pipelines, activePipelineId } = get();
       const pipeline = pipelines.find((p) => p.id === activePipelineId);
       if (!pipeline) return;
 
-      set({ isRunningPipeline: true, analysisResults: {} });
+      // Filter to subset if nodeIds provided
+      const nodeIdSet = nodeIds ? new Set(nodeIds) : null;
+      const filteredNodes = nodeIdSet ? pipeline.nodes.filter((n) => nodeIdSet.has(n.id)) : pipeline.nodes;
+      const filteredEdges = nodeIdSet
+        ? pipeline.edges.filter((e) => nodeIdSet.has(e.source) && nodeIdSet.has(e.target))
+        : pipeline.edges;
+
+      set({ isRunningPipeline: true, ...(nodeIdSet ? {} : { analysisResults: {} }) });
 
       try {
         const execNodes = [];
-        for (const node of pipeline.nodes) {
+        for (const node of filteredNodes) {
           if (node.type === 'data_source' && node.data_table_id) {
             const { loadDataTable } = await import('../lib/dataTableStorage');
             const table = await loadDataTable(node.data_table_id);
@@ -1840,12 +1847,20 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
         const response = await executePipeline({
           pipeline_id: pipeline.id,
-          run_from: runFrom ?? null,
+          run_from: null,
           nodes: execNodes,
-          edges: pipeline.edges,
+          edges: filteredEdges,
         });
 
-        set({ analysisResults: response.results, isRunningPipeline: false });
+        // Merge results (partial run keeps previous results for nodes not in scope)
+        if (nodeIdSet) {
+          set((state) => ({
+            analysisResults: { ...state.analysisResults, ...response.results },
+            isRunningPipeline: false,
+          }));
+        } else {
+          set({ analysisResults: response.results, isRunningPipeline: false });
+        }
       } catch {
         set({ isRunningPipeline: false });
       }
