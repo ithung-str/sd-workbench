@@ -1,24 +1,36 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Handle, Position, type NodeProps, NodeResizer } from 'reactflow';
-import { Box, Text, Table, ScrollArea } from '@mantine/core';
-import { IconCode } from '@tabler/icons-react';
+import { ActionIcon, Box, Text, TextInput, Table, ScrollArea, Tooltip } from '@mantine/core';
+import { IconCode, IconDeviceFloppy } from '@tabler/icons-react';
 import Editor from '@monaco-editor/react';
 import type { NodeResultResponse } from '../../../lib/api';
 
 type CodeData = {
   code?: string;
   onUpdate: (patch: Record<string, unknown>) => void;
+  onSaveComponent?: (name: string, code: string) => void;
   result?: NodeResultResponse;
   selected?: boolean;
 };
 
 export function CodeNode({ data }: NodeProps<CodeData>) {
+  const [saveName, setSaveName] = useState('');
+  const [showSave, setShowSave] = useState(false);
+
   const handleCodeChange = useCallback(
     (value: string | undefined) => {
       data.onUpdate({ code: value ?? '' });
     },
     [data],
   );
+
+  const handleSave = () => {
+    if (saveName.trim() && data.code && data.onSaveComponent) {
+      data.onSaveComponent(saveName.trim(), data.code);
+      setSaveName('');
+      setShowSave(false);
+    }
+  };
 
   const result = data.result;
   const preview = result?.ok ? result.preview : null;
@@ -40,10 +52,33 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
         <Box style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
           <IconCode size={14} color="#862e9c" />
           <Text size="xs" fw={600} c="violet.8">Code</Text>
+          {data.onSaveComponent && (
+            <Tooltip label="Save as component">
+              <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => setShowSave(!showSave)} style={{ marginLeft: 'auto' }}>
+                <IconDeviceFloppy size={12} />
+              </ActionIcon>
+            </Tooltip>
+          )}
           {result && (
-            <Box style={{ marginLeft: 'auto', width: 8, height: 8, borderRadius: '50%', background: result.ok ? '#2f9e44' : '#e03131' }} />
+            <Box style={{ marginLeft: data.onSaveComponent ? 0 : 'auto', width: 8, height: 8, borderRadius: '50%', background: result.ok ? '#2f9e44' : '#e03131' }} />
           )}
         </Box>
+
+        {showSave && (
+          <Box style={{ display: 'flex', gap: 4, padding: '4px 12px', borderBottom: '1px solid #f0f0f0' }}>
+            <TextInput
+              size="xs"
+              placeholder="Component name"
+              value={saveName}
+              onChange={(e) => setSaveName(e.currentTarget.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+              style={{ flex: 1 }}
+            />
+            <ActionIcon size="sm" variant="filled" color="violet" onClick={handleSave} disabled={!saveName.trim()}>
+              <IconDeviceFloppy size={12} />
+            </ActionIcon>
+          </Box>
+        )}
 
         <Handle type="target" position={Position.Left} />
         <Handle type="source" position={Position.Right} />

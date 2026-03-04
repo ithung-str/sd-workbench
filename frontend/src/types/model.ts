@@ -319,6 +319,38 @@ export type SensitivityConfig = {
   seed?: number;
 };
 
+export type AnalysisNodeType = 'data_source' | 'code' | 'output';
+
+export type AnalysisNode = {
+  id: string;
+  type: AnalysisNodeType;
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+  code?: string;
+  data_table_id?: string;
+};
+
+export type AnalysisEdge = {
+  id: string;
+  source: string;
+  target: string;
+};
+
+export type AnalysisPipeline = {
+  id: string;
+  name: string;
+  nodes: AnalysisNode[];
+  edges: AnalysisEdge[];
+};
+
+export type AnalysisComponent = {
+  id: string;
+  name: string;
+  code: string;
+};
+
 export type AnalysisConfig = {
   scenarios: ScenarioDefinition[];
   defaults?: {
@@ -326,10 +358,13 @@ export type AnalysisConfig = {
     active_dashboard_id?: string;
     active_sensitivity_config_id?: string;
     active_optimisation_config_id?: string;
+    active_pipeline_id?: string;
   };
   dashboards?: DashboardDefinition[];
   sensitivity_configs?: SensitivityConfig[];
   optimisation_configs?: OptimisationConfig[];
+  pipelines?: AnalysisPipeline[];
+  analysis_components?: AnalysisComponent[];
 };
 
 export type ScenarioRunResult = {

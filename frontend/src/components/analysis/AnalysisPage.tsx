@@ -27,6 +27,7 @@ function pipelineNodesToFlow(
   nodes: AnalysisNodeT[],
   results: Record<string, any>,
   onUpdate: (nodeId: string, patch: Record<string, unknown>) => void,
+  onSaveComponent: (name: string, code: string) => void,
   selectedNodeId: string | null,
 ): Node[] {
   return nodes.map((n) => ({
@@ -39,6 +40,7 @@ function pipelineNodesToFlow(
       result: results[n.id],
       selected: n.id === selectedNodeId,
       onUpdate: (patch: Record<string, unknown>) => onUpdate(n.id, patch),
+      onSaveComponent: n.type === 'code' ? onSaveComponent : undefined,
     },
   }));
 }
@@ -61,6 +63,8 @@ export function AnalysisPage() {
   const runPipeline = useEditorStore((s) => s.runPipeline);
   const isRunningPipeline = useEditorStore((s) => s.isRunningPipeline);
   const analysisResults = useEditorStore((s) => s.analysisResults);
+  const analysisComponents = useEditorStore((s) => s.analysisComponents);
+  const saveAnalysisComponent = useEditorStore((s) => s.saveAnalysisComponent);
 
   const activePipeline = pipelines.find((p) => p.id === activePipelineId) ?? null;
 
@@ -76,8 +80,8 @@ export function AnalysisPage() {
   );
 
   const flowNodes = useMemo(
-    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, analysisResults, handleUpdateNode, null) : [],
-    [activePipeline, analysisResults, handleUpdateNode],
+    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, analysisResults, handleUpdateNode, saveAnalysisComponent, null) : [],
+    [activePipeline, analysisResults, handleUpdateNode, saveAnalysisComponent],
   );
 
   const flowEdges = useMemo(
@@ -144,7 +148,7 @@ export function AnalysisPage() {
   );
 
   const handleAddNode = useCallback(
-    (type: AnalysisNodeType) => {
+    (type: AnalysisNodeType, code?: string) => {
       if (!activePipeline) return;
       const id = `node_${Date.now()}`;
       const newNode: AnalysisNodeT = {
@@ -152,7 +156,7 @@ export function AnalysisPage() {
         type,
         x: 100 + activePipeline.nodes.length * 50,
         y: 100 + activePipeline.nodes.length * 50,
-        ...(type === 'code' ? { code: '# Transform your data\ndf = df', w: 350, h: 300 } : {}),
+        ...(type === 'code' ? { code: code ?? '# Transform your data\ndf = df', w: 350, h: 300 } : {}),
       };
       updatePipeline(activePipeline.id, { nodes: [...activePipeline.nodes, newNode] });
     },
@@ -189,6 +193,7 @@ export function AnalysisPage() {
       <AnalysisToolbar
         pipeline={activePipeline}
         isRunning={isRunningPipeline}
+        components={analysisComponents}
         onUpdatePipeline={updatePipeline}
         onAddNode={handleAddNode}
         onRun={() => void runPipeline()}

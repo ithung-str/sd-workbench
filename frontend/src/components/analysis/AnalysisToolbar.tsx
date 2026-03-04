@@ -1,16 +1,17 @@
-import { Button, Group, Menu, TextInput } from '@mantine/core';
-import { IconPlayerPlay, IconPlus, IconCode, IconDatabase, IconTableFilled } from '@tabler/icons-react';
-import type { AnalysisPipeline, AnalysisNodeType } from '../../types/model';
+import { Button, Group, Menu, Text, TextInput } from '@mantine/core';
+import { IconPlayerPlay, IconPlus, IconCode, IconDatabase, IconTableFilled, IconPuzzle } from '@tabler/icons-react';
+import type { AnalysisComponent, AnalysisPipeline, AnalysisNodeType } from '../../types/model';
 
 type Props = {
   pipeline: AnalysisPipeline;
   isRunning: boolean;
+  components: AnalysisComponent[];
   onUpdatePipeline: (id: string, patch: Partial<AnalysisPipeline>) => void;
-  onAddNode: (type: AnalysisNodeType) => void;
+  onAddNode: (type: AnalysisNodeType, code?: string) => void;
   onRun: () => void;
 };
 
-export function AnalysisToolbar({ pipeline, isRunning, onUpdatePipeline, onAddNode, onRun }: Props) {
+export function AnalysisToolbar({ pipeline, isRunning, components, onUpdatePipeline, onAddNode, onRun }: Props) {
   return (
     <Group
       gap="sm"
@@ -36,6 +37,27 @@ export function AnalysisToolbar({ pipeline, isRunning, onUpdatePipeline, onAddNo
           </Menu.Item>
         </Menu.Dropdown>
       </Menu>
+
+      {components.length > 0 && (
+        <Menu shadow="md" width={220}>
+          <Menu.Target>
+            <Button size="xs" variant="subtle" leftSection={<IconPuzzle size={14} />}>
+              Components
+            </Button>
+          </Menu.Target>
+          <Menu.Dropdown>
+            {components.map((comp) => (
+              <Menu.Item
+                key={comp.id}
+                leftSection={<IconCode size={14} />}
+                onClick={() => onAddNode('code', comp.code)}
+              >
+                <Text size="xs" truncate>{comp.name}</Text>
+              </Menu.Item>
+            ))}
+          </Menu.Dropdown>
+        </Menu>
+      )}
 
       <Button
         size="xs"

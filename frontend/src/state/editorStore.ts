@@ -24,6 +24,7 @@ import {
 import type {
   AIChatComponentGroup,
   AIChatMessage,
+  AnalysisComponent,
   AnalysisPipeline,
   BatchSimulateResponse,
   CldSymbol,
@@ -215,6 +216,9 @@ type EditorState = {
   deletePipeline: (id: string) => void;
   setActivePipeline: (id: string) => void;
   runPipeline: (runFrom?: string) => Promise<void>;
+  analysisComponents: AnalysisComponent[];
+  saveAnalysisComponent: (name: string, code: string) => void;
+  deleteAnalysisComponent: (id: string) => void;
   addDashboardCard: (dashboardId: string, card: Omit<DashboardCard, 'id' | 'order'> & { id?: string; order?: number }) => void;
   updateDashboardCard: (dashboardId: string, cardId: string, patch: Partial<DashboardCard>) => void;
   moveDashboardCard: (dashboardId: string, cardId: string, direction: 'up' | 'down') => void;
@@ -396,6 +400,7 @@ function persistAnalysis(
   activeOptimisationConfigId?: string,
   pipelines?: AnalysisPipeline[],
   activePipelineId?: string | null,
+  analysisComponents?: AnalysisComponent[],
 ): ModelDocument {
   return {
     ...model,
@@ -407,6 +412,7 @@ function persistAnalysis(
         sensitivity_configs: sensitivityConfigs,
         optimisation_configs: optimisationConfigs,
         pipelines: pipelines,
+        analysis_components: analysisComponents,
         defaults: {
           baseline_scenario_id: activeScenarioId,
           active_dashboard_id: activeDashboardId ?? undefined,
@@ -518,6 +524,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
       initialOptimisationConfigs.activeOptimisationConfigId,
       (initialModel.metadata?.analysis as any)?.pipelines ?? [],
       (initialModel.metadata?.analysis as any)?.defaults?.active_pipeline_id ?? null,
+      (initialModel.metadata?.analysis as any)?.analysis_components ?? [],
     ),
     selected: null,
     simConfig: { start: 0, stop: 30, dt: 1, method: 'euler' },
@@ -533,6 +540,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     activePipelineId: (initialModel.metadata?.analysis as any)?.defaults?.active_pipeline_id ?? null,
     analysisResults: {},
     isRunningPipeline: false,
+    analysisComponents: (initialModel.metadata?.analysis as any)?.analysis_components ?? [],
     optimisationResults: null,
     isRunningOptimisation: false,
     optimisationProgress: null,
@@ -1193,8 +1201,9 @@ export const useEditorStore = create<EditorState>((set, get) => {
           sensitivityDefaults.activeSensitivityConfigId,
           optimisationDefaults.optimisationConfigs,
           optimisationDefaults.activeOptimisationConfigId,
-          state.pipelines,
-          state.activePipelineId,
+          get().pipelines,
+          get().activePipelineId,
+          get().analysisComponents,
         );
         set({
           model: persisted,
@@ -1253,6 +1262,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         activeSensitivityConfigId: sensitivityDefaults.activeSensitivityConfigId,
         optimisationConfigs: optimisationDefaults.optimisationConfigs,
         activeOptimisationConfigId: optimisationDefaults.activeOptimisationConfigId,
+        analysisComponents: [],
         optimisationResults: null,
         isRunningOptimisation: false,
         optimisationProgress: null,
@@ -1279,6 +1289,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const optimisationDefaults = defaultOptimisationConfigs(cloned);
       const pipelinesFromModel = (cloned.metadata?.analysis as any)?.pipelines ?? [];
       const activePipelineFromModel = (cloned.metadata?.analysis as any)?.defaults?.active_pipeline_id ?? null;
+      const componentsFromModel = (cloned.metadata?.analysis as any)?.analysis_components ?? [];
       const persisted = persistAnalysis(
         cloned,
         scenarioDefaults.scenarios,
@@ -1291,6 +1302,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         optimisationDefaults.activeOptimisationConfigId,
         pipelinesFromModel,
         activePipelineFromModel,
+        componentsFromModel,
       );
       set({
         model: persisted,
@@ -1304,6 +1316,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         activeOptimisationConfigId: optimisationDefaults.activeOptimisationConfigId,
         pipelines: pipelinesFromModel,
         activePipelineId: activePipelineFromModel,
+        analysisComponents: componentsFromModel,
         analysisResults: {},
         isRunningPipeline: false,
         optimisationResults: null,
@@ -1338,7 +1351,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             state.sensitivityConfigs, state.activeSensitivityConfigId,
             state.optimisationConfigs, state.activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1369,7 +1382,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             state.sensitivityConfigs, state.activeSensitivityConfigId,
             state.optimisationConfigs, state.activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1399,7 +1412,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             state.sensitivityConfigs, state.activeSensitivityConfigId,
             state.optimisationConfigs, state.activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1416,7 +1429,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             state.sensitivityConfigs, state.activeSensitivityConfigId,
             state.optimisationConfigs, state.activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1424,7 +1437,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     setActiveScenario: (id) => {
       set((state) => ({
         activeScenarioId: id,
-        model: persistAnalysis(state.model, state.scenarios, id, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId),
+        model: persistAnalysis(state.model, state.scenarios, id, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, state.analysisComponents),
       }));
     },
     updateDefaultStyle: (nodeType, style) => {
@@ -1467,7 +1480,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return {
           dashboards,
           activeDashboardId: id,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, state.analysisComponents),
         };
       });
     },
@@ -1478,7 +1491,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         );
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, state.analysisComponents),
         };
       });
     },
@@ -1489,14 +1502,14 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return {
           dashboards,
           activeDashboardId,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, state.analysisComponents),
         };
       });
     },
     setActiveDashboard: (id) => {
       set((state) => ({
         activeDashboardId: id,
-        model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId),
+        model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, state.analysisComponents),
       }));
     },
     createSensitivityConfig: () => {
@@ -1523,7 +1536,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             sensitivityConfigs, activeSensitivityConfigId,
             state.optimisationConfigs, state.activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1547,7 +1560,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             sensitivityConfigs, activeSensitivityConfigId,
             state.optimisationConfigs, state.activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1564,7 +1577,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             sensitivityConfigs, state.activeSensitivityConfigId,
             state.optimisationConfigs, state.activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1584,7 +1597,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             sensitivityConfigs, activeSensitivityConfigId,
             state.optimisationConfigs, state.activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1653,7 +1666,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             state.sensitivityConfigs, state.activeSensitivityConfigId,
             optimisationConfigs, activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1677,7 +1690,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             state.sensitivityConfigs, state.activeSensitivityConfigId,
             optimisationConfigs, activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1694,7 +1707,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             state.sensitivityConfigs, state.activeSensitivityConfigId,
             optimisationConfigs, state.activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1715,7 +1728,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.dashboards, state.activeDashboardId,
             state.sensitivityConfigs, state.activeSensitivityConfigId,
             optimisationConfigs, activeOptimisationConfigId,
-            state.pipelines, state.activePipelineId,
+            state.pipelines, state.activePipelineId, state.analysisComponents,
           ),
         };
       });
@@ -1767,7 +1780,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return {
           pipelines,
           activePipelineId: id,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, pipelines, id),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, pipelines, id, state.analysisComponents),
         };
       });
     },
@@ -1776,7 +1789,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         const pipelines = state.pipelines.map((p) => (p.id === id ? { ...p, ...patch } : p));
         return {
           pipelines,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, pipelines, state.activePipelineId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, pipelines, state.activePipelineId, state.analysisComponents),
         };
       });
     },
@@ -1787,7 +1800,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return {
           pipelines,
           activePipelineId,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, pipelines, activePipelineId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, pipelines, activePipelineId, state.analysisComponents),
         };
       });
     },
@@ -1795,7 +1808,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
       set((state) => ({
         activePipelineId: id,
         analysisResults: {},
-        model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, id),
+        model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, id, state.analysisComponents),
       }));
     },
     runPipeline: async (runFrom) => {
@@ -1836,6 +1849,26 @@ export const useEditorStore = create<EditorState>((set, get) => {
       } catch {
         set({ isRunningPipeline: false });
       }
+    },
+    saveAnalysisComponent: (name, code) => {
+      set((state) => {
+        const id = `comp_${Date.now()}`;
+        const component: AnalysisComponent = { id, name, code };
+        const analysisComponents = [...state.analysisComponents, component];
+        return {
+          analysisComponents,
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, analysisComponents),
+        };
+      });
+    },
+    deleteAnalysisComponent: (id) => {
+      set((state) => {
+        const analysisComponents = state.analysisComponents.filter((c) => c.id !== id);
+        return {
+          analysisComponents,
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, analysisComponents),
+        };
+      });
     },
     addDashboardCard: (dashboardId, card) => {
       set((state) => {
@@ -1879,7 +1912,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, state.analysisComponents),
         };
       });
     },
@@ -1894,7 +1927,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, state.analysisComponents),
         };
       });
     },
@@ -1915,7 +1948,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, state.analysisComponents),
         };
       });
     },
@@ -1928,7 +1961,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, state.activePipelineId, state.analysisComponents),
         };
       });
     },
