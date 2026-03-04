@@ -11,7 +11,10 @@ import {
 } from '@mantine/core';
 import { IconPlayerPlay } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
-import type { ScenarioRunResult } from '../../types/model';
+import type { DashboardCard, ScenarioRunResult } from '../../types/model';
+import { CardConfigPanel } from './CardConfigPanel';
+import { listDataTables } from '../../lib/dataTableStorage';
+import type { DataTableMeta } from '../../types/dataTable';
 import { DashboardCanvasPanel } from './DashboardCanvasPanel';
 import { DashboardListPanel } from './DashboardListPanel';
 import { DashboardToolbar } from './DashboardToolbar';
@@ -64,8 +67,18 @@ export function DashboardPage() {
   const activeScenarioId = useEditorStore((s) => s.activeScenarioId);
 
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [dataTables, setDataTables] = useState<DataTableMeta[]>([]);
+
+  useEffect(() => {
+    listDataTables().then(setDataTables).catch(() => setDataTables([]));
+  }, []);
 
   const activeDashboard = dashboards.find((d) => d.id === activeDashboardId) ?? null;
+
+  useEffect(() => {
+    setSelectedCardId(null);
+  }, [activeDashboardId]);
 
   const variableOptions = useMemo(() => {
     const nodeOptions = model.nodes
@@ -112,6 +125,16 @@ export function DashboardPage() {
   }, [dedupedRuns, activeScenarioId]);
 
   const selectedRun = dedupedRuns.find((run) => run.scenario_id === selectedScenarioId) ?? null;
+
+  const selectedCard = activeDashboard?.cards.find((c) => c.id === selectedCardId) ?? null;
+
+  const handleUpdateSelectedCard = useCallback(
+    (patch: Partial<DashboardCard>) => {
+      if (!activeDashboard || !selectedCardId) return;
+      updateDashboardCard(activeDashboard.id, selectedCardId, patch);
+    },
+    [activeDashboard, selectedCardId, updateDashboardCard],
+  );
 
   const handleDuplicate = useCallback(
     (id: string) => {
@@ -205,6 +228,8 @@ export function DashboardPage() {
                 onUpdateCard={updateDashboardCard}
                 onDeleteCard={deleteDashboardCard}
                 variableOptions={variableOptions}
+                selectedCardId={selectedCardId}
+                onSelectCard={setSelectedCardId}
               />
             ) : (
               <Box style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -213,6 +238,17 @@ export function DashboardPage() {
             )}
           </Box>
         </Box>
+
+        {/* Right: config panel */}
+        {selectedCard && activeDashboard && (
+          <CardConfigPanel
+            card={selectedCard}
+            variableOptions={variableOptions}
+            dataTables={dataTables}
+            onUpdate={handleUpdateSelectedCard}
+            onClose={() => setSelectedCardId(null)}
+          />
+        )}
       </Box>
     </Box>
     </DashboardErrorBoundary>
