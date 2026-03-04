@@ -72,19 +72,29 @@ const CARD_TYPE_LABEL: Record<DashboardCardType, string> = {
 };
 
 const CARD_TYPE_DATA = [
-  { value: 'kpi', label: 'KPI', group: 'Simulation' },
-  { value: 'line', label: 'Line Chart', group: 'Simulation' },
-  { value: 'table', label: 'Sim Table', group: 'Simulation' },
-  { value: 'sparkline', label: 'Sparkline', group: 'Simulation' },
-  { value: 'comparison', label: 'Comparison', group: 'Simulation' },
-  { value: 'heatmap', label: 'Heatmap', group: 'Simulation' },
-  { value: 'map', label: 'Stock-Flow Map', group: 'Simulation' },
-  { value: 'data_bar', label: 'Bar Chart', group: 'Data Table' },
-  { value: 'data_stacked_bar', label: 'Stacked Bar', group: 'Data Table' },
-  { value: 'data_area', label: 'Area Chart', group: 'Data Table' },
-  { value: 'data_pie', label: 'Pie Chart', group: 'Data Table' },
-  { value: 'data_table', label: 'Data Table', group: 'Data Table' },
-  { value: 'data_pivot', label: 'Pivot Table', group: 'Data Table' },
+  {
+    group: 'Simulation',
+    items: [
+      { value: 'kpi', label: 'KPI' },
+      { value: 'line', label: 'Line Chart' },
+      { value: 'table', label: 'Sim Table' },
+      { value: 'sparkline', label: 'Sparkline' },
+      { value: 'comparison', label: 'Comparison' },
+      { value: 'heatmap', label: 'Heatmap' },
+      { value: 'map', label: 'Stock-Flow Map' },
+    ],
+  },
+  {
+    group: 'Data Table',
+    items: [
+      { value: 'data_bar', label: 'Bar Chart' },
+      { value: 'data_stacked_bar', label: 'Stacked Bar' },
+      { value: 'data_area', label: 'Area Chart' },
+      { value: 'data_pie', label: 'Pie Chart' },
+      { value: 'data_table', label: 'Data Table' },
+      { value: 'data_pivot', label: 'Pivot Table' },
+    ],
+  },
 ];
 
 const SINGLE_VAR_TYPES: DashboardCardType[] = ['kpi', 'line', 'table', 'sparkline'];

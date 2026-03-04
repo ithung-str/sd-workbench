@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Component, useCallback, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from 'react';
 import {
+  Alert,
   Badge,
   Box,
   Button,
@@ -14,6 +15,26 @@ import type { ScenarioRunResult } from '../../types/model';
 import { DashboardCanvasPanel } from './DashboardCanvasPanel';
 import { DashboardListPanel } from './DashboardListPanel';
 import { DashboardToolbar } from './DashboardToolbar';
+
+class DashboardErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error('Dashboard crash:', error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <Alert color="red" title="Dashboard Error" m="md">
+          <Text size="sm">{this.state.error.message}</Text>
+          <Text size="xs" c="dimmed" mt="xs" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+            {this.state.error.stack}
+          </Text>
+          <Button size="xs" mt="sm" onClick={() => this.setState({ error: null })}>Retry</Button>
+        </Alert>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function dedupeRuns(runs: ScenarioRunResult[]): ScenarioRunResult[] {
   const seen = new Set<string>();
@@ -103,6 +124,7 @@ export function DashboardPage() {
   );
 
   return (
+    <DashboardErrorBoundary>
     <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <Group
@@ -193,5 +215,6 @@ export function DashboardPage() {
         </Box>
       </Box>
     </Box>
+    </DashboardErrorBoundary>
   );
 }
