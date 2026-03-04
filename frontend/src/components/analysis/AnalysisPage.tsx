@@ -189,7 +189,7 @@ export function AnalysisPage() {
   }
 
   return (
-    <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <AnalysisToolbar
         pipeline={activePipeline}
         isRunning={isRunningPipeline}
@@ -198,7 +198,7 @@ export function AnalysisPage() {
         onAddNode={handleAddNode}
         onRun={() => void runPipeline()}
       />
-      <Box style={{ flex: 1 }}>
+      <Box style={{ flex: 1, position: 'relative' }}>
         <ReactFlow
           nodes={flowNodes}
           edges={flowEdges}

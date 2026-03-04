@@ -67,6 +67,7 @@ export function WorkbenchLayout() {
   const logoUrl = (import.meta.env.VITE_SC_LOGO_URL as string | undefined) || defaultLogoUrl;
 
   const isCanvas = activeTab === 'canvas';
+  const isAnalysis = activeTab === 'analysis';
 
   // When leaving canvas, switch away from canvas-only sidebar modes
   useEffect(() => {
@@ -281,7 +282,7 @@ export function WorkbenchLayout() {
             flexDirection: 'column',
             minWidth: 0,
             position: 'relative',
-            overflow: isCanvas ? 'hidden' : 'auto',
+            overflow: (isCanvas || isAnalysis) ? 'hidden' : 'auto',
           }}
         >
           {activeTab === 'canvas' && <ModelCanvas />}
