@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Table, Text } from '@mantine/core';
 import type { DashboardCard } from '../../types/model';
 import type { DataTable } from '../../types/dataTable';
+import { applyFilters } from '../../lib/dataTableFilters';
 
 type AggregateFn = NonNullable<DashboardCard['aggregate_fn']>;
 
@@ -47,8 +48,9 @@ export function DataPivotCardContent({ card, table }: Props) {
     const valueIdx = table.columns.findIndex((c) => c.key === valueCol);
     if (groupIdx < 0 || valueIdx < 0) return [];
 
+    const filteredRows = applyFilters(table, card.filters ?? []);
     const groups = new Map<string, number[]>();
-    for (const row of table.rows) {
+    for (const row of filteredRows) {
       const key = row[groupIdx] != null ? String(row[groupIdx]) : '(empty)';
       const val = row[valueIdx];
       const num = typeof val === 'number' ? val : Number(val);
@@ -68,7 +70,7 @@ export function DataPivotCardContent({ card, table }: Props) {
         count: values.length,
       }))
       .sort((a, b) => b.value - a.value);
-  }, [table, groupCol, valueCol, fn]);
+  }, [table, groupCol, valueCol, fn, card.filters]);
 
   if (!groupCol || !valueCol) {
     return <Text size="xs" c="dimmed">Configure group column, value column, and aggregation.</Text>;

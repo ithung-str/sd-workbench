@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Table, Text } from '@mantine/core';
 import type { DashboardCard } from '../../types/model';
 import type { DataTable } from '../../types/dataTable';
+import { applyFilters } from '../../lib/dataTableFilters';
 
 type Props = {
   card: DashboardCard;
@@ -11,9 +12,14 @@ type Props = {
 export function DataTableCardContent({ card, table }: Props) {
   const maxRows = card.data_table_rows ?? 20;
 
+  const filteredRows = useMemo(
+    () => applyFilters(table, card.filters ?? []),
+    [table, card.filters],
+  );
+
   const displayRows = useMemo(
-    () => table.rows.slice(0, maxRows),
-    [table.rows, maxRows],
+    () => filteredRows.slice(0, maxRows),
+    [filteredRows, maxRows],
   );
 
   if (table.columns.length === 0) {
@@ -45,9 +51,9 @@ export function DataTableCardContent({ card, table }: Props) {
           </Table.Tr>
         ))}
       </Table.Tbody>
-      {table.rows.length > maxRows && (
+      {filteredRows.length > maxRows && (
         <Table.Caption>
-          Showing {maxRows} of {table.rows.length} rows
+          Showing {maxRows} of {filteredRows.length} rows
         </Table.Caption>
       )}
     </Table>

@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import type { DashboardCard } from '../../types/model';
 import type { DataTable } from '../../types/dataTable';
+import { applyFilters } from '../../lib/dataTableFilters';
 
 const COLORS = ['#1b6ca8', '#d46a00', '#2f7d32', '#8a2be2', '#d32f2f', '#00838f', '#c2185b', '#455a64'];
 
@@ -28,7 +29,8 @@ export function DataPieCardContent({ card, table }: Props) {
     const yIdx = table.columns.findIndex((c) => c.key === yCol);
     if (xIdx < 0 || yIdx < 0) return [];
 
-    return table.rows
+    const filteredRows = applyFilters(table, card.filters ?? []);
+    return filteredRows
       .map((row) => {
         const val = row[yIdx];
         return {
@@ -37,7 +39,7 @@ export function DataPieCardContent({ card, table }: Props) {
         };
       })
       .filter((d) => d.value > 0);
-  }, [table, xCol, yCol]);
+  }, [table, xCol, yCol, card.filters]);
 
   if (!xCol || !yCol) {
     return <Text size="xs" c="dimmed">Configure label column and value column.</Text>;

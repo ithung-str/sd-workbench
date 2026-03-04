@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import type { DashboardCard } from '../../types/model';
 import type { DataTable } from '../../types/dataTable';
+import { applyFilters } from '../../lib/dataTableFilters';
 
 const COLORS = ['#1b6ca8', '#d46a00', '#2f7d32', '#8a2be2', '#d32f2f', '#00838f', '#c2185b', '#455a64'];
 
@@ -31,7 +32,8 @@ export function DataBarCardContent({ card, table, stacked = false }: Props) {
     const yIdxs = yCols.map((key) => table.columns.findIndex((c) => c.key === key));
     if (xIdx < 0 || yIdxs.some((i) => i < 0)) return [];
 
-    return table.rows.map((row) => {
+    const filteredRows = applyFilters(table, card.filters ?? []);
+    return filteredRows.map((row) => {
       const entry: Record<string, string | number> = {
         [xCol]: row[xIdx] != null ? String(row[xIdx]) : '',
       };
@@ -41,7 +43,7 @@ export function DataBarCardContent({ card, table, stacked = false }: Props) {
       }
       return entry;
     });
-  }, [table, xCol, yCols]);
+  }, [table, xCol, yCols, card.filters]);
 
   if (!xCol || yCols.length === 0) {
     return <Text size="xs" c="dimmed">Configure X column and Y column(s).</Text>;
