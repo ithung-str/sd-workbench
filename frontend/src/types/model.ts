@@ -281,6 +281,22 @@ export type DashboardCard = {
   value_column?: string;
   aggregate_fn?: 'sum' | 'avg' | 'count' | 'min' | 'max';
   data_table_rows?: number;
+  // Filters (data cards)
+  filters?: Array<{ column: string; operator: string; value: string | string[] }>;
+  series_column?: string;
+  // Display options (sim cards)
+  y_min?: number;
+  y_max?: number;
+  decimals?: number;
+  unit_suffix?: string;
+  show_data_points?: boolean;
+  reference_line?: number;
+  // Style options (both families)
+  line_color?: string;
+  line_style?: 'solid' | 'dashed' | 'dotted';
+  show_legend?: boolean;
+  show_grid?: boolean;
+  color_palette?: string;
 };
 
 export type DashboardDefinition = {
