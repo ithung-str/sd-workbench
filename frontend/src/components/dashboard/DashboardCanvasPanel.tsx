@@ -16,6 +16,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -266,25 +267,33 @@ function ComparisonContent({ card, run }: { card: DashboardCard; run: ScenarioRu
     return row;
   });
 
+  const yDomain: [number | string, number | string] = [
+    card.y_min != null ? card.y_min : 'auto',
+    card.y_max != null ? card.y_max : 'auto',
+  ];
+
   return (
     <Box h={220}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
+          {card.show_grid !== false && <CartesianGrid strokeDasharray="3 3" />}
           <XAxis dataKey="time" />
-          <YAxis />
+          <YAxis domain={yDomain} />
           <Tooltip />
-          <Legend />
+          {card.show_legend !== false && <Legend />}
           {vars.map((v, i) => (
             <Line
               key={v}
               type="monotone"
               dataKey={v}
               stroke={COMPARISON_COLORS[i % COMPARISON_COLORS.length]}
-              dot={false}
+              dot={card.show_data_points ?? false}
               strokeWidth={2}
             />
           ))}
+          {card.reference_line != null && (
+            <ReferenceLine y={card.reference_line} stroke="#888" strokeDasharray="4 4" label="Ref" />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </Box>
@@ -349,25 +358,45 @@ function CardContent({
 
   if (card.type === 'kpi') {
     const value = latestFinite(run.series[card.variable]);
+    const decimals = card.decimals ?? 4;
+    const suffix = card.unit_suffix ?? '';
     return (
       <Stack gap={6}>
         <Text size="xs" c="dimmed">Latest value</Text>
-        <Text fw={700} size="xl">{value == null ? 'N/A' : value.toFixed(4)}</Text>
+        <Text fw={700} size="xl">
+          {value == null ? 'N/A' : `${value.toFixed(decimals)}${suffix}`}
+        </Text>
       </Stack>
     );
   }
 
   if (card.type === 'line') {
     const rows = lineRows(run, card.variable);
+    const yDomain: [number | string, number | string] = [
+      card.y_min != null ? card.y_min : 'auto',
+      card.y_max != null ? card.y_max : 'auto',
+    ];
+    const strokeDash = card.line_style === 'dashed' ? '8 4' : card.line_style === 'dotted' ? '2 2' : undefined;
     return (
       <Box h={220}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={rows}>
-            <CartesianGrid strokeDasharray="3 3" />
+            {card.show_grid !== false && <CartesianGrid strokeDasharray="3 3" />}
             <XAxis dataKey="time" />
-            <YAxis />
+            <YAxis domain={yDomain} />
             <Tooltip />
-            <Line type="monotone" dataKey="value" stroke="#5e35b1" dot={false} />
+            {card.show_legend !== false && <Legend />}
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={card.line_color ?? '#5e35b1'}
+              dot={card.show_data_points ?? false}
+              strokeWidth={2}
+              strokeDasharray={strokeDash}
+            />
+            {card.reference_line != null && (
+              <ReferenceLine y={card.reference_line} stroke="#888" strokeDasharray="4 4" label="Ref" />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </Box>

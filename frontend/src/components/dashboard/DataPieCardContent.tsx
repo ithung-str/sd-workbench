@@ -11,8 +11,7 @@ import {
 import type { DashboardCard } from '../../types/model';
 import type { DataTable } from '../../types/dataTable';
 import { applyFilters } from '../../lib/dataTableFilters';
-
-const COLORS = ['#1b6ca8', '#d46a00', '#2f7d32', '#8a2be2', '#d32f2f', '#00838f', '#c2185b', '#455a64'];
+import { getPalette } from '../../lib/chartPalettes';
 
 type Props = {
   card: DashboardCard;
@@ -49,6 +48,8 @@ export function DataPieCardContent({ card, table }: Props) {
     return <Text size="xs" c="dimmed">No data to display.</Text>;
   }
 
+  const colors = getPalette(card.color_palette);
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <PieChart>
@@ -64,11 +65,11 @@ export function DataPieCardContent({ card, table }: Props) {
           style={{ fontSize: 10 }}
         >
           {data.map((_, i) => (
-            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+            <Cell key={i} fill={colors[i % colors.length]} />
           ))}
         </Pie>
         <Tooltip />
-        <Legend wrapperStyle={{ fontSize: 10 }} />
+        {card.show_legend !== false && <Legend wrapperStyle={{ fontSize: 10 }} />}
       </PieChart>
     </ResponsiveContainer>
   );
