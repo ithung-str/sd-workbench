@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionIcon,
   Alert,
-  Badge,
   Box,
   Card,
   Group,
@@ -49,22 +48,6 @@ const DATA_CARD_TYPES: DashboardCardType[] = [
 function isDataCard(type: DashboardCardType): boolean {
   return DATA_CARD_TYPES.includes(type);
 }
-
-const CARD_TYPE_LABEL: Record<DashboardCardType, string> = {
-  kpi: 'KPI',
-  line: 'LINE',
-  table: 'TABLE',
-  map: 'MAP',
-  heatmap: 'HEATMAP',
-  sparkline: 'SPARK',
-  comparison: 'COMPARE',
-  data_bar: 'BAR',
-  data_stacked_bar: 'STACKED',
-  data_area: 'AREA',
-  data_pie: 'PIE',
-  data_table: 'DATA',
-  data_pivot: 'PIVOT',
-};
 
 const CANVAS_MIN_HEIGHT = 720;
 const COMPARISON_COLORS = ['#1b6ca8', '#d46a00', '#2f7d32', '#8a2be2', '#d32f2f', '#00838f'];
@@ -232,8 +215,8 @@ function SparklineContent({ card, run }: { card: DashboardCard; run: ScenarioRun
   const latest = latestFinite(values);
 
   return (
-    <Stack gap={2} align="center">
-      <svg viewBox={`0 0 ${svgW} ${svgH}`} width="100%" height={svgH} preserveAspectRatio="none">
+    <Stack gap={4} align="center" justify="center" h="100%">
+      <svg viewBox={`0 0 ${svgW} ${svgH}`} width="100%" style={{ flex: 1, minHeight: 0 }} preserveAspectRatio="none">
         <polyline
           points={points}
           fill="none"
@@ -244,7 +227,7 @@ function SparklineContent({ card, run }: { card: DashboardCard; run: ScenarioRun
       </svg>
       <Group gap={8} justify="center">
         <Text size="xs" c="dimmed">{card.variable}</Text>
-        <Text size="xs" fw={600}>{latest != null ? latest.toFixed(2) : 'N/A'}</Text>
+        <Text size="sm" fw={600}>{latest != null ? latest.toFixed(2) : 'N/A'}</Text>
       </Group>
     </Stack>
   );
@@ -273,14 +256,14 @@ function ComparisonContent({ card, run }: { card: DashboardCard; run: ScenarioRu
   ];
 
   return (
-    <Box h={220}>
+    <Box style={{ width: '100%', height: '100%' }}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          {card.show_grid !== false && <CartesianGrid strokeDasharray="3 3" />}
-          <XAxis dataKey="time" />
-          <YAxis domain={yDomain} />
-          <Tooltip />
-          {card.show_legend !== false && <Legend />}
+        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+          {card.show_grid !== false && <CartesianGrid stroke="#f0f0f0" vertical={false} />}
+          <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#868e96' }} axisLine={{ stroke: '#dee2e6' }} tickLine={false} />
+          <YAxis domain={yDomain} tick={{ fontSize: 11, fill: '#868e96' }} axisLine={false} tickLine={false} width={50} />
+          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e9ecef', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} />
+          {card.show_legend !== false && <Legend wrapperStyle={{ fontSize: 11, color: '#868e96' }} />}
           {vars.map((v, i) => (
             <Line
               key={v}
@@ -358,14 +341,14 @@ function CardContent({
 
   if (card.type === 'kpi') {
     const value = latestFinite(run.series[card.variable]);
-    const decimals = card.decimals ?? 4;
+    const decimals = card.decimals ?? 2;
     const suffix = card.unit_suffix ?? '';
     return (
-      <Stack gap={6}>
-        <Text size="xs" c="dimmed">Latest value</Text>
-        <Text fw={700} size="xl">
+      <Stack gap={2} align="center" justify="center" h="100%">
+        <Text fw={700} style={{ fontSize: 32, lineHeight: 1.1 }}>
           {value == null ? 'N/A' : `${value.toFixed(decimals)}${suffix}`}
         </Text>
+        <Text size="xs" c="dimmed">{card.variable}</Text>
       </Stack>
     );
   }
@@ -378,14 +361,14 @@ function CardContent({
     ];
     const strokeDash = card.line_style === 'dashed' ? '8 4' : card.line_style === 'dotted' ? '2 2' : undefined;
     return (
-      <Box h={220}>
+      <Box style={{ width: '100%', height: '100%' }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows}>
-            {card.show_grid !== false && <CartesianGrid strokeDasharray="3 3" />}
-            <XAxis dataKey="time" />
-            <YAxis domain={yDomain} />
-            <Tooltip />
-            {card.show_legend !== false && <Legend />}
+          <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+            {card.show_grid !== false && <CartesianGrid stroke="#f0f0f0" vertical={false} />}
+            <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#868e96' }} axisLine={{ stroke: '#dee2e6' }} tickLine={false} />
+            <YAxis domain={yDomain} tick={{ fontSize: 11, fill: '#868e96' }} axisLine={false} tickLine={false} width={50} />
+            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e9ecef', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} />
+            {card.show_legend !== false && <Legend wrapperStyle={{ fontSize: 11, color: '#868e96' }} />}
             <Line
               type="monotone"
               dataKey="value"
@@ -452,12 +435,12 @@ type Props = {
   activeDashboardId: string;
   onUpdateCard: (dashboardId: string, cardId: string, patch: Partial<DashboardCard>) => void;
   onDeleteCard: (dashboardId: string, cardId: string) => void;
-  variableOptions: Array<{ value: string; label: string }>;
   selectedCardId: string | null;
   onSelectCard: (cardId: string | null) => void;
 };
 
-export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, onUpdateCard, onDeleteCard, variableOptions, selectedCardId, onSelectCard }: Props) {
+export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, onUpdateCard, onDeleteCard, selectedCardId, onSelectCard }: Props) {
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const sortedCards = useMemo(
     () => cards.slice().sort((a, b) => a.order - b.order),
     [cards],
@@ -693,21 +676,21 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
         position: 'relative',
         width: '100%',
         height: canvasHeight,
-        backgroundImage:
-          'linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)',
-        backgroundSize: `${DASHBOARD_GRID_SIZE}px ${DASHBOARD_GRID_SIZE}px`,
+        background: '#f8f9fa',
         borderRadius: 8,
       }}
     >
       {sortedCards.map((card) => {
         const rect = cardLayout[card.id] ?? layoutSeed[card.id] ?? resolveCardRect(card);
+        const isHovered = hoveredCardId === card.id || selectedCardId === card.id;
         return (
           <Card
             key={card.id}
-            withBorder
-            shadow="sm"
             radius="md"
+            p="sm"
             onClick={() => onSelectCard(card.id === selectedCardId ? null : card.id)}
+            onMouseEnter={() => setHoveredCardId(card.id)}
+            onMouseLeave={() => setHoveredCardId(null)}
             style={{
               position: 'absolute',
               left: rect.x,
@@ -716,35 +699,43 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
               height: rect.h,
               overflow: 'hidden',
               cursor: 'pointer',
-              outline: card.id === selectedCardId ? '2px solid var(--mantine-color-blue-5)' : undefined,
-              outlineOffset: card.id === selectedCardId ? -1 : undefined,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)',
+              border: card.id === selectedCardId ? '1.5px solid var(--mantine-color-blue-4)' : '1px solid transparent',
+              transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
             }}
           >
-            <Stack gap="xs" h="100%">
+            <Stack gap={4} h="100%">
               <Group justify="space-between" wrap="nowrap">
                 <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
                   <ActionIcon
                     variant="subtle"
+                    size="xs"
                     aria-label="Drag card"
                     title="Drag card"
                     onPointerDown={(event) => beginDrag(event, card.id)}
-                    style={{ cursor: dragState?.cardId === card.id ? 'grabbing' : 'grab' }}
+                    style={{
+                      cursor: dragState?.cardId === card.id ? 'grabbing' : 'grab',
+                      opacity: isHovered ? 1 : 0,
+                      transition: 'opacity 0.15s ease',
+                      pointerEvents: isHovered ? 'auto' : 'none',
+                    }}
                   >
-                    <IconGripVertical size={14} />
+                    <IconGripVertical size={12} />
                   </ActionIcon>
-                  <Text fw={700} lineClamp={1}>{card.title}</Text>
+                  <Text fw={500} size="sm" c="dimmed" lineClamp={1}>{card.title}</Text>
                 </Group>
-                <Group gap={4} wrap="nowrap">
-                  <Badge variant="light" size="sm">{CARD_TYPE_LABEL[card.type] ?? card.type.toUpperCase()}</Badge>
-                  <ActionIcon
-                    variant="subtle"
-                    size="sm"
-                    color="red"
-                    onClick={(e) => { e.stopPropagation(); onDeleteCard(activeDashboardId, card.id); }}
-                  >
-                    <IconTrash size={14} />
-                  </ActionIcon>
-                </Group>
+                <ActionIcon
+                  variant="subtle"
+                  size="xs"
+                  color="red"
+                  onClick={(e) => { e.stopPropagation(); onDeleteCard(activeDashboardId, card.id); }}
+                  style={{
+                    opacity: isHovered ? 1 : 0,
+                    transition: 'opacity 0.15s ease',
+                  }}
+                >
+                  <IconTrash size={12} />
+                </ActionIcon>
               </Group>
               <Box style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                 <CardContent card={card} run={selectedRun} dataTableCache={dataTableCache} />
@@ -756,11 +747,9 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
                 position: 'absolute',
                 right: 0,
                 bottom: 0,
-                width: 16,
-                height: 16,
+                width: 12,
+                height: 12,
                 cursor: 'nwse-resize',
-                background: 'linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.15) 50%)',
-                borderRadius: '0 0 8px 0',
                 zIndex: 10,
               }}
             />

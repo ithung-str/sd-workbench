@@ -227,7 +227,6 @@ export function DashboardPage() {
                 activeDashboardId={activeDashboard.id}
                 onUpdateCard={updateDashboardCard}
                 onDeleteCard={deleteDashboardCard}
-                variableOptions={variableOptions}
                 selectedCardId={selectedCardId}
                 onSelectCard={setSelectedCardId}
               />

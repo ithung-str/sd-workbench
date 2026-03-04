@@ -55,12 +55,12 @@ export function DataAreaCardContent({ card, table }: Props) {
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-        {card.show_grid !== false && <CartesianGrid strokeDasharray="3 3" stroke="#eee" />}
-        <XAxis dataKey={xCol} tick={{ fontSize: 10 }} />
-        <YAxis tick={{ fontSize: 10 }} width={48} />
-        <Tooltip />
-        {card.show_legend !== false && yCols.length > 1 && <Legend wrapperStyle={{ fontSize: 10 }} />}
+      <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+        {card.show_grid !== false && <CartesianGrid stroke="#f0f0f0" vertical={false} />}
+        <XAxis dataKey={xCol} tick={{ fontSize: 11, fill: '#868e96' }} axisLine={{ stroke: '#dee2e6' }} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#868e96' }} axisLine={false} tickLine={false} width={50} />
+        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e9ecef', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} />
+        {card.show_legend !== false && yCols.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: '#868e96' }} />}
         {yCols.map((col, i) => (
           <Area
             key={col}

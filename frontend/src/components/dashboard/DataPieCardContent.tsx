@@ -62,14 +62,14 @@ export function DataPieCardContent({ card, table }: Props) {
           outerRadius="70%"
           label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
           labelLine={{ strokeWidth: 1 }}
-          style={{ fontSize: 10 }}
+          style={{ fontSize: 11 }}
         >
           {data.map((_, i) => (
             <Cell key={i} fill={colors[i % colors.length]} />
           ))}
         </Pie>
-        <Tooltip />
-        {card.show_legend !== false && <Legend wrapperStyle={{ fontSize: 10 }} />}
+        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e9ecef', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} />
+        {card.show_legend !== false && <Legend wrapperStyle={{ fontSize: 11, color: '#868e96' }} />}
       </PieChart>
     </ResponsiveContainer>
   );
