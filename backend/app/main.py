@@ -32,6 +32,7 @@ logging.basicConfig(
 )
 
 from app.api.routes_ai import router as ai_router
+from app.api.routes_analysis import router as analysis_router
 from app.api.routes_imports import router as imports_router
 from app.api.routes_models import router as models_router
 
@@ -48,3 +49,4 @@ app.add_middleware(
 app.include_router(models_router)
 app.include_router(ai_router)
 app.include_router(imports_router)
+app.include_router(analysis_router)
