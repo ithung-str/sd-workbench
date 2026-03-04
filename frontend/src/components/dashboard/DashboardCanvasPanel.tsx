@@ -520,6 +520,17 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
     return Math.max(CANVAS_MIN_HEIGHT, maxBottom);
   }, [sortedCards, cardLayout, layoutSeed]);
 
+  // Escape key to deselect
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedCardId) {
+        onSelectCard(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedCardId, onSelectCard]);
+
   // Drag logic
   const beginDrag = (event: React.PointerEvent<HTMLButtonElement>, cardId: string) => {
     const rect = cardLayoutRef.current[cardId];
