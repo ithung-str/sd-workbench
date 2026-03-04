@@ -13,7 +13,7 @@ import {
   Tooltip,
   UnstyledButton,
 } from '@mantine/core';
-import { IconTrash, IconUpload } from '@tabler/icons-react';
+import { IconBrandGoogle, IconRefresh, IconTrash, IconUpload } from '@tabler/icons-react';
 import type { DataTable, DataTableMeta } from '../../types/dataTable';
 import {
   listDataTables,
@@ -22,6 +22,66 @@ import {
   saveDataTable,
 } from '../../lib/dataTableStorage';
 import { parseCSV } from '../../lib/csvParser';
+import { GoogleSheetsImportModal } from '../analysis/GoogleSheetsImportModal';
+import { refreshGoogleSheetsTable } from '../../lib/googleSheetsApi';
+import { useGoogleAuth } from '../../lib/googleAuth';
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
+function SheetsImportButton({ onImported }: { onImported: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        size="compact-sm"
+        variant="light"
+        color="teal"
+        leftSection={<IconBrandGoogle size={14} />}
+        onClick={() => setOpen(true)}
+      >
+        Google Sheets
+      </Button>
+      <GoogleSheetsImportModal
+        opened={open}
+        onClose={() => setOpen(false)}
+        onImport={async (table) => {
+          await saveDataTable(table);
+          onImported(table.id);
+        }}
+      />
+    </>
+  );
+}
+
+function RefreshSheetButton({ tableId, onRefreshed }: { tableId: string; onRefreshed: () => void }) {
+  const { getToken } = useGoogleAuth();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRefreshing(true);
+    try {
+      const existing = await loadDataTable(tableId);
+      if (!existing || existing.source !== 'google_sheets') return;
+      const token = await getToken();
+      const updated = await refreshGoogleSheetsTable(existing, token);
+      await saveDataTable(updated);
+      onRefreshed();
+    } catch (err) {
+      window.alert(`Refresh failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <Tooltip label="Refresh from Google Sheets">
+      <ActionIcon size="xs" variant="subtle" color="blue" onClick={handleRefresh} loading={refreshing}>
+        <IconRefresh size={12} />
+      </ActionIcon>
+    </Tooltip>
+  );
+}
 
 export function DataPage() {
   const [tables, setTables] = useState<DataTableMeta[]>([]);
@@ -85,14 +145,19 @@ export function DataPage() {
         style={{ borderBottom: '1px solid var(--mantine-color-gray-3)', flexShrink: 0 }}
       >
         <Title order={4}>Data Tables</Title>
-        <Button
-          size="compact-sm"
-          variant="light"
-          leftSection={<IconUpload size={14} />}
-          onClick={() => fileRef.current?.click()}
-        >
-          Upload CSV
-        </Button>
+        <Group gap="xs">
+          <Button
+            size="compact-sm"
+            variant="light"
+            leftSection={<IconUpload size={14} />}
+            onClick={() => fileRef.current?.click()}
+          >
+            Upload CSV
+          </Button>
+          {googleClientId && (
+            <SheetsImportButton onImported={async (id) => { await refresh(); setSelectedId(id); }} />
+          )}
+        </Group>
         <input ref={fileRef} type="file" accept=".csv" onChange={handleUpload} hidden />
       </Group>
 
@@ -134,8 +199,12 @@ export function DataPage() {
                     <Group gap={4}>
                       <Badge size="xs" variant="light">{t.rowCount} rows</Badge>
                       <Badge size="xs" variant="light" color="gray">{t.columns.length} cols</Badge>
+                      {t.source === 'google_sheets' && <Badge size="xs" variant="light" color="teal">Sheets</Badge>}
                     </Group>
                   </UnstyledButton>
+                  {t.source === 'google_sheets' && googleClientId && (
+                    <RefreshSheetButton tableId={t.id} onRefreshed={refresh} />
+                  )}
                   <Tooltip label="Delete">
                     <ActionIcon size="xs" variant="subtle" color="red" onClick={() => handleDelete(t.id, t.name)}>
                       <IconTrash size={12} />
