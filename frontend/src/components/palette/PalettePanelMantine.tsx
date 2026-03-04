@@ -58,8 +58,6 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
   const model = useEditorStore((s) => s.model);
   const selected = useEditorStore((s) => s.selected);
   const setSelected = useEditorStore((s) => s.setSelected);
-  const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
-  const importedVensim = useEditorStore((s) => s.importedVensim);
   const updateDefaultStyle = useEditorStore((s) => s.updateDefaultStyle);
   const defaultStyles = model.metadata?.default_styles;
   const aiCommand = useEditorStore((s) => s.aiCommand);
@@ -170,7 +168,6 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
         </Accordion.Item>
 
         {/* ── Global Variables ── */}
-        {activeSimulationMode !== 'vensim' && (
           <Accordion.Item value="global-vars">
             <Accordion.Control>
               <Group gap={8} wrap="nowrap">
@@ -328,7 +325,6 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
               </Stack>
             </Accordion.Panel>
           </Accordion.Item>
-        )}
 
         {/* ── Global Styles ── */}
         <Accordion.Item value="global-styles">
@@ -426,114 +422,20 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
               />
               <Button
                 onClick={() => void runAiCommand()}
-                disabled={isApplyingAi || !aiCommand.trim() || activeSimulationMode === 'vensim'}
+                disabled={isApplyingAi || !aiCommand.trim()}
                 variant="light"
                 color="deepPurple"
                 size="sm"
               >
                 {isApplyingAi ? 'Applying...' : 'Send to AI'}
               </Button>
-              {activeSimulationMode === 'vensim' ? (
-                <Text size="xs" c="dimmed">
-                  AI canvas edits are available in native JSON mode.
-                </Text>
-              ) : (
-                <Text size="xs" c="dimmed">
-                  AI will ask clarifying questions if your request is ambiguous.
-                </Text>
-              )}
+              <Text size="xs" c="dimmed">
+                AI will ask clarifying questions if your request is ambiguous.
+              </Text>
             </Stack>
           </Accordion.Panel>
         </Accordion.Item>
 
-        {/* ── Vensim Compatibility (conditional) ── */}
-        {activeSimulationMode === 'vensim' && importedVensim && (
-          <Accordion.Item value="vensim-compat">
-            <Accordion.Control>
-              <Group gap="xs">
-                <IconAlertCircle size={16} />
-                <Text size="sm" fw={500}>Vensim Compatibility</Text>
-              </Group>
-            </Accordion.Control>
-            <Accordion.Panel>
-              <Paper p="sm" withBorder>
-                <Stack gap="xs">
-                  <Text size="sm">
-                    <strong>Tier:</strong> {importedVensim.capabilities.tier}
-                  </Text>
-                  <Text size="sm">
-                    <strong>Unsupported:</strong> {importedVensim.capabilities.unsupported.length || 0}
-                  </Text>
-                  <Text size="sm">
-                    <strong>Partial:</strong> {importedVensim.capabilities.partial.length || 0}
-                  </Text>
-                  {importedVensim.model_view.time_settings && (
-                    <Text size="sm">
-                      <strong>Time:</strong>{' '}
-                      {[
-                        importedVensim.model_view.time_settings.initial_time != null
-                          ? `start=${importedVensim.model_view.time_settings.initial_time}`
-                          : null,
-                        importedVensim.model_view.time_settings.final_time != null
-                          ? `stop=${importedVensim.model_view.time_settings.final_time}`
-                          : null,
-                        importedVensim.model_view.time_settings.time_step != null
-                          ? `dt=${importedVensim.model_view.time_settings.time_step}`
-                          : null,
-                        importedVensim.model_view.time_settings.saveper != null
-                          ? `saveper=${importedVensim.model_view.time_settings.saveper}`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(', ')}
-                    </Text>
-                  )}
-                  {importedVensim.capabilities.detected_functions.length > 0 && (
-                    <Text size="sm">
-                      <strong>Detected functions:</strong> {importedVensim.capabilities.detected_functions.slice(0, 8).join(', ')}
-                      {importedVensim.capabilities.detected_functions.length > 8 && '...'}
-                    </Text>
-                  )}
-                  {importedVensim.model_view.dependency_graph && (
-                    <Text size="sm">
-                      <strong>Graph:</strong> auto-generated dependency graph ({importedVensim.model_view.dependency_graph.edges.length} edges)
-                    </Text>
-                  )}
-                </Stack>
-              </Paper>
-            </Accordion.Panel>
-          </Accordion.Item>
-        )}
-
-        {/* ── Vensim Variables (conditional) ── */}
-        {activeSimulationMode === 'vensim' && importedVensim && (
-          <Accordion.Item value="vensim-vars">
-            <Accordion.Control>
-              <Group gap="xs">
-                <IconCode size={16} />
-                <Text size="sm" fw={500}>Vensim Variables</Text>
-                <Badge size="sm" variant="light" color="gray">
-                  {importedVensim.model_view.variables.length}
-                </Badge>
-              </Group>
-            </Accordion.Control>
-            <Accordion.Panel>
-              <ScrollArea h={300}>
-                <Stack gap="xs">
-                  {importedVensim.model_view.variables.slice(0, 40).map((v) => (
-                    <Paper key={v.name} p="xs" withBorder>
-                      <Group gap="xs" mb={v.equation ? 4 : 0}>
-                        <Badge size="sm" color="green">{v.kind ?? 'var'}</Badge>
-                        <Text size="sm">{v.name}</Text>
-                      </Group>
-                      {v.equation && <Code block style={{ fontSize: '0.75rem' }}>{v.equation}</Code>}
-                    </Paper>
-                  ))}
-                </Stack>
-              </ScrollArea>
-            </Accordion.Panel>
-          </Accordion.Item>
-        )}
       </Accordion>
       </Stack>
     </div>

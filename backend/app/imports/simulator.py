@@ -27,18 +27,6 @@ from app.schemas.model import (
     SimulateRequest,
 )
 from app.services.model_service import run_monte_carlo, run_oat_sensitivity, simulate_model, simulate_scenario_batch
-from app.vensim.schemas_compat import (
-    to_vensim_batch_request,
-    to_vensim_monte_carlo_request,
-    to_vensim_oat_request,
-    to_vensim_sim_request,
-)
-from app.vensim.simulator import (
-    run_vensim_monte_carlo,
-    run_vensim_oat_sensitivity,
-    simulate_imported_vensim,
-    simulate_imported_vensim_batch,
-)
 
 
 def _simcfg_from_imported(time: ImportedTimeSettings, override) -> SimConfig:
@@ -68,10 +56,6 @@ def simulate_imported_model(request: ImportedSimulateRequest) -> ImportedSimulat
     if session is None:
         raise imported_http_error(404, "IM_IMPORT_EXPIRED", "Import session not found or expired")
 
-    if session.source_format == "vensim-mdl":
-        v = simulate_imported_vensim(to_vensim_sim_request(request))
-        return ImportedSimulateResponse.model_validate(v.model_dump())
-
     if not session.canonical:
         raise imported_http_error(500, "IM_IMPORT_FAILED", "No canonical model available for this imported session")
 
@@ -93,10 +77,6 @@ def simulate_imported_model_batch(request: ImportedBatchSimulateRequest) -> Impo
     session = get_session(request.import_id)
     if session is None:
         raise imported_http_error(404, "IM_IMPORT_EXPIRED", "Import session not found or expired")
-
-    if session.source_format == "vensim-mdl":
-        v = simulate_imported_vensim_batch(to_vensim_batch_request(request))
-        return ImportedBatchSimulateResponse.model_validate(v.model_dump())
 
     if not session.canonical:
         raise imported_http_error(500, "IM_IMPORT_FAILED", "No canonical model available for this imported session")
@@ -129,8 +109,6 @@ def run_imported_oat_sensitivity(request: ImportedOATSensitivityRequest) -> Impo
     session = get_session(request.import_id)
     if session is None:
         raise imported_http_error(404, "IM_IMPORT_EXPIRED", "Import session not found or expired")
-    if session.source_format == "vensim-mdl":
-        return ImportedOATSensitivityResponse.model_validate(run_vensim_oat_sensitivity(to_vensim_oat_request(request)).model_dump())
     if not session.canonical:
         raise imported_http_error(500, "IM_IMPORT_FAILED", "No canonical model available for this imported session")
 
@@ -153,8 +131,6 @@ def run_imported_monte_carlo(request: ImportedMonteCarloRequest) -> ImportedMont
     session = get_session(request.import_id)
     if session is None:
         raise imported_http_error(404, "IM_IMPORT_EXPIRED", "Import session not found or expired")
-    if session.source_format == "vensim-mdl":
-        return ImportedMonteCarloResponse.model_validate(run_vensim_monte_carlo(to_vensim_monte_carlo_request(request)).model_dump())
     if not session.canonical:
         raise imported_http_error(500, "IM_IMPORT_FAILED", "No canonical model available for this imported session")
 

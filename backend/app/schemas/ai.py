@@ -47,6 +47,15 @@ class RetryLogEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class StreamChunk(BaseModel):
+    type: str       # "node" | "edge" | "action" | "message" | "clarification"
+    data: dict[str, Any]
+    status: str = "pending"   # "valid" | "warning" | "error"
+    errors: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class AIExecuteResponse(BaseModel):
     ok: bool
     model: ModelDocument | None = None
@@ -57,5 +66,7 @@ class AIExecuteResponse(BaseModel):
     needs_clarification: bool = False
     suggestions: list[str] = Field(default_factory=list)
     retry_log: list[RetryLogEntry] = Field(default_factory=list)
+    debug_raw_response: str | None = None
+    chunks: list[dict[str, Any]] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")

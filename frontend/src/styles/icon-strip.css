@@ -1,8 +1,8 @@
 .icon-strip {
   width: 44px;
   height: 100%;
-  background: #1a1a2e;
-  border-right: 1px solid #2a2a40;
+  background: #f3f3f8;
+  border-right: 1px solid #e7e7ee;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -10,17 +10,17 @@
 }
 
 .icon-strip-btn {
-  color: #9ca3af !important;
+  color: #6b7280 !important;
   border-radius: 8px;
   position: relative;
 }
 
 .icon-strip-btn:hover {
-  color: #e5e7eb !important;
-  background: rgba(255, 255, 255, 0.08) !important;
+  color: #374151 !important;
+  background: rgba(0, 0, 0, 0.06) !important;
 }
 
 .icon-strip-btn-active {
-  color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.12) !important;
+  color: #3D1F6F !important;
+  background: rgba(93, 53, 177, 0.1) !important;
 }

@@ -23,11 +23,22 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useEditorStore, type WorkbenchTab } from '../../state/editorStore';
-import type { AIChatMessage, RetryLogEntry } from '../../types/model';
+import type { AIChatComponentGroup, AIChatMessage, RetryLogEntry } from '../../types/model';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
+
+/** Strip markdown tables/headers from content when we have structured component groups */
+function trimBeforeMarkdownTables(content: string): string {
+  // Find the first markdown heading (##) or table row (| ... |) and cut there
+  const lines = content.split('\n');
+  const cutIdx = lines.findIndex((l) => /^#{1,3}\s/.test(l.trim()) || /^\|.*\|.*\|/.test(l.trim()));
+  if (cutIdx > 0) {
+    return lines.slice(0, cutIdx).join('\n').trim();
+  }
+  return content;
+}
 
 const ACTION_COLORS: Record<string, string> = {
   success: 'green',
@@ -158,6 +169,41 @@ function DebugRawResponseSection({ text }: { text: string }) {
   );
 }
 
+function ComponentGroups({ groups }: { groups: AIChatComponentGroup[] }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggle = (type: string) =>
+    setExpanded((prev) => ({ ...prev, [type]: !prev[type] }));
+
+  return (
+    <Stack gap={2} mt={6}>
+      {groups.map((group) => (
+        <Box key={group.type}>
+          <Group
+            gap={6}
+            style={{ cursor: 'pointer' }}
+            onClick={() => toggle(group.type)}
+          >
+            {expanded[group.type] ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+            <Badge size="xs" variant="light" color="violet">
+              {group.type} ({group.names.length})
+            </Badge>
+          </Group>
+          <Collapse in={!!expanded[group.type]}>
+            <Stack gap={1} ml={20} mt={2}>
+              {group.names.map((name) => (
+                <Text key={name} size="xs" style={{ lineHeight: 1.4 }}>
+                  {name}
+                </Text>
+              ))}
+            </Stack>
+          </Collapse>
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
 function ChatBubble({
   msg,
   isLast,
@@ -196,8 +242,11 @@ function ChatBubble({
           {msg.role === 'user' ? 'You' : 'AI'}
         </Text>
         <Text size="sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {msg.content}
+          {msg.components?.length ? trimBeforeMarkdownTables(msg.content) : msg.content}
         </Text>
+        {msg.components && msg.components.length > 0 && (
+          <ComponentGroups groups={msg.components} />
+        )}
       </Paper>
 
       {msg.role === 'assistant' && msg.retryLog && msg.retryLog.length > 0 && (

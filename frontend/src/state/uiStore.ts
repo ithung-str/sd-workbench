@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { MfaMissingValueRule, MfaTimeUnit } from '../lib/mfaExport';
 
-export type FlyoutPanel = 'components' | 'outline' | 'variables' | 'settings' | 'search' | null;
+export type FlyoutPanel = 'components' | 'outline' | 'variables' | 'settings' | 'data' | null;
 
 type UIState = {
   leftRailCollapsed: boolean;

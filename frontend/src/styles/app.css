@@ -67,6 +67,72 @@ button:hover,
   margin: 2px 0;
 }
 
+.saved-models-list {
+  display: grid;
+  gap: 2px;
+  padding: 4px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.saved-models-empty {
+  font-size: 0.8rem;
+  color: #888;
+  padding: 4px 8px;
+}
+
+.saved-model-item {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+
+.saved-model-item.active {
+  background: #f0ebff;
+}
+
+.saved-model-load {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 5px 8px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.saved-model-load:hover {
+  background: #f6f2ff;
+}
+
+.saved-model-name {
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.saved-model-time {
+  font-size: 0.72rem;
+  color: #999;
+}
+
+.saved-model-delete {
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  font-size: 1rem;
+  color: #bbb;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.saved-model-delete:hover {
+  color: #d32f2f;
+  background: #ffeaea;
+}
+
 button.active {
   background: var(--accent);
   color: #fff;
@@ -351,6 +417,8 @@ button.danger {
   margin-top: 6px;
   display: grid;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .equation-editor-top-row {
@@ -358,6 +426,7 @@ button.danger {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .equation-function-picker-wrap {
@@ -367,7 +436,9 @@ button.danger {
 }
 
 .equation-function-picker {
-  min-width: 210px;
+  min-width: 0;
+  max-width: 210px;
+  flex: 1 1 auto;
   border: 1px solid #d6d6e1;
   border-radius: 6px;
   background: #fff;
@@ -427,6 +498,7 @@ button.danger {
   color: #352f45;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .equation-editor-overlay-content {
@@ -448,6 +520,8 @@ button.danger {
   background: transparent;
   color: transparent;
   caret-color: #2f2a38;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .equation-editor.compact .equation-editor-input-wrap {
@@ -462,27 +536,26 @@ button.danger {
 .equation-inline-chip {
   display: inline;
   border: 0;
-  border-radius: 999px;
-  background: #f8f6ff;
+  border-radius: 3px;
+  background: #ece8f8;
   color: #4c4366;
-  font-size: 0.73rem;
-  line-height: 1.2;
-  padding: 0 3px;
-  margin: 0 -1px;
-  box-shadow: inset 0 0 0 1px #dad5ea;
+  font-size: inherit;
+  line-height: inherit;
+  padding: 0;
+  margin: 0;
+  box-decoration-break: clone;
 }
 
 .equation-inline-chip.connected {
-  box-shadow: inset 0 0 0 1px #d8c8f9;
-  background: #f7f1ff;
+  background: #e4dbf7;
   color: var(--accent);
-  font-weight: 600;
 }
 
 .equation-inline-chip.unknown {
-  box-shadow: inset 0 0 0 1px #efb9b9;
-  background: #fff4f4;
+  background: #fde8e8;
   color: #9e3434;
+  text-decoration: wavy underline #d88;
+  text-underline-offset: 2px;
 }
 
 .equation-smart-panel {
@@ -493,6 +566,8 @@ button.danger {
   padding: 6px;
   display: grid;
   gap: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .equation-suggestions-panel button {
@@ -856,6 +931,49 @@ button.danger {
 
 .chart-wrap { width: 100%; min-height: 240px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
 .chart-canvas { width: 100%; height: 220px; }
+
+/* Custom chart tooltip */
+.chart-tooltip {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 8px 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  max-width: 260px;
+}
+.chart-tooltip-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #555;
+  font-size: 0.74rem;
+}
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+}
+.chart-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chart-tooltip-name {
+  flex: 1;
+  color: #444;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-tooltip-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: #222;
+  white-space: nowrap;
+}
 .table-wrap { overflow: auto; max-height: 240px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
 .table-actions { display: flex; justify-content: flex-end; margin: 0 0 6px; }
 .table-wrap table { border-collapse: collapse; width: 100%; }

@@ -1,8 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
-  getVensimDiagnostics,
-  getVensimParityReadiness,
-  importVensimFile,
   runMonteCarlo,
   runOATSensitivity,
   simulateModel,
@@ -83,47 +80,4 @@ describe('api client', () => {
     expect(mc.ok).toBe(true);
   });
 
-  it('parses vensim diagnostics endpoints', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ ok: true, import_id: 'abc', capabilities: { tier: 'T2', supported: [], partial: [], unsupported: [], detected_functions: [], detected_time_settings: [] }, warnings: [], errors: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ ok: true, import_id: 'abc', readiness: 'yellow', reasons: ['fallback'] }),
-        }),
-    );
-    const diag = await getVensimDiagnostics('abc');
-    const ready = await getVensimParityReadiness('abc');
-    expect(diag.ok).toBe(true);
-    expect(ready.readiness).toBe('yellow');
-  });
-
-  it('times out vensim import requests with a clear message', async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation((_url: string, init?: RequestInit) =>
-        new Promise((_resolve, reject) => {
-          const signal = init?.signal;
-          signal?.addEventListener('abort', () => {
-            const error = new Error('Aborted');
-            (error as Error & { name: string }).name = 'AbortError';
-            reject(error);
-          });
-        }),
-      ),
-    );
-
-    const pending = importVensimFile(new File(['{UTF-8}\n'], 'test.mdl', { type: 'text/plain' }));
-    const assertion = expect(pending).rejects.toMatchObject({
-      errors: [{ message: 'Vensim import timed out after 30s' }],
-    });
-    await vi.advanceTimersByTimeAsync(30_000);
-    await assertion;
-  });
 });

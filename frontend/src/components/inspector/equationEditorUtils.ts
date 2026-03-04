@@ -35,13 +35,16 @@ const OPERATOR_CHAR = /[+\-*/^=<>!&|%]/;
 const PAREN_CHAR = /[()[\]{}]/;
 const WHITESPACE_CHAR = /\s/;
 
-export const DEFAULT_RESERVED_NAMES = ['min', 'max', 'abs', 'exp', 'log', 'time'] as const;
+export const DEFAULT_RESERVED_NAMES = ['min', 'max', 'abs', 'exp', 'log', 'sin', 'cos', 'time'] as const;
 export const DEFAULT_FUNCTION_NAMES = [
   'min',
   'max',
   'abs',
   'exp',
   'log',
+  'sin',
+  'cos',
+  'if_then_else',
   'step',
   'ramp',
   'pulse',
@@ -50,6 +53,7 @@ export const DEFAULT_FUNCTION_NAMES = [
   'delay1',
   'delay3',
   'delayn',
+  'delay_fixed',
   'smooth',
   'smooth3',
   'smoothn',

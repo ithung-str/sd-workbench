@@ -22,8 +22,6 @@ export function InspectorPanel() {
   const setSelected = useEditorStore((s) => s.setSelected);
   const deleteSelected = useEditorStore((s) => s.deleteSelected);
   const validation = useEditorStore((s) => s.validation);
-  const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
-  const importedVensim = useEditorStore((s) => s.importedVensim);
 
   const node = useMemo<NodeModel | null>(() => {
     if (!selected || selected.kind !== 'node') return null;
@@ -94,8 +92,8 @@ export function InspectorPanel() {
   }, [model.edges, model.nodes, node]);
 
   const availableFunctions = useMemo(
-    () => buildContextFunctions(activeSimulationMode, importedVensim),
-    [activeSimulationMode, importedVensim],
+    () => buildContextFunctions(),
+    [],
   );
 
   if (!node && !edge && !globalVariable) {

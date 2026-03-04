@@ -18,6 +18,7 @@ export function SearchPanel() {
   const [query, setQuery] = useState('');
   const model = useEditorStore((s) => s.model);
   const setSelected = useEditorStore((s) => s.setSelected);
+  const selected = useEditorStore((s) => s.selected);
 
   const results = query.trim()
     ? model.nodes
@@ -38,20 +39,33 @@ export function SearchPanel() {
         onChange={(e) => setQuery(e.target.value)}
         autoFocus
       />
-      {results.map((node) => (
-        <UnstyledButton
-          key={node.id}
-          onClick={() => setSelected({ kind: 'node', id: node.id })}
-          style={{ padding: '4px 8px', borderRadius: 4 }}
-        >
-          <Group gap={6}>
-            <Badge size="xs" variant="light" color={NODE_TYPE_COLORS[node.type] ?? 'gray'}>
-              {node.type}
-            </Badge>
-            <Text size="xs">{'name' in node ? (node as { name?: string }).name ?? node.id : node.id}</Text>
-          </Group>
-        </UnstyledButton>
-      ))}
+      <Stack gap={1}>
+        {results.map((node) => {
+          const isSelected = selected?.kind === 'node' && selected.id === node.id;
+          return (
+            <UnstyledButton
+              key={node.id}
+              onClick={() => setSelected({ kind: 'node', id: node.id })}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '5px 8px',
+                borderRadius: 4,
+                background: isSelected ? 'var(--mantine-color-blue-0)' : 'transparent',
+                transition: 'background 80ms ease',
+              }}
+              className="flyout-list-item"
+            >
+              <Group gap={6}>
+                <Badge size="xs" variant="light" color={NODE_TYPE_COLORS[node.type] ?? 'gray'}>
+                  {node.type}
+                </Badge>
+                <Text size="xs">{'name' in node ? (node as { name?: string }).name ?? node.id : node.id}</Text>
+              </Group>
+            </UnstyledButton>
+          );
+        })}
+      </Stack>
       {query.trim() && results.length === 0 && (
         <Text size="xs" c="dimmed" ta="center">
           No results found

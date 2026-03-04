@@ -12,8 +12,8 @@ type GeoStock = {
   id: string;
   name: string;
   label: string;
-  geoX: number;
-  geoY: number;
+  lon: number;
+  lat: number;
 };
 
 type FlowLine = {
@@ -38,13 +38,13 @@ export function MapCardContent({
   // Collect stocks with geo coordinates
   const geoStocks = useMemo<GeoStock[]>(() => {
     return model.nodes
-      .filter((n): n is StockNode => n.type === 'stock' && n.geo_x != null && n.geo_y != null)
+      .filter((n): n is StockNode => n.type === 'stock' && n.longitude != null && n.latitude != null)
       .map((n) => ({
         id: n.id,
         name: n.name,
         label: n.label,
-        geoX: n.geo_x!,
-        geoY: n.geo_y!,
+        lon: n.longitude!,
+        lat: n.latitude!,
       }));
   }, [model.nodes]);
 
@@ -81,10 +81,10 @@ export function MapCardContent({
           if (src && tgt) {
             lines.push({
               key: `${flowId}-${srcId}-${tgtId}`,
-              fromX: src.geoX,
-              fromY: src.geoY,
-              toX: tgt.geoX,
-              toY: tgt.geoY,
+              fromX: src.lon,
+              fromY: src.lat,
+              toX: tgt.lon,
+              toY: tgt.lat,
             });
           }
         }
@@ -118,15 +118,15 @@ export function MapCardContent({
   if (geoStocks.length === 0) {
     return (
       <Text size="sm" c="dimmed">
-        No stocks have geo coordinates. Set X/Y values in the Formulas page.
+        No stocks have coordinates. Set longitude/latitude values in the Inspector or Formulas page.
       </Text>
     );
   }
 
   // Compute SVG bounds from geo coordinates
   const bounds = useMemo(() => {
-    const xs = geoStocks.map((s) => s.geoX);
-    const ys = geoStocks.map((s) => s.geoY);
+    const xs = geoStocks.map((s) => s.lon);
+    const ys = geoStocks.map((s) => s.lat);
     return {
       minX: Math.min(...xs),
       maxX: Math.max(...xs),
@@ -178,8 +178,8 @@ export function MapCardContent({
             return (
               <g key={s.id}>
                 <circle
-                  cx={s.geoX}
-                  cy={s.geoY}
+                  cx={s.lon}
+                  cy={s.lat}
                   r={r}
                   fill="#5e35b1"
                   fillOpacity={0.7}
@@ -187,8 +187,8 @@ export function MapCardContent({
                   strokeWidth={Math.max(0.5, labelSize * 0.15)}
                 />
                 <text
-                  x={s.geoX}
-                  y={s.geoY + r + labelSize * 1.2}
+                  x={s.lon}
+                  y={s.lat + r + labelSize * 1.2}
                   textAnchor="middle"
                   fontSize={labelSize}
                   fill="#333"
@@ -197,8 +197,8 @@ export function MapCardContent({
                 </text>
                 {val != null && Number.isFinite(val) && (
                   <text
-                    x={s.geoX}
-                    y={s.geoY + r + labelSize * 2.4}
+                    x={s.lon}
+                    y={s.lat + r + labelSize * 2.4}
                     textAnchor="middle"
                     fontSize={labelSize * 0.8}
                     fill="#888"

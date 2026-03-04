@@ -1,35 +1,59 @@
 .bottom-nav {
-  height: 32px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  background: #f3f3f8;
-  border-top: 1px solid #e7e7ee;
+  background: #f5f5fa;
+  border-top: 1px solid #e0e0e8;
   flex-shrink: 0;
 }
 
 .bottom-nav-tabs {
   display: flex;
-  gap: 0;
+  align-items: center;
+  gap: 4px;
 }
 
 .bottom-nav-tab {
-  padding: 4px 12px;
-  border-radius: 4px;
-  color: #7b7a87;
-  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #6b6b80;
+  font-size: 0.84rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
   transition: background 120ms ease, color 120ms ease;
 }
 
 .bottom-nav-tab:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #212027;
+  background: #e8e8f0;
+  color: #3a3a50;
 }
 
 .bottom-nav-tab-active {
-  color: #4b1b78;
+  color: #ffffff;
   font-weight: 600;
+}
+
+.bottom-nav-tab-active:hover {
+  filter: brightness(1.08);
+}
+
+.bottom-nav-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.bottom-nav-tab-label {
+  line-height: 1;
 }
 
 .bottom-nav-status {

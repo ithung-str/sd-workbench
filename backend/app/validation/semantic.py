@@ -190,6 +190,51 @@ def validate_semantics(model: ModelDocument) -> tuple[list[ValidationIssue], lis
                         )
                     )
 
+    # ── Dimension validation ──
+    defined_dim_names = {d.name for d in model.dimensions}
+    dim_elements: dict[str, set[str]] = {
+        d.name: set(d.elements) for d in model.dimensions
+    }
+    for node in variable_nodes:
+        if not hasattr(node, 'dimensions'):
+            continue
+        for dim_name in node.dimensions:
+            if dim_name not in defined_dim_names:
+                errors.append(
+                    ValidationIssue(
+                        code="UNKNOWN_DIMENSION",
+                        message=f"Node '{node.name}' references undefined dimension '{dim_name}'",
+                        severity="error",
+                        node_id=node.id,
+                    )
+                )
+        if hasattr(node, 'equation_overrides'):
+            all_elements: set[str] = set()
+            for dim_name in node.dimensions:
+                all_elements |= dim_elements.get(dim_name, set())
+            for elem, override_eq in node.equation_overrides.items():
+                if elem not in all_elements:
+                    errors.append(
+                        ValidationIssue(
+                            code="INVALID_OVERRIDE_ELEMENT",
+                            message=f"Override element '{elem}' is not in dimensions of node '{node.name}'",
+                            severity="error",
+                            node_id=node.id,
+                        )
+                    )
+                else:
+                    try:
+                        parse_equation(override_eq)
+                    except (EquationSyntaxError, UnsupportedExpressionError) as exc:
+                        errors.append(
+                            ValidationIssue(
+                                code="INVALID_OVERRIDE_SYNTAX",
+                                message=f"Override equation for '{elem}' on '{node.name}': {exc}",
+                                severity="error",
+                                node_id=node.id,
+                            )
+                        )
+
     # Derive stock equations from flow_link edges so stocks with connected flows
     # are validated against the derived equation rather than their stored equation
     # (which may be empty or stale).

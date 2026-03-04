@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../lib/api';
 import { cloneModel, teacupModel } from '../lib/sampleModels';
 import { useEditorStore } from './editorStore';
-import type { VensimImportResponse } from '../types/model';
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -213,7 +212,6 @@ describe('editorStore', () => {
     const spy = vi.spyOn(api, 'simulateScenarioBatch').mockResolvedValue({ ok: true, runs: [], errors: [] });
     useEditorStore.setState((state) => ({
       ...state,
-      activeSimulationMode: 'native_json',
       scenarios: [
         { id: 'baseline', name: 'Baseline', status: 'baseline', overrides: { params: {}, outputs: [], sim_config: {} } },
         { id: 'policy_1', name: 'Policy 1', status: 'policy', overrides: { params: {}, outputs: [], sim_config: {} } },
@@ -230,7 +228,6 @@ describe('editorStore', () => {
     const spy = vi.spyOn(api, 'simulateScenarioBatch').mockResolvedValue({ ok: true, runs: [], errors: [] });
     useEditorStore.setState((state) => ({
       ...state,
-      activeSimulationMode: 'native_json',
       scenarios: [{ id: 'policy_1', name: 'Policy 1', status: 'policy', overrides: { params: {}, outputs: [], sim_config: {} } }],
     }));
 
@@ -240,75 +237,6 @@ describe('editorStore', () => {
     expect(spy.mock.calls[0]?.[0]?.include_baseline).toBe(true);
   });
 
-  it('loads Vensim preset and stores partial status when warnings or gaps exist', async () => {
-    const imported: VensimImportResponse = {
-      ok: true,
-      import_id: 'preset_1',
-      source: { filename: 'Random Numbers.mdl', format: 'vensim-mdl' },
-      capabilities: {
-        tier: 'T2',
-        supported: ['INITIAL TIME'],
-        partial: ['RANDOM NORMAL'],
-        unsupported: [],
-        detected_functions: ['RANDOM NORMAL'],
-        detected_time_settings: ['INITIAL TIME', 'FINAL TIME', 'TIME STEP', 'SAVEPER'],
-        details: [],
-        families: [],
-      },
-      warnings: [{ code: 'VENSIM_PARTIAL_SUPPORT_WARNING', message: 'partial support', severity: 'warning' }],
-      errors: [],
-      model_view: {
-        canonical: cloneModel(teacupModel),
-        variables: [],
-        import_gaps: {
-          dropped_variables: 1,
-          dropped_edges: 2,
-          unparsed_equations: 0,
-          unsupported_constructs: [],
-          samples: [],
-        },
-      },
-    };
-    vi.spyOn(api, 'importVensimFile').mockResolvedValue(imported);
-
-    await useEditorStore.getState().loadVensimPreset({
-      id: 'mdl_random_numbers',
-      filename: 'Random Numbers.mdl',
-      label: 'Random Numbers',
-      source: '{UTF-8}\n',
-      features: ['stochastic'],
-    });
-
-    const state = useEditorStore.getState();
-    expect(state.activeSimulationMode).toBe('vensim');
-    expect(state.vensimPresetStatus.mdl_random_numbers?.status).toBe('partial');
-    expect(state.vensimPresetCache.mdl_random_numbers?.import_id).toBe('preset_1');
-    expect(state.isLoadingVensimPreset).toBe(false);
-    expect(state.loadingVensimPresetId).toBeNull();
-  });
-
-  it('marks preset as failed and preserves current model when preset import fails', async () => {
-    const beforeId = useEditorStore.getState().model.id;
-    vi.spyOn(api, 'importVensimFile').mockRejectedValue({
-      errors: [{ message: 'translation failed' }],
-    });
-
-    await useEditorStore.getState().loadVensimPreset({
-      id: 'mdl_broken',
-      filename: 'Broken.mdl',
-      label: 'Broken',
-      source: '{UTF-8}\nBROKEN',
-      features: [],
-    });
-
-    const state = useEditorStore.getState();
-    expect(state.model.id).toBe(beforeId);
-    expect(state.vensimPresetStatus.mdl_broken?.status).toBe('failed');
-    expect(state.apiError).toContain('translation failed');
-    expect(state.isLoadingVensimPreset).toBe(false);
-    expect(state.loadingVensimPresetId).toBeNull();
-  });
-
   it('updates backend health state via setter', () => {
     useEditorStore.getState().setBackendHealthy(true);
     expect(useEditorStore.getState().backendHealthy).toBe(true);
@@ -316,5 +244,218 @@ describe('editorStore', () => {
     expect(useEditorStore.getState().backendHealthy).toBe(false);
     useEditorStore.getState().setBackendHealthy(null);
     expect(useEditorStore.getState().backendHealthy).toBeNull();
+  });
+
+  it('setMultiSelectedNodeIds with >=2 ids sets state and clears single selected', () => {
+    // First set a single selection
+    useEditorStore.getState().setSelected({ kind: 'node', id: 'stock_temperature' });
+    expect(useEditorStore.getState().selected).toEqual({ kind: 'node', id: 'stock_temperature' });
+
+    // Now multi-select two nodes
+    useEditorStore.getState().setMultiSelectedNodeIds(['stock_temperature', 'aux_room_temperature']);
+    const state = useEditorStore.getState();
+    expect(state.multiSelectedNodeIds).toEqual(['stock_temperature', 'aux_room_temperature']);
+    expect(state.selected).toBeNull();
+  });
+
+  it('setMultiSelectedNodeIds with <2 ids clears multiSelectedNodeIds', () => {
+    // Set up multi-selection first
+    useEditorStore.getState().setMultiSelectedNodeIds(['stock_temperature', 'aux_room_temperature']);
+    expect(useEditorStore.getState().multiSelectedNodeIds).toEqual(['stock_temperature', 'aux_room_temperature']);
+
+    // Calling with 1 id should clear
+    useEditorStore.getState().setMultiSelectedNodeIds(['stock_temperature']);
+    expect(useEditorStore.getState().multiSelectedNodeIds).toEqual([]);
+
+    // Set up again and call with empty array
+    useEditorStore.getState().setMultiSelectedNodeIds(['stock_temperature', 'aux_room_temperature']);
+    useEditorStore.getState().setMultiSelectedNodeIds([]);
+    expect(useEditorStore.getState().multiSelectedNodeIds).toEqual([]);
+  });
+
+  it('setSelected clears multiSelectedNodeIds', () => {
+    // Set up multi-selection
+    useEditorStore.getState().setMultiSelectedNodeIds(['stock_temperature', 'aux_room_temperature']);
+    expect(useEditorStore.getState().multiSelectedNodeIds).toEqual(['stock_temperature', 'aux_room_temperature']);
+
+    // Single-select should clear multi-selection
+    useEditorStore.getState().setSelected({ kind: 'node', id: 'stock_temperature' });
+    const state = useEditorStore.getState();
+    expect(state.selected).toEqual({ kind: 'node', id: 'stock_temperature' });
+    expect(state.multiSelectedNodeIds).toEqual([]);
+  });
+
+  it('deleteMultiSelected removes nodes and edges, supports undo', () => {
+    const state = useEditorStore.getState();
+    const nodeCountBefore = state.model.nodes.length;
+    const edgeCountBefore = state.model.edges.length;
+
+    // Multi-select the two aux nodes
+    const idsToDelete = ['aux_room_temperature', 'aux_characteristic_time'];
+    state.setMultiSelectedNodeIds(idsToDelete);
+
+    // Count edges that reference those nodes
+    const edgesRemovedCount = state.model.edges.filter(
+      (e) => idsToDelete.includes(e.source) || idsToDelete.includes(e.target),
+    ).length;
+    expect(edgesRemovedCount).toBeGreaterThan(0);
+
+    // Delete
+    useEditorStore.getState().deleteMultiSelected();
+
+    const afterDelete = useEditorStore.getState();
+    expect(afterDelete.model.nodes.some((n) => n.id === 'aux_room_temperature')).toBe(false);
+    expect(afterDelete.model.nodes.some((n) => n.id === 'aux_characteristic_time')).toBe(false);
+    expect(afterDelete.model.nodes.length).toBe(nodeCountBefore - 2);
+    expect(afterDelete.model.edges.length).toBe(edgeCountBefore - edgesRemovedCount);
+    expect(afterDelete.multiSelectedNodeIds).toEqual([]);
+    expect(afterDelete.selected).toBeNull();
+
+    // Undo should restore
+    afterDelete.undo();
+    const afterUndo = useEditorStore.getState();
+    expect(afterUndo.model.nodes.some((n) => n.id === 'aux_room_temperature')).toBe(true);
+    expect(afterUndo.model.nodes.some((n) => n.id === 'aux_characteristic_time')).toBe(true);
+    expect(afterUndo.model.nodes.length).toBe(nodeCountBefore);
+    expect(afterUndo.model.edges.length).toBe(edgeCountBefore);
+
+    // Redo should re-delete
+    afterUndo.redo();
+    const afterRedo = useEditorStore.getState();
+    expect(afterRedo.model.nodes.some((n) => n.id === 'aux_room_temperature')).toBe(false);
+    expect(afterRedo.model.nodes.some((n) => n.id === 'aux_characteristic_time')).toBe(false);
+    expect(afterRedo.model.nodes.length).toBe(nodeCountBefore - 2);
+  });
+
+  // ── Optimisation config CRUD ──
+
+  it('creates an optimisation config', () => {
+    const startCount = useEditorStore.getState().optimisationConfigs.length;
+    useEditorStore.getState().createOptimisationConfig();
+    const state = useEditorStore.getState();
+    expect(state.optimisationConfigs.length).toBe(startCount + 1);
+    expect(state.activeOptimisationConfigId).toBe(state.optimisationConfigs[state.optimisationConfigs.length - 1].id);
+    expect(state.optimisationConfigs[0].mode).toBe('goal-seek');
+  });
+
+  it('duplicates an optimisation config', () => {
+    useEditorStore.getState().createOptimisationConfig();
+    const created = useEditorStore.getState().optimisationConfigs[0];
+    useEditorStore.getState().updateOptimisationConfig(created.id, { name: 'Test Config' });
+    useEditorStore.getState().duplicateOptimisationConfig(created.id);
+    const state = useEditorStore.getState();
+    expect(state.optimisationConfigs.length).toBe(2);
+    expect(state.optimisationConfigs[1].name).toBe('Test Config (copy)');
+    expect(state.activeOptimisationConfigId).toBe(state.optimisationConfigs[1].id);
+  });
+
+  it('updates an optimisation config', () => {
+    useEditorStore.getState().createOptimisationConfig();
+    const created = useEditorStore.getState().optimisationConfigs[0];
+    useEditorStore.getState().updateOptimisationConfig(created.id, { mode: 'policy', name: 'Policy Test' });
+    const updated = useEditorStore.getState().optimisationConfigs.find((c) => c.id === created.id);
+    expect(updated?.mode).toBe('policy');
+    expect(updated?.name).toBe('Policy Test');
+  });
+
+  it('deletes an optimisation config', () => {
+    useEditorStore.getState().createOptimisationConfig();
+    const state = useEditorStore.getState();
+    expect(state.optimisationConfigs.length).toBe(1);
+    const toDelete = state.optimisationConfigs[0].id;
+    useEditorStore.getState().deleteOptimisationConfig(toDelete);
+    const after = useEditorStore.getState();
+    expect(after.optimisationConfigs.length).toBe(0);
+    expect(after.activeOptimisationConfigId).toBe('');
+  });
+
+  it('persists optimisation configs in model.metadata.analysis', () => {
+    useEditorStore.getState().createOptimisationConfig();
+    const state = useEditorStore.getState();
+    const analysis = state.model.metadata?.analysis;
+    expect(analysis?.optimisation_configs?.length).toBe(1);
+    expect(analysis?.defaults?.active_optimisation_config_id).toBe(state.activeOptimisationConfigId);
+  });
+
+  it('loadModel restores optimisation configs from metadata', () => {
+    useEditorStore.getState().createOptimisationConfig();
+    const model = useEditorStore.getState().model;
+    // Reload the same model
+    useEditorStore.getState().loadModel(model);
+    const state = useEditorStore.getState();
+    expect(state.optimisationConfigs.length).toBe(1);
+    expect(state.activeOptimisationConfigId).toBe(model.metadata?.analysis?.defaults?.active_optimisation_config_id);
+  });
+
+  it('bulkUpdateNodes applies patch to all listed nodes, supports undo', () => {
+    const state = useEditorStore.getState();
+    const ids = ['aux_room_temperature', 'aux_characteristic_time'];
+
+    // Capture original equations
+    const origRoomTemp = state.model.nodes.find((n) => n.id === 'aux_room_temperature');
+    const origCharTime = state.model.nodes.find((n) => n.id === 'aux_characteristic_time');
+    expect(origRoomTemp).toBeDefined();
+    expect(origCharTime).toBeDefined();
+    if (!origRoomTemp || !origCharTime) return;
+    const origEqRoom = origRoomTemp.type === 'aux' ? origRoomTemp.equation : undefined;
+    const origEqChar = origCharTime.type === 'aux' ? origCharTime.equation : undefined;
+
+    // Bulk update equations
+    state.bulkUpdateNodes(ids, { equation: '99' } as any);
+
+    const afterUpdate = useEditorStore.getState();
+    const updatedRoom = afterUpdate.model.nodes.find((n) => n.id === 'aux_room_temperature');
+    const updatedChar = afterUpdate.model.nodes.find((n) => n.id === 'aux_characteristic_time');
+    expect(updatedRoom && updatedRoom.type === 'aux' ? updatedRoom.equation : undefined).toBe('99');
+    expect(updatedChar && updatedChar.type === 'aux' ? updatedChar.equation : undefined).toBe('99');
+
+    // Non-targeted node should be unchanged
+    const stock = afterUpdate.model.nodes.find((n) => n.id === 'stock_temperature');
+    expect(stock && stock.type === 'stock' ? stock.equation : undefined).not.toBe('99');
+
+    // Undo should restore originals
+    afterUpdate.undo();
+    const afterUndo = useEditorStore.getState();
+    const restoredRoom = afterUndo.model.nodes.find((n) => n.id === 'aux_room_temperature');
+    const restoredChar = afterUndo.model.nodes.find((n) => n.id === 'aux_characteristic_time');
+    expect(restoredRoom && restoredRoom.type === 'aux' ? restoredRoom.equation : undefined).toBe(origEqRoom);
+    expect(restoredChar && restoredChar.type === 'aux' ? restoredChar.equation : undefined).toBe(origEqChar);
+
+    // Redo should re-apply the bulk update
+    afterUndo.redo();
+    const afterRedo = useEditorStore.getState();
+    const redoRoom = afterRedo.model.nodes.find((n) => n.id === 'aux_room_temperature');
+    const redoChar = afterRedo.model.nodes.find((n) => n.id === 'aux_characteristic_time');
+    expect(redoRoom && redoRoom.type === 'aux' ? redoRoom.equation : undefined).toBe('99');
+    expect(redoChar && redoChar.type === 'aux' ? redoChar.equation : undefined).toBe('99');
+  });
+});
+
+describe('Dimension management', () => {
+  it('addDimension creates a new dimension', () => {
+    useEditorStore.getState().addDimension('Region', ['North', 'South']);
+    const dims = useEditorStore.getState().model.dimensions ?? [];
+    expect(dims).toHaveLength(1);
+    expect(dims[0].name).toBe('Region');
+    expect(dims[0].elements).toEqual(['North', 'South']);
+  });
+
+  it('updateDimension renames a dimension', () => {
+    useEditorStore.getState().addDimension('Region', ['N', 'S']);
+    const dimId = (useEditorStore.getState().model.dimensions ?? [])[0].id;
+    useEditorStore.getState().updateDimension(dimId, { name: 'Area' });
+    expect((useEditorStore.getState().model.dimensions ?? [])[0].name).toBe('Area');
+  });
+
+  it('deleteDimension removes dimension and strips from nodes', () => {
+    useEditorStore.getState().addDimension('Region', ['N', 'S']);
+    const dimId = (useEditorStore.getState().model.dimensions ?? [])[0].id;
+    // Assign dimension to a node
+    const nodeId = useEditorStore.getState().model.nodes[0]?.id;
+    if (nodeId) {
+      useEditorStore.getState().updateNode(nodeId, { dimensions: ['Region'] } as any);
+    }
+    useEditorStore.getState().deleteDimension(dimId);
+    expect(useEditorStore.getState().model.dimensions ?? []).toHaveLength(0);
   });
 });

@@ -572,7 +572,7 @@ class TestApplyPatches:
 
     def test_patchable_fields_constant(self):
         """PATCHABLE_FIELDS should contain exactly the documented set."""
-        assert PATCHABLE_FIELDS == {"equation", "initial_value", "units", "label", "name", "non_negative", "min_value", "max_value"}
+        assert PATCHABLE_FIELDS == {"equation", "initial_value", "units", "label", "name", "non_negative", "min_value", "max_value", "longitude", "latitude", "dimensions", "equation_overrides"}
 
 
 # ========================================================================

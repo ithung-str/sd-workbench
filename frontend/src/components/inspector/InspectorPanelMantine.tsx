@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Stack, Title, Button, TextInput, Textarea, Group, Text, Paper, Alert, Checkbox, NumberInput } from '@mantine/core';
+import { Stack, Title, Button, TextInput, Textarea, Group, Text, Paper, Alert, Checkbox, NumberInput, MultiSelect } from '@mantine/core';
 import { IconTrash, IconInfoCircle } from '@tabler/icons-react';
 import { collectGlobalVariableUsage } from '../../lib/globalVariableUsage';
 import { getStockFlowEquation, toIdentifier } from '../../lib/modelHelpers';
@@ -8,6 +8,7 @@ import type { CldLoopDirection, CldSymbol, EdgeModel, LookupNode, NodeModel } fr
 import { EquationEditor } from './EquationEditor';
 import { buildContextFunctions } from './functionCatalog';
 import { LookupEditor } from './LookupEditor';
+import { UNIT_CODES, UnitQuickFix } from '../validation/ValidationList';
 
 function endpointLabel(node: NodeModel | undefined, fallback: string): string {
   if (!node) return fallback;
@@ -26,8 +27,6 @@ export function InspectorPanel() {
   const setSelected = useEditorStore((s) => s.setSelected);
   const deleteSelected = useEditorStore((s) => s.deleteSelected);
   const validation = useEditorStore((s) => s.validation);
-  const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
-  const importedVensim = useEditorStore((s) => s.importedVensim);
 
   const node = useMemo<NodeModel | null>(() => {
     if (!selected || selected.kind !== 'node') return null;
@@ -98,13 +97,18 @@ export function InspectorPanel() {
   }, [model.edges, model.nodes, node]);
 
   const availableFunctions = useMemo(
-    () => buildContextFunctions(activeSimulationMode, importedVensim),
-    [activeSimulationMode, importedVensim],
+    () => buildContextFunctions(),
+    [],
   );
 
   const stockFlowEquation = useMemo(
     () => (node?.type === 'stock' ? getStockFlowEquation(node.id, model) : null),
     [node, model],
+  );
+
+  const availableDimensions = useMemo(
+    () => (model.dimensions ?? []).map((d) => d.name),
+    [model.dimensions],
   );
 
   if (!node && !edge && !globalVariable) {
@@ -391,6 +395,24 @@ export function InspectorPanel() {
               size="xs"
             />
           </Group>
+          <Group grow>
+            <NumberInput
+              label="Longitude"
+              size="xs"
+              placeholder="—"
+              value={node.longitude ?? ''}
+              onChange={(value) => updateNode(node.id, { longitude: value === '' ? undefined : Number(value) } as Partial<NodeModel>)}
+              decimalScale={6}
+            />
+            <NumberInput
+              label="Latitude"
+              size="xs"
+              placeholder="—"
+              value={node.latitude ?? ''}
+              onChange={(value) => updateNode(node.id, { latitude: value === '' ? undefined : Number(value) } as Partial<NodeModel>)}
+              decimalScale={6}
+            />
+          </Group>
         </>
       )}
 
@@ -445,12 +467,53 @@ export function InspectorPanel() {
         </>
       )}
 
+      {availableDimensions.length > 0 && 'dimensions' in node && (
+        <MultiSelect
+          label="Dimensions"
+          size="xs"
+          placeholder="None"
+          data={availableDimensions}
+          value={(node as any).dimensions ?? []}
+          onChange={(dims) => updateNode(node.id, { dimensions: dims } as Partial<NodeModel>)}
+        />
+      )}
+
+      {'dimensions' in node && ((node as any).dimensions?.length ?? 0) > 0 && (
+        <Stack gap={2}>
+          <Text size="xs" fw={500}>Equation Overrides</Text>
+          {(model.dimensions ?? [])
+            .filter((d) => (node as any).dimensions?.includes(d.name))
+            .flatMap((d) => d.elements)
+            .map((elem) => (
+              <Group key={elem} gap={4}>
+                <Text size="xs" w={80} c="dimmed">{elem}:</Text>
+                <TextInput
+                  size="xs"
+                  style={{ flex: 1 }}
+                  placeholder="(use default equation)"
+                  value={(node as any).equation_overrides?.[elem] ?? ''}
+                  onChange={(e) => {
+                    const overrides = { ...((node as any).equation_overrides ?? {}) };
+                    if (e.currentTarget.value) {
+                      overrides[elem] = e.currentTarget.value;
+                    } else {
+                      delete overrides[elem];
+                    }
+                    updateNode(node.id, { equation_overrides: overrides } as Partial<NodeModel>);
+                  }}
+                />
+              </Group>
+            ))}
+        </Stack>
+      )}
+
       {nodeIssues.length > 0 && (
         <Stack gap="xs">
           {nodeIssues.map((issue, idx) => (
             <Alert key={`${issue.code}-${idx}`} color={issue.severity === 'error' ? 'red' : 'orange'} variant="light">
               <Text size="sm" fw={600}>{issue.code}:</Text>
               <Text size="sm">{issue.message}</Text>
+              {UNIT_CODES.has(issue.code) && <UnitQuickFix issue={issue} />}
             </Alert>
           ))}
         </Stack>

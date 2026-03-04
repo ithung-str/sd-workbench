@@ -8,11 +8,12 @@ DELAY_FUNCTIONS = {"delay1", "delay3", "delayn"}
 SMOOTH_FUNCTIONS = {"smooth", "smooth3"}
 TIME_FUNCTIONS = {"step", "ramp", "pulse", "pulse_train"}
 ALLOWED_FUNCTIONS = (
-    {"min", "max", "abs", "exp", "log", "if_then_else"}
+    {"min", "max", "abs", "exp", "log", "sin", "cos", "if_then_else"}
     | DELAY_FUNCTIONS
     | SMOOTH_FUNCTIONS
     | TIME_FUNCTIONS
     | {"delay_fixed"}
+    | {"SUM", "MEAN"}
 )
 ALLOWED_BINOPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)
 ALLOWED_UNARYOPS = (ast.UAdd, ast.USub)
@@ -26,6 +27,7 @@ ALLOWED_NODE_TYPES = (
     ast.Name,
     ast.Load,
     ast.Constant,
+    ast.Subscript,
 )
 
 
@@ -88,6 +90,13 @@ class _Validator(ast.NodeVisitor):
     def visit_Constant(self, node: ast.Constant) -> None:
         if not isinstance(node.value, (int, float)):
             raise UnsupportedExpressionError("Only numeric literals are supported")
+
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        if not isinstance(node.value, ast.Name):
+            raise UnsupportedExpressionError("Subscript base must be a variable name")
+        if not isinstance(node.slice, ast.Name):
+            raise UnsupportedExpressionError("Subscript index must be an element name")
+        self.symbols.add(node.value.id)
 
 
 

@@ -112,8 +112,9 @@ export function computeFlowDirections(
 // ---------------------------------------------------------------------------
 
 const FUNCTION_NAMES = [
-  'PULSE TRAIN', 'STEP', 'RAMP', 'PULSE', 'DELAY1', 'DELAY3',
-  'DELAYN', 'DELAY', 'SMOOTH', 'SMOOTH3', 'SMOOTHN',
+  'IF_THEN_ELSE', 'PULSE TRAIN', 'STEP', 'RAMP', 'PULSE',
+  'DELAY_FIXED', 'DELAY1', 'DELAY3', 'DELAYN', 'DELAY',
+  'SMOOTH', 'SMOOTH3', 'SMOOTHN',
 ];
 
 export function maskFunctionInternals(equation: string): string {
@@ -300,12 +301,14 @@ export function toReactFlowNodes(
   showFunctionInternals: boolean,
   highlightedNodeIds?: Set<string>,
   sparklineDataMap?: Map<string, number[]>,
+  multiSelectedNodeIds?: string[],
 ): Node[] {
   const flowDirectionById = computeFlowDirections(nodes, edges);
+  const multiSet = multiSelectedNodeIds?.length ? new Set(multiSelectedNodeIds) : undefined;
 
   return nodes.map((node) => {
     const data = buildNodeData(node, showFunctionInternals, flowDirectionById);
-    const isSelected = selected?.kind === 'node' && selected.id === node.id;
+    const isSelected = (selected?.kind === 'node' && selected.id === node.id) || (multiSet?.has(node.id) ?? false);
     if (node.type === 'stock' || node.type === 'aux' || node.type === 'lookup' || node.type === 'flow') {
       (data as LabelNodeData).nodeId = node.id;
     }

@@ -16,6 +16,12 @@ export type VisualStyle = {
   text_align?: string;
 };
 
+export type DimensionDefinition = {
+  id: string;
+  name: string;
+  elements: string[];
+};
+
 export type LayoutMetadata = {
   width?: number;
   height?: number;
@@ -41,8 +47,10 @@ export type StockNode = {
   style?: VisualStyle;
   layout?: LayoutMetadata;
   show_graph?: boolean;
-  geo_x?: number;
-  geo_y?: number;
+  longitude?: number;
+  latitude?: number;
+  dimensions?: string[];
+  equation_overrides?: Record<string, string>;
 };
 
 export type AuxNode = {
@@ -55,6 +63,8 @@ export type AuxNode = {
   position: Position;
   style?: VisualStyle;
   layout?: LayoutMetadata;
+  dimensions?: string[];
+  equation_overrides?: Record<string, string>;
 };
 
 export type FlowNode = {
@@ -73,6 +83,8 @@ export type FlowNode = {
   position: Position;
   style?: VisualStyle;
   layout?: LayoutMetadata;
+  dimensions?: string[];
+  equation_overrides?: Record<string, string>;
 };
 
 export type LookupInterpolation = 'linear' | 'step' | 'cubic' | 'exponential' | 's-curve';
@@ -91,6 +103,8 @@ export type LookupNode = {
   position: Position;
   style?: VisualStyle;
   layout?: LayoutMetadata;
+  dimensions?: string[];
+  equation_overrides?: Record<string, string>;
 };
 
 export type TextNode = {
@@ -167,6 +181,7 @@ export type ModelDocument = {
   edges: EdgeModel[];
   outputs: string[];
   global_variables?: GlobalVariable[];
+  dimensions?: DimensionDefinition[];
 };
 
 export type FunctionCatalogEntry = {
@@ -175,7 +190,7 @@ export type FunctionCatalogEntry = {
   template: string;
   category: 'Math' | 'Time Inputs' | 'Delays/Smoothing' | 'Stochastic' | 'Lookups' | 'Other Detected';
   description: string;
-  source: 'core' | 'vensim';
+  source: 'core';
 };
 
 export type SimConfig = {
@@ -214,11 +229,6 @@ export type SimulateResponse = {
     method?: 'euler';
     row_count: number;
     variables_returned: string[];
-    source_format?: 'vensim-mdl';
-    import_id?: string;
-    time?: ImportedTimeSettings;
-    execution_mode?: 'pysd' | 'mixed' | 'blocked';
-    fallback_activations?: string[];
   };
 };
 
@@ -245,7 +255,9 @@ export type ScenarioDefinition = {
   overrides?: ScenarioOverrides;
 };
 
-export type DashboardCardType = 'kpi' | 'line' | 'table' | 'map';
+export type DashboardCardType =
+  | 'kpi' | 'line' | 'table' | 'map' | 'heatmap' | 'sparkline' | 'comparison'
+  | 'data_bar' | 'data_stacked_bar' | 'data_area' | 'data_pie' | 'data_table' | 'data_pivot';
 
 export type DashboardCard = {
   id: string;
@@ -254,11 +266,21 @@ export type DashboardCard = {
   variable: string;
   order: number;
   table_rows?: number;
+  variables?: string[];
+  scale_nodes?: boolean;
   x?: number;
   y?: number;
   w?: number;
   h?: number;
   time_index?: number;
+  // Data-table-backed card fields
+  data_table_id?: string;
+  x_column?: string;
+  y_columns?: string[];
+  group_column?: string;
+  value_column?: string;
+  aggregate_fn?: 'sum' | 'avg' | 'count' | 'min' | 'max';
+  data_table_rows?: number;
 };
 
 export type DashboardDefinition = {
@@ -287,9 +309,11 @@ export type AnalysisConfig = {
     baseline_scenario_id?: string;
     active_dashboard_id?: string;
     active_sensitivity_config_id?: string;
+    active_optimisation_config_id?: string;
   };
   dashboards?: DashboardDefinition[];
   sensitivity_configs?: SensitivityConfig[];
+  optimisation_configs?: OptimisationConfig[];
 };
 
 export type ScenarioRunResult = {
@@ -413,6 +437,86 @@ export type MonteCarloResponse = {
   samples: MonteCarloSample[];
 };
 
+// ── Optimisation types ──
+
+export type OptimisationMode = 'goal-seek' | 'multi-objective' | 'policy';
+
+export type OptimisationParameterRange = {
+  name: string;
+  low: number;
+  high: number;
+  steps: number;
+};
+
+export type OptimisationObjective = {
+  id: string;
+  output: string;
+  metric: 'final' | 'max' | 'min' | 'mean';
+  direction: 'minimize' | 'maximize';
+  weight: number;
+  target_value?: number;
+};
+
+export type OptimisationConfig = {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  mode: OptimisationMode;
+  // Goal-seek fields
+  output?: string;
+  target_value?: number;
+  metric?: 'final' | 'max' | 'min' | 'mean';
+  // Multi-objective fields
+  objectives?: OptimisationObjective[];
+  // Common
+  parameters: OptimisationParameterRange[];
+  // Policy fields
+  policy_output?: string;
+  policy_metric?: 'final' | 'max' | 'min' | 'mean';
+  policy_direction?: 'minimize' | 'maximize';
+};
+
+export type EvaluationPoint = {
+  params: Record<string, number>;
+  metricValue: number;
+  objectiveValues?: Record<string, number>;
+};
+
+export type ParetoPoint = {
+  params: Record<string, number>;
+  objectiveValues: Record<string, number>;
+  dominationRank: number;
+};
+
+export type PolicyRank = {
+  scenarioId: string;
+  scenarioName: string;
+  metricValue: number;
+  rank: number;
+  series: Record<string, number[]>;
+};
+
+export type OptimisationResult = {
+  configId: string;
+  mode: OptimisationMode;
+  // Goal-seek
+  bestParams?: Record<string, number>;
+  bestMetric?: number;
+  targetValue?: number;
+  gap?: number;
+  baselineSeries?: Record<string, number[]>;
+  optimisedSeries?: Record<string, number[]>;
+  // Common
+  evaluations?: EvaluationPoint[];
+  totalEvaluations?: number;
+  elapsedMs?: number;
+  // Multi-objective
+  paretoFrontier?: ParetoPoint[];
+  // Policy
+  policyRanking?: PolicyRank[];
+};
+
 export type ImportedVariableSummary = {
   name: string;
   py_name?: string;
@@ -436,132 +540,6 @@ export type ImportedTimeSettings = {
   saveper?: number;
 };
 
-export type VensimImportGapItem = {
-  kind: 'variable' | 'edge' | 'equation' | 'construct' | 'layout';
-  symbol: string;
-  reason: string;
-  severity: 'info' | 'warning' | 'error';
-};
-
-export type VensimImportGapSummary = {
-  dropped_variables: number;
-  dropped_edges: number;
-  unparsed_equations: number;
-  unsupported_constructs: string[];
-  samples: VensimImportGapItem[];
-};
-
-export type VensimCapabilityReport = {
-  tier: 'T0' | 'T1' | 'T2' | 'T3' | 'T4';
-  supported: string[];
-  partial: string[];
-  unsupported: string[];
-  detected_functions: string[];
-  detected_time_settings: string[];
-  details?: VensimFunctionCapabilityDetail[];
-  families?: VensimFamilyCapabilitySummary[];
-};
-
-export type VensimFunctionCapabilityDetail = {
-  function: string;
-  family: string;
-  support_mode: 'pysd' | 'native_fallback' | 'unsupported';
-  pysd_support: 'yes' | 'partial' | 'no';
-  deterministic: boolean;
-  dimensional: boolean;
-  count: number;
-  severity: 'info' | 'warning' | 'error';
-  notes: string;
-};
-
-export type VensimFamilyCapabilitySummary = {
-  family: string;
-  functions: string[];
-  highest_severity: 'info' | 'warning' | 'error';
-  support_mode: 'pysd' | 'native_fallback' | 'unsupported';
-};
-
-export type VensimImportResponse = {
-  ok: boolean;
-  import_id: string;
-  source: { filename: string; format: 'vensim-mdl' };
-  capabilities: VensimCapabilityReport;
-  warnings: ValidationIssue[];
-  errors: ValidationIssue[];
-  model_view: {
-    canonical?: ModelDocument;
-    variables: ImportedVariableSummary[];
-    dimensions?: ImportedDimensionSummary[];
-    time_settings?: ImportedTimeSettings;
-    dependency_graph?: { edges: [string, string][] };
-    import_gaps?: VensimImportGapSummary;
-  };
-};
-
-export type VensimSimConfigOverride = {
-  start?: number;
-  stop?: number;
-  dt?: number;
-  saveper?: number;
-};
-
-export type VensimSimulateRequest = {
-  import_id: string;
-  sim_config?: VensimSimConfigOverride;
-  outputs?: string[];
-  params?: Record<string, number | string>;
-};
-
-export type VensimSimulateResponse = SimulateResponse;
-
-export type VensimDiagnosticsResponse = {
-  ok: boolean;
-  import_id: string;
-  capabilities: VensimCapabilityReport;
-  warnings: ValidationIssue[];
-  errors: ValidationIssue[];
-  import_gaps?: VensimImportGapSummary;
-};
-
-export type VensimPresetLoadStatus = 'ok' | 'partial' | 'failed';
-
-export type VensimParityReadinessResponse = {
-  ok: boolean;
-  import_id: string;
-  readiness: 'green' | 'yellow' | 'red';
-  reasons: string[];
-};
-
-export type VensimBatchSimulateRequest = {
-  import_id: string;
-  sim_config?: VensimSimConfigOverride;
-  scenarios: ScenarioDefinition[];
-  include_baseline?: boolean;
-  outputs?: string[];
-};
-
-export type VensimOATSensitivityRequest = {
-  import_id: string;
-  sim_config?: VensimSimConfigOverride;
-  scenarios: ScenarioDefinition[];
-  scenario_id?: string;
-  output: string;
-  metric: 'final' | 'max' | 'min' | 'mean';
-  parameters: SensitivityParameterRange[];
-};
-
-export type VensimMonteCarloRequest = {
-  import_id: string;
-  sim_config?: VensimSimConfigOverride;
-  scenarios: ScenarioDefinition[];
-  scenario_id?: string;
-  output: string;
-  metric: 'final' | 'max' | 'min' | 'mean';
-  runs: number;
-  seed: number;
-  parameters: MonteCarloParameter[];
-};
-
 export type RetryLogEntry = {
   round: number;
   errors: string[];
@@ -569,11 +547,19 @@ export type RetryLogEntry = {
   model_used?: string;
 };
 
+export type AIChatComponentGroup = {
+  type: string;
+  names: string[];
+};
+
 export type AIChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   suggestions?: string[];
   retryLog?: RetryLogEntry[];
+  debugRawResponse?: string;
+  /** Grouped components created/modified by this AI response */
+  components?: AIChatComponentGroup[];
 };
 
 export type AIPatch = {
@@ -597,6 +583,19 @@ export type AIAction = {
   params: Record<string, unknown>;
 };
 
+export type StreamChunk = {
+  type: 'node' | 'edge' | 'action' | 'message' | 'clarification';
+  data: Record<string, unknown>;
+  status: 'pending' | 'valid' | 'warning' | 'error';
+  errors: string[];
+};
+
+export type ChunkUpdate = {
+  index: number;
+  status: 'valid' | 'warning' | 'error';
+  errors: string[];
+};
+
 export type AIExecuteResponse = {
   ok: boolean;
   model: ModelDocument | null;
@@ -607,4 +606,6 @@ export type AIExecuteResponse = {
   needs_clarification: boolean;
   suggestions: string[];
   retry_log: RetryLogEntry[];
+  debug_raw_response?: string | null;
+  chunks?: StreamChunk[];
 };

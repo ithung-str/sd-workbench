@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -24,6 +25,11 @@ def _load_repo_env() -> None:
 
 
 _load_repo_env()
+
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 from app.api.routes_ai import router as ai_router
 from app.api.routes_imports import router as imports_router

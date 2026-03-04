@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app.schemas.ai import AIExecuteRequest, AIExecuteResponse
-from app.services.ai_model_service import execute_ai_command, execute_ai_command_stream
+from app.services.ai_model_service import execute_ai_command, execute_ai_command_stream, execute_ai_command_stream_jsonl
 
 router = APIRouter(prefix="/api")
 
@@ -32,7 +32,7 @@ def ai_execute_endpoint(request: AIExecuteRequest) -> AIExecuteResponse:
 @router.post("/ai/execute-stream")
 async def ai_execute_stream_endpoint(request: AIExecuteRequest) -> StreamingResponse:
     async def event_generator():
-        async for event in execute_ai_command_stream(
+        async for event in execute_ai_command_stream_jsonl(
             request.prompt, request.model, request.history or None, request.sim_config
         ):
             event_type = event.get("event", "status")

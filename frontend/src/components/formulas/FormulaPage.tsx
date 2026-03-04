@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionIcon,
   Button,
+  Collapse,
   Group,
   Menu,
   ScrollArea,
+  Stack,
   Table,
   Text,
   TextInput,
@@ -48,8 +50,8 @@ type FormulaRow = {
   connectedVariableNames: string[];
   issues: ValidationIssue[];
   stockFlowEquation: string | null;
-  geo_x?: number;
-  geo_y?: number;
+  longitude?: number;
+  latitude?: number;
 };
 
 const TYPE_COLORS: Record<TypeFilter, string> = {
@@ -87,10 +89,14 @@ export function FormulaPage() {
   const selected = useEditorStore((s) => s.selected);
   const addEdge = useEditorStore((s) => s.addEdge);
   const autoOrganize = useEditorStore((s) => s.autoOrganize);
-  const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
-  const importedVensim = useEditorStore((s) => s.importedVensim);
+  const addDimension = useEditorStore((s) => s.addDimension);
+  const updateDimension = useEditorStore((s) => s.updateDimension);
+  const deleteDimension = useEditorStore((s) => s.deleteDimension);
 
   // Local state
+  const [dimOpen, setDimOpen] = useState(true);
+  const [newDimName, setNewDimName] = useState('');
+  const [newDimElements, setNewDimElements] = useState('');
   const [activeFilters, setActiveFilters] = useState<Set<TypeFilter>>(new Set(ALL_TYPES));
   const [sortField, setSortField] = useState<SortField>('type');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -104,11 +110,12 @@ export function FormulaPage() {
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   // Derived data
+  const dimensions = model.dimensions ?? [];
   const equationVariableNames = useMemo(() => getEquationVariableNames(model), [model]);
 
   const availableFunctions = useMemo(
-    () => buildContextFunctions(activeSimulationMode, importedVensim),
-    [activeSimulationMode, importedVensim],
+    () => buildContextFunctions(),
+    [],
   );
 
   const makeConnectHandler = useCallback(
@@ -146,8 +153,8 @@ export function FormulaPage() {
           ...(validation?.warnings?.filter((w) => w.node_id === n.id) ?? []),
         ],
         stockFlowEquation: n.type === 'stock' ? getStockFlowEquation(n.id, model) : null,
-        geo_x: n.type === 'stock' ? (n as StockNode).geo_x : undefined,
-        geo_y: n.type === 'stock' ? (n as StockNode).geo_y : undefined,
+        longitude: n.type === 'stock' ? (n as StockNode).longitude : undefined,
+        latitude: n.type === 'stock' ? (n as StockNode).latitude : undefined,
       }));
 
     const globalRows: FormulaRow[] = (model.global_variables ?? []).map((g) => ({
@@ -278,7 +285,7 @@ export function FormulaPage() {
         const node = model.nodes.find(
           (n) => n.type === 'stock' && n.name === name,
         );
-        if (node) updateNode(node.id, { geo_x: geoX, geo_y: geoY } as Partial<NodeModel>);
+        if (node) updateNode(node.id, { longitude: geoX, latitude: geoY } as Partial<NodeModel>);
       }
     };
     reader.readAsText(file);
@@ -304,6 +311,54 @@ export function FormulaPage() {
 
   const contentBody = (
         <div className="formula-page" style={{ padding: '16px 24px', height: '100%', overflow: 'auto' }}>
+          {/* Dimensions */}
+          <Stack gap="xs" mb="md">
+            <Group justify="space-between">
+              <Text fw={600} size="sm" onClick={() => setDimOpen((o) => !o)} style={{ cursor: 'pointer' }}>
+                {dimOpen ? '\u25BC' : '\u25B6'} Dimensions ({dimensions.length})
+              </Text>
+            </Group>
+            <Collapse in={dimOpen}>
+              <Stack gap={4}>
+                {dimensions.map((dim) => (
+                  <Group key={dim.id} gap="xs">
+                    <TextInput
+                      size="xs" style={{ flex: 1 }} placeholder="Name"
+                      value={dim.name}
+                      onChange={(e) => updateDimension(dim.id, { name: e.currentTarget.value })}
+                    />
+                    <TextInput
+                      size="xs" style={{ flex: 2 }} placeholder="Elements (comma-separated)"
+                      value={dim.elements.join(', ')}
+                      onChange={(e) => updateDimension(dim.id, {
+                        elements: e.currentTarget.value.split(',').map((s) => s.trim()).filter(Boolean),
+                      })}
+                    />
+                    <ActionIcon size="sm" color="red" variant="subtle" onClick={() => deleteDimension(dim.id)}>
+                      <IconTrash size={14} />
+                    </ActionIcon>
+                  </Group>
+                ))}
+                <Group gap="xs">
+                  <TextInput size="xs" placeholder="New dimension name" value={newDimName}
+                    onChange={(e) => setNewDimName(e.currentTarget.value)} style={{ flex: 1 }} />
+                  <TextInput size="xs" placeholder="Elements (comma-separated)" value={newDimElements}
+                    onChange={(e) => setNewDimElements(e.currentTarget.value)} style={{ flex: 2 }} />
+                  <ActionIcon size="sm" variant="light"
+                    onClick={() => {
+                      if (newDimName.trim()) {
+                        addDimension(newDimName.trim(), newDimElements.split(',').map((s) => s.trim()).filter(Boolean));
+                        setNewDimName('');
+                        setNewDimElements('');
+                      }
+                    }}>
+                    <IconPlus size={14} />
+                  </ActionIcon>
+                </Group>
+              </Stack>
+            </Collapse>
+          </Stack>
+
           {/* Toolbar */}
           <Group justify="space-between" mb="sm">
             <Group gap={6}>
@@ -322,7 +377,7 @@ export function FormulaPage() {
             </Group>
 
             <Group gap={6}>
-              <Tooltip label="Import coordinates CSV (name,geo_x,geo_y)" withArrow>
+              <Tooltip label="Import coordinates CSV (name,longitude,latitude)" withArrow>
                 <ActionIcon variant="subtle" color="gray" size="sm" onClick={() => csvInputRef.current?.click()}>
                   <IconMapPin size={16} />
                 </ActionIcon>
@@ -525,11 +580,11 @@ export function FormulaPage() {
                           size="xs"
                           variant="unstyled"
                           placeholder="—"
-                          value={row.geo_x != null ? String(row.geo_x) : ''}
+                          value={row.longitude != null ? String(row.longitude) : ''}
                           onChange={(e) => {
                             const v = e.currentTarget.value;
                             const parsed = parseFloat(v);
-                            updateNode(row.id, { geo_x: Number.isFinite(parsed) ? parsed : undefined } as Partial<NodeModel>);
+                            updateNode(row.id, { longitude: Number.isFinite(parsed) ? parsed : undefined } as Partial<NodeModel>);
                           }}
                           styles={{ input: { fontFamily: 'monospace', fontSize: '0.78rem', textAlign: 'right' } }}
                         />
@@ -543,11 +598,11 @@ export function FormulaPage() {
                           size="xs"
                           variant="unstyled"
                           placeholder="—"
-                          value={row.geo_y != null ? String(row.geo_y) : ''}
+                          value={row.latitude != null ? String(row.latitude) : ''}
                           onChange={(e) => {
                             const v = e.currentTarget.value;
                             const parsed = parseFloat(v);
-                            updateNode(row.id, { geo_y: Number.isFinite(parsed) ? parsed : undefined } as Partial<NodeModel>);
+                            updateNode(row.id, { latitude: Number.isFinite(parsed) ? parsed : undefined } as Partial<NodeModel>);
                           }}
                           styles={{ input: { fontFamily: 'monospace', fontSize: '0.78rem', textAlign: 'right' } }}
                         />

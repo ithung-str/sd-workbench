@@ -5,7 +5,7 @@ import { ComponentsPalette } from './flyouts/ComponentsPalette';
 import { ModelOutline } from './flyouts/ModelOutline';
 import { GlobalVariables } from './flyouts/GlobalVariables';
 import { SettingsPanel } from './flyouts/SettingsPanel';
-import { SearchPanel } from './flyouts/SearchPanel';
+import { DataTablesFlyout } from './flyouts/DataTablesFlyout';
 import '../../styles/flyout-panel.css';
 
 const PANEL_TITLES: Record<NonNullable<FlyoutPanelType>, string> = {
@@ -13,7 +13,7 @@ const PANEL_TITLES: Record<NonNullable<FlyoutPanelType>, string> = {
   outline: 'Model Outline',
   variables: 'Global Variables',
   settings: 'Settings',
-  search: 'Search',
+  data: 'Data Tables',
 };
 
 export function FlyoutPanel() {
@@ -36,7 +36,7 @@ export function FlyoutPanel() {
           {activeFlyout === 'outline' && <ModelOutline />}
           {activeFlyout === 'variables' && <GlobalVariables />}
           {activeFlyout === 'settings' && <SettingsPanel />}
-          {activeFlyout === 'search' && <SearchPanel />}
+          {activeFlyout === 'data' && <DataTablesFlyout />}
         </div>
       </ScrollArea>
     </div>

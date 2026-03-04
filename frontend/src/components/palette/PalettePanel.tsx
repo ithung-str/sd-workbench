@@ -14,8 +14,8 @@ export function PalettePanel({ onSelectOutlineNode }: PalettePanelProps) {
   const model = useEditorStore((s) => s.model);
   const selected = useEditorStore((s) => s.selected);
   const setSelected = useEditorStore((s) => s.setSelected);
-  const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
-  const importedVensim = useEditorStore((s) => s.importedVensim);
+  const activeSimulationMode = 'native_json' as const;
+  const importedVensim = null as any;
   const [editingGlobalId, setEditingGlobalId] = useState<string | null>(null);
   const [editingGlobalValue, setEditingGlobalValue] = useState('');
   const globalUsage = useMemo(() => collectGlobalVariableUsage(model), [model]);

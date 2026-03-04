@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ReactFlow, { Background, BackgroundVariant, Controls, MarkerType, MiniMap, Panel, ReactFlowProvider, type Connection, type Edge, type EdgeTypes, type Node, type NodeTypes, type OnConnectStartParams, type ReactFlowInstance } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, MarkerType, MiniMap, Panel, ReactFlowProvider, type Connection, type Edge, type EdgeTypes, type Node, type NodeTypes, type OnConnectStartParams, type OnSelectionChangeParams, type ReactFlowInstance } from 'reactflow';
 import { createPortal } from 'react-dom';
 import 'reactflow/dist/style.css';
 
@@ -49,6 +49,9 @@ function ModelCanvasInner() {
   const selected = useEditorStore((s) => s.selected);
   const setSelected = useEditorStore((s) => s.setSelected);
   const deleteSelected = useEditorStore((s) => s.deleteSelected);
+  const multiSelectedNodeIds = useEditorStore((s) => s.multiSelectedNodeIds);
+  const setMultiSelectedNodeIds = useEditorStore((s) => s.setMultiSelectedNodeIds);
+  const deleteMultiSelected = useEditorStore((s) => s.deleteMultiSelected);
   const addModelEdge = useEditorStore((s) => s.addEdge);
   const updateNodePosition = useEditorStore((s) => s.updateNodePosition);
   const commitNodePosition = useEditorStore((s) => s.commitNodePosition);
@@ -101,8 +104,8 @@ function ModelCanvasInner() {
   }, [results]);
 
   const rfNodes = useMemo<Node[]>(
-    () => toReactFlowNodes(model.nodes, model.edges, selected, showFunctionInternals, undefined, sparklineDataMap),
-    [model.nodes, model.edges, selected, showFunctionInternals, sparklineDataMap],
+    () => toReactFlowNodes(model.nodes, model.edges, selected, showFunctionInternals, undefined, sparklineDataMap, multiSelectedNodeIds),
+    [model.nodes, model.edges, selected, showFunctionInternals, sparklineDataMap, multiSelectedNodeIds],
   );
 
   const rfEdges = useMemo<Edge[]>(
@@ -308,6 +311,16 @@ function ModelCanvasInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flowInstance]);
 
+  const onSelectionChange = useCallback(({ nodes }: OnSelectionChangeParams) => {
+    const selectedIds = nodes.map((n) => n.id);
+    if (selectedIds.length >= 2) {
+      setMultiSelectedNodeIds(selectedIds);
+    } else if (selectedIds.length === 1) {
+      setSelected({ kind: 'node', id: selectedIds[0] });
+    }
+    // When 0, we don't clear here — onPaneClick handles that
+  }, [setMultiSelectedNodeIds, setSelected]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
@@ -330,14 +343,19 @@ function ModelCanvasInner() {
       }
       if (event.key !== 'Backspace') return;
       if (isCanvasLocked) return;
-      if (!selected || (selected.kind !== 'node' && selected.kind !== 'edge')) return;
       if (isEditableTarget(event.target)) return;
+      if (multiSelectedNodeIds.length >= 2) {
+        event.preventDefault();
+        deleteMultiSelected();
+        return;
+      }
+      if (!selected || (selected.kind !== 'node' && selected.kind !== 'edge')) return;
       event.preventDefault();
       deleteSelected();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleteSelected, isCanvasLocked, selected, undo, redo]);
+  }, [deleteSelected, deleteMultiSelected, isCanvasLocked, selected, multiSelectedNodeIds, undo, redo]);
 
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node) => {
@@ -377,13 +395,20 @@ function ModelCanvasInner() {
         nodesDraggable={!isCanvasLocked}
         nodesConnectable={!isCanvasLocked}
         elementsSelectable
-        onNodeClick={(_, node) => setSelected({ kind: 'node', id: node.id })}
+        multiSelectionKeyCode="Shift"
+        selectionOnDrag={false}
+        onSelectionChange={onSelectionChange}
+        onNodeClick={(event, node) => {
+          const e = event as unknown as MouseEvent;
+          if (e.shiftKey || e.metaKey) return; // let ReactFlow handle multi-select
+          setSelected({ kind: 'node', id: node.id });
+        }}
         onNodeDoubleClick={(event, node) => {
           setSelected({ kind: 'node', id: node.id });
           setPopover({ nodeId: node.id, screenX: (event as unknown as MouseEvent).clientX, screenY: (event as unknown as MouseEvent).clientY });
         }}
         onEdgeClick={(_, edge) => setSelected({ kind: 'edge', id: edge.id })}
-        onPaneClick={() => { setSelected(null); setPopover(null); }}
+        onPaneClick={() => { setSelected(null); setMultiSelectedNodeIds([]); setPopover(null); }}
         onConnect={onConnect}
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
@@ -398,7 +423,6 @@ function ModelCanvasInner() {
           <CanvasComponentsBar />
         </Panel>
         {showMinimap && <MiniMap pannable zoomable />}
-        <Controls />
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="#b9c1cf" />
       </ReactFlow>
       {flowDrag && createPortal(

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from app.equations.parser import DELAY_FUNCTIONS, SMOOTH_FUNCTIONS, parse_equation
 from app.schemas.model import AuxNode, FlowNode, LookupNode, ModelDocument, StockNode
 from app.validation.semantic import topological_order_for_transients
+from app.equations.evaluator import DimensionContext
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ class ExecutableModel:
     outputs: list[str]
     delay_stocks: list[DelayStock] = field(default_factory=list)
     delay_fixed_specs: list[DelayFixedSpec] = field(default_factory=list)
+    dimension_context: DimensionContext = field(default_factory=DimensionContext)
 
 
 
@@ -342,6 +344,17 @@ def translate_model(model: ModelDocument) -> ExecutableModel:
 
     transient_order = topological_order_for_transients(model)
     outputs = model.outputs or [n.name for n in stock_nodes]
+
+    # Build dimension context
+    dim_dimensions: dict[str, list[str]] = {}
+    dim_node_dims: dict[str, list[str]] = {}
+    for dim_def in model.dimensions:
+        dim_dimensions[dim_def.name] = list(dim_def.elements)
+    for node in model.nodes:
+        if hasattr(node, "dimensions") and node.dimensions:
+            dim_node_dims[node.name] = list(node.dimensions)
+    dim_context = DimensionContext(dimensions=dim_dimensions, node_dimensions=dim_node_dims)
+
     return ExecutableModel(
         stock_nodes=stock_nodes,
         aux_nodes=aux_nodes,
@@ -352,4 +365,5 @@ def translate_model(model: ModelDocument) -> ExecutableModel:
         outputs=outputs,
         delay_stocks=all_delay_stocks,
         delay_fixed_specs=all_delay_fixed,
+        dimension_context=dim_context,
     )

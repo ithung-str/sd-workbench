@@ -4,7 +4,7 @@ import {
   IconListDetails,
   IconVariable,
   IconSettings,
-  IconSearch,
+  IconTable,
 } from '@tabler/icons-react';
 import { useUIStore, type FlyoutPanel } from '../../state/uiStore';
 import '../../styles/icon-strip.css';
@@ -14,7 +14,7 @@ const ICONS: Array<{ panel: NonNullable<FlyoutPanel>; icon: typeof IconPlus; lab
   { panel: 'outline', icon: IconListDetails, label: 'Model Outline' },
   { panel: 'variables', icon: IconVariable, label: 'Global Variables' },
   { panel: 'settings', icon: IconSettings, label: 'Settings' },
-  { panel: 'search', icon: IconSearch, label: 'Search' },
+  { panel: 'data', icon: IconTable, label: 'Data Tables' },
 ];
 
 export function IconStrip() {

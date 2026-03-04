@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import type { FunctionCatalogEntry } from '../../types/model';
+import { useEditorStore } from '../../state/editorStore';
 import {
   DEFAULT_FUNCTION_NAMES,
   DEFAULT_RESERVED_NAMES,
@@ -195,8 +196,28 @@ export function EquationEditor({
     setDismissSuggestions(false);
   };
 
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Ctrl/Cmd+Z → store undo/redo (prevent browser native undo conflict)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+      return;
+    }
+
     if (mode !== 'suggest') {
+      // Enter → blur/confirm (equations are single-expression)
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        textRef.current?.blur();
+        return;
+      }
       if (e.key === 'Escape') setDismissSuggestions(true);
       return;
     }

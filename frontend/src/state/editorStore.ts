@@ -10,15 +10,24 @@ import {
 import { firstFreeRect, resolveCardRect } from '../lib/dashboardLayout';
 import { computeAutoLayout } from '../lib/autoLayout';
 import { syncInfluenceEdgesForNode } from '../lib/modelHelpers';
+import { detectLoops } from '../lib/loopDetection';
 import { localValidate } from '../lib/modelValidation';
 import { blankModel, cloneModel, teacupModel } from '../lib/sampleModels';
+import {
+  saveModelToStorage,
+  loadModelFromStorage,
+  getActiveModelId,
+  setActiveModelId,
+} from '../lib/modelStorage';
 import type {
+  AIChatComponentGroup,
   AIChatMessage,
   BatchSimulateResponse,
   CldSymbol,
   CldLoopDirection,
   DashboardCard,
   DashboardDefinition,
+  DimensionDefinition,
   EdgeModel,
   GlobalVariable,
   ModelDocument,
@@ -26,6 +35,8 @@ import type {
   MonteCarloResponse,
   NodeModel,
   OATSensitivityResponse,
+  OptimisationConfig,
+  OptimisationResult,
   ScenarioDefinition,
   SensitivityConfig,
   SimConfig,
@@ -36,8 +47,8 @@ import type {
 } from '../types/model';
 
 export type DockTab = 'validation' | 'chart' | 'table' | 'compare';
-export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity';
-export type RightSidebarMode = 'inspector' | 'chat' | 'simulation';
+export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity' | 'optimisation' | 'data';
+export type RightSidebarMode = 'inspector' | 'chat' | 'simulation' | 'validation';
 
 type Selection =
   | { kind: 'node'; id: string }
@@ -46,6 +57,26 @@ type Selection =
   | null;
 
 type CanvasInsertNodeType = Exclude<NodeModel['type'], 'cld_symbol'>;
+
+const VISIBLE_NODE_TYPES = new Set(['stock', 'flow', 'aux', 'lookup']);
+const TYPE_LABELS: Record<string, string> = { stock: 'Stocks', flow: 'Flows', aux: 'Variables', lookup: 'Lookups' };
+
+function buildComponentGroups(newModel: ModelDocument): AIChatComponentGroup[] {
+  const grouped: Record<string, string[]> = {};
+  for (const node of newModel.nodes) {
+    if (!VISIBLE_NODE_TYPES.has(node.type)) continue;
+    const name = 'name' in node ? (node as any).name : undefined;
+    if (!name) continue;
+    const type = node.type;
+    if (!grouped[type]) grouped[type] = [];
+    grouped[type].push(name);
+  }
+  const order = ['stock', 'flow', 'aux', 'lookup'];
+  return order
+    .filter((t) => grouped[t]?.length)
+    .map((t) => ({ type: TYPE_LABELS[t] || t, names: grouped[t] }));
+}
+
 type HistoryEntry = { model: ModelDocument; selected: Selection };
 type PendingCommit = {
   key: string;
@@ -67,6 +98,11 @@ type EditorState = {
   activeDashboardId: string | null;
   sensitivityConfigs: SensitivityConfig[];
   activeSensitivityConfigId: string;
+  optimisationConfigs: OptimisationConfig[];
+  activeOptimisationConfigId: string;
+  optimisationResults: OptimisationResult | null;
+  isRunningOptimisation: boolean;
+  optimisationProgress: { current: number; total: number } | null;
   compareResults: BatchSimulateResponse | null;
   oatResults: OATSensitivityResponse | null;
   monteCarloResults: MonteCarloResponse | null;
@@ -86,6 +122,7 @@ type EditorState = {
   aiStreamingChunks: StreamChunk[];
   isRunningBatch: boolean;
   isRunningSensitivity: boolean;
+  multiSelectedNodeIds: string[];
   isCanvasLocked: boolean;
   activeTab: WorkbenchTab;
   backendHealthy: boolean | null;
@@ -94,12 +131,19 @@ type EditorState = {
   historyLimit: number;
   pendingCommit: PendingCommit | null;
   setSelected: (selected: Selection) => void;
+  setMultiSelectedNodeIds: (ids: string[]) => void;
+  deleteMultiSelected: () => void;
+  bulkUpdateNodes: (ids: string[], patch: Partial<NodeModel>) => void;
   setCanvasLocked: (locked: boolean) => void;
   addNode: (type: CanvasInsertNodeType) => void;
   addCldSymbol: (symbol: CldSymbol) => void;
   addGlobalVariable: () => void;
   updateGlobalVariable: (id: string, patch: Partial<GlobalVariable>) => void;
   deleteGlobalVariable: (id: string) => void;
+  // Dimension management
+  addDimension: (name: string, elements: string[]) => void;
+  updateDimension: (id: string, patch: Partial<Pick<DimensionDefinition, 'name' | 'elements'>>) => void;
+  deleteDimension: (id: string) => void;
   updateNode: (id: string, patch: Partial<NodeModel>) => void;
   updateNodePosition: (id: string, x: number, y: number) => void;
   commitNodePosition: (id: string, x: number, y: number) => void;
@@ -152,6 +196,12 @@ type EditorState = {
   deleteSensitivityConfig: (id: string) => void;
   setActiveSensitivityConfig: (id: string) => void;
   runActiveSensitivity: () => Promise<void>;
+  createOptimisationConfig: () => void;
+  duplicateOptimisationConfig: (id: string) => void;
+  updateOptimisationConfig: (id: string, patch: Partial<OptimisationConfig>) => void;
+  deleteOptimisationConfig: (id: string) => void;
+  setActiveOptimisationConfig: (id: string) => void;
+  runActiveOptimisation: () => Promise<void>;
   addDashboardCard: (dashboardId: string, card: Omit<DashboardCard, 'id' | 'order'> & { id?: string; order?: number }) => void;
   updateDashboardCard: (dashboardId: string, cardId: string, patch: Partial<DashboardCard>) => void;
   moveDashboardCard: (dashboardId: string, cardId: string, direction: 'up' | 'down') => void;
@@ -161,6 +211,10 @@ type EditorState = {
   setBackendHealthy: (value: boolean | null) => void;
   autoOrganize: () => void;
   alignNodes: (direction: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v', nodeIds: string[]) => void;
+  detectedLoops: import('../lib/loopDetection').DetectedLoop[];
+  highlightedLoopId: string | null;
+  refreshLoops: () => void;
+  setHighlightedLoop: (id: string | null) => void;
 };
 
 function defaultValidation(): ValidateResponse {
@@ -169,9 +223,10 @@ function defaultValidation(): ValidateResponse {
 
 function nextNodeDefaults(type: CanvasInsertNodeType, count: number): NodeModel {
   const n = count + 1;
+  const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   if (type === 'stock') {
     return {
-      id: `stock_${n}`,
+      id: `stock_${uid}`,
       type: 'stock',
       name: `stock_${n}`,
       label: `Stock ${n}`,
@@ -182,7 +237,7 @@ function nextNodeDefaults(type: CanvasInsertNodeType, count: number): NodeModel 
   }
   if (type === 'flow') {
     return {
-      id: `flow_${n}`,
+      id: `flow_${uid}`,
       type: 'flow',
       name: `flow_${n}`,
       label: `Flow ${n}`,
@@ -192,18 +247,18 @@ function nextNodeDefaults(type: CanvasInsertNodeType, count: number): NodeModel 
   }
   if (type === 'cloud') {
     return {
-      id: `cloud_${n}`,
+      id: `cloud_${uid}`,
       type: 'cloud',
       position: { x: 200 + n * 40, y: 160 + n * 30 },
     };
   }
   if (type === 'lookup') {
     return {
-      id: `lookup_${n}`,
+      id: `lookup_${uid}`,
       type: 'lookup',
       name: `lookup_${n}`,
       label: `Lookup ${n}`,
-      equation: '0',
+      equation: 'TIME',
       points: [
         { x: 0, y: 0 },
         { x: 1, y: 1 },
@@ -214,14 +269,14 @@ function nextNodeDefaults(type: CanvasInsertNodeType, count: number): NodeModel 
   }
   if (type === 'text') {
     return {
-      id: `text_${n}`,
+      id: `text_${uid}`,
       type: 'text',
       text: 'Note',
       position: { x: 260 + n * 20, y: 140 + n * 20 },
     };
   }
   return {
-    id: `aux_${n}`,
+    id: `aux_${uid}`,
     type: 'aux',
     name: `aux_${n}`,
     label: `Variable ${n}`,
@@ -275,6 +330,17 @@ function defaultSensitivityConfigs(model: ModelDocument): { sensitivityConfigs: 
   return { sensitivityConfigs: [], activeSensitivityConfigId: '' };
 }
 
+function defaultOptimisationConfigs(model: ModelDocument): { optimisationConfigs: OptimisationConfig[]; activeOptimisationConfigId: string } {
+  const existing = model.metadata?.analysis?.optimisation_configs ?? [];
+  if (existing.length > 0) {
+    const activeId =
+      model.metadata?.analysis?.defaults?.active_optimisation_config_id ??
+      existing[0].id;
+    return { optimisationConfigs: existing, activeOptimisationConfigId: activeId };
+  }
+  return { optimisationConfigs: [], activeOptimisationConfigId: '' };
+}
+
 function persistScenarios(model: ModelDocument, scenarios: ScenarioDefinition[], activeScenarioId: string): ModelDocument {
   const existingAnalysis = model.metadata?.analysis;
   const existingDashboards = existingAnalysis?.dashboards ?? [];
@@ -313,6 +379,8 @@ function persistAnalysis(
   activeDashboardId: string | null,
   sensitivityConfigs?: SensitivityConfig[],
   activeSensitivityConfigId?: string,
+  optimisationConfigs?: OptimisationConfig[],
+  activeOptimisationConfigId?: string,
 ): ModelDocument {
   return {
     ...model,
@@ -322,10 +390,12 @@ function persistAnalysis(
         scenarios,
         dashboards,
         sensitivity_configs: sensitivityConfigs,
+        optimisation_configs: optimisationConfigs,
         defaults: {
           baseline_scenario_id: activeScenarioId,
           active_dashboard_id: activeDashboardId ?? undefined,
           active_sensitivity_config_id: activeSensitivityConfigId ?? undefined,
+          active_optimisation_config_id: activeOptimisationConfigId ?? undefined,
         },
       },
     },
@@ -362,10 +432,13 @@ function snapshotsEqual(a: HistoryEntry, b: HistoryEntry): boolean {
 }
 
 export const useEditorStore = create<EditorState>((set, get) => {
-  const initialModel = cloneModel(teacupModel);
+  const savedId = getActiveModelId();
+  const savedModel = savedId ? loadModelFromStorage(savedId) : null;
+  const initialModel = cloneModel(savedModel ?? teacupModel);
   const initialScenarios = defaultScenarios(initialModel);
   const initialDashboards = defaultDashboards(initialModel);
   const initialSensitivityConfigs = defaultSensitivityConfigs(initialModel);
+  const initialOptimisationConfigs = defaultOptimisationConfigs(initialModel);
   const pushHistory = (before: HistoryEntry, after: HistoryEntry) => {
     if (snapshotsEqual(before, after)) return;
     set((state) => {
@@ -424,6 +497,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
       initialDashboards.activeDashboardId,
       initialSensitivityConfigs.sensitivityConfigs,
       initialSensitivityConfigs.activeSensitivityConfigId,
+      initialOptimisationConfigs.optimisationConfigs,
+      initialOptimisationConfigs.activeOptimisationConfigId,
     ),
     selected: null,
     simConfig: { start: 0, stop: 30, dt: 1, method: 'euler' },
@@ -433,6 +508,11 @@ export const useEditorStore = create<EditorState>((set, get) => {
     activeDashboardId: initialDashboards.activeDashboardId,
     sensitivityConfigs: initialSensitivityConfigs.sensitivityConfigs,
     activeSensitivityConfigId: initialSensitivityConfigs.activeSensitivityConfigId,
+    optimisationConfigs: initialOptimisationConfigs.optimisationConfigs,
+    activeOptimisationConfigId: initialOptimisationConfigs.activeOptimisationConfigId,
+    optimisationResults: null,
+    isRunningOptimisation: false,
+    optimisationProgress: null,
     compareResults: null,
     oatResults: null,
     monteCarloResults: null,
@@ -452,6 +532,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     aiStreamingChunks: [],
     isRunningBatch: false,
     isRunningSensitivity: false,
+    multiSelectedNodeIds: [],
     isCanvasLocked: false,
     activeTab: 'canvas',
     backendHealthy: null,
@@ -459,7 +540,53 @@ export const useEditorStore = create<EditorState>((set, get) => {
     redoStack: [],
     historyLimit: HISTORY_LIMIT,
     pendingCommit: null,
-    setSelected: (selected) => set({ selected }),
+    detectedLoops: [],
+    highlightedLoopId: null,
+    refreshLoops: () => {
+      const loops = detectLoops(get().model);
+      set({ detectedLoops: loops });
+    },
+    setHighlightedLoop: (id) => set({ highlightedLoopId: id }),
+    setSelected: (selected) => set({ selected, multiSelectedNodeIds: [] }),
+    setMultiSelectedNodeIds: (ids) => {
+      if (ids.length >= 2) {
+        set({ multiSelectedNodeIds: ids, selected: null });
+      } else {
+        set({ multiSelectedNodeIds: [] });
+      }
+    },
+    deleteMultiSelected: () => {
+      const { multiSelectedNodeIds } = get();
+      if (multiSelectedNodeIds.length < 2) return;
+      flushPendingCommit();
+      const before = snapshotFromState(get().model, get().selected);
+      const idsToDelete = new Set(multiSelectedNodeIds);
+      set((state) => {
+        const nodes = state.model.nodes.filter((n) => !idsToDelete.has(n.id));
+        const edges = state.model.edges.filter(
+          (e) => !idsToDelete.has(e.source) && !idsToDelete.has(e.target),
+        );
+        const model = { ...state.model, nodes, edges };
+        return { model, selected: null, multiSelectedNodeIds: [], localIssues: localValidate(model) };
+      });
+      const afterState = get();
+      pushHistory(before, snapshotFromState(afterState.model, afterState.selected));
+    },
+    bulkUpdateNodes: (ids, patch) => {
+      if (ids.length === 0) return;
+      flushPendingCommit();
+      const before = snapshotFromState(get().model, get().selected);
+      const idSet = new Set(ids);
+      set((state) => {
+        const nodes = state.model.nodes.map((n) =>
+          idSet.has(n.id) ? ({ ...n, ...patch } as NodeModel) : n,
+        );
+        const model = { ...state.model, nodes };
+        return { model, localIssues: localValidate(model) };
+      });
+      const afterState = get();
+      pushHistory(before, snapshotFromState(afterState.model, afterState.selected));
+    },
     setActiveTab: (activeTab) => set({ activeTab }),
     setBackendHealthy: (value) => set({ backendHealthy: value }),
     setCanvasLocked: (locked) => set({ isCanvasLocked: locked }),
@@ -548,6 +675,55 @@ export const useEditorStore = create<EditorState>((set, get) => {
       });
       const afterState = get();
       pushHistory(before, snapshotFromState(afterState.model, afterState.selected));
+    },
+    addDimension: (name, elements) => {
+      const before = snapshotFromState(get().model, get().selected);
+      set((state) => {
+        const id = `dim_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const dim: DimensionDefinition = { id, name, elements };
+        const dimensions = [...(state.model.dimensions ?? []), dim];
+        const model = { ...state.model, dimensions };
+        return { model };
+      });
+      const afterState = get();
+      scheduleGroupedCommit('dimension:add', before, snapshotFromState(afterState.model, afterState.selected));
+    },
+    updateDimension: (id, patch) => {
+      const before = snapshotFromState(get().model, get().selected);
+      set((state) => {
+        const dimensions = (state.model.dimensions ?? []).map((d) =>
+          d.id === id ? { ...d, ...patch } : d
+        );
+        const model = { ...state.model, dimensions };
+        return { model };
+      });
+      const afterState = get();
+      scheduleGroupedCommit(`dimension:${id}`, before, snapshotFromState(afterState.model, afterState.selected));
+    },
+    deleteDimension: (id) => {
+      const before = snapshotFromState(get().model, get().selected);
+      set((state) => {
+        const deletedDim = (state.model.dimensions ?? []).find((d) => d.id === id);
+        const dimensions = (state.model.dimensions ?? []).filter((d) => d.id !== id);
+        // Strip this dimension from any nodes that reference it
+        let nodes = state.model.nodes;
+        if (deletedDim) {
+          nodes = nodes.map((n) => {
+            if ('dimensions' in n && n.dimensions?.includes(deletedDim.name)) {
+              return {
+                ...n,
+                dimensions: n.dimensions.filter((d: string) => d !== deletedDim.name),
+                equation_overrides: {},
+              } as typeof n;
+            }
+            return n;
+          });
+        }
+        const model = { ...state.model, dimensions, nodes };
+        return { model };
+      });
+      const afterState = get();
+      scheduleGroupedCommit('dimension:delete', before, snapshotFromState(afterState.model, afterState.selected));
     },
     updateNode: (id, patch) => {
       const before = snapshotFromState(get().model, get().selected);
@@ -925,7 +1101,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
         let assistantMsg = response.assistant_message || 'Model updated successfully.';
         const retryLog = response.retry_log?.length ? response.retry_log : undefined;
         const debugRawResponse = response.debug_raw_response ?? undefined;
-        const finalHistory: AIChatMessage[] = [...updatedHistory, { role: 'assistant', content: assistantMsg, retryLog, debugRawResponse }];
+        const components = response.model ? buildComponentGroups(response.model) : undefined;
+        const finalHistory: AIChatMessage[] = [...updatedHistory, { role: 'assistant', content: assistantMsg, retryLog, debugRawResponse, components: components?.length ? components : undefined }];
 
         // --- Patch mode: apply patches individually via updateNode for undo support ---
         if (response.patches && response.patches.length > 0) {
@@ -962,19 +1139,27 @@ export const useEditorStore = create<EditorState>((set, get) => {
         }
 
         // --- Full model mode: replace entire model ---
-        // Apply auto-layout so AI-generated models have readable node positions
+        // Apply auto-layout only if the AI didn't already provide meaningful positions.
+        // Consider positions meaningful if at least some nodes have non-zero coordinates.
         const rawUpdated = cloneModel(response.model);
-        const layoutPositions = computeAutoLayout(rawUpdated);
-        const updated = {
-          ...rawUpdated,
-          nodes: rawUpdated.nodes.map((n) => {
-            const pos = layoutPositions.find((p) => p.id === n.id);
-            return pos ? { ...n, position: { x: pos.x, y: pos.y } } : n;
-          }),
-        };
+        const hasAiPositions = rawUpdated.nodes.some(
+          (n) => 'position' in n && (n.position.x !== 0 || n.position.y !== 0),
+        );
+        let updated = rawUpdated;
+        if (!hasAiPositions) {
+          const layoutPositions = computeAutoLayout(rawUpdated);
+          updated = {
+            ...rawUpdated,
+            nodes: rawUpdated.nodes.map((n) => {
+              const pos = layoutPositions.find((p) => p.id === n.id);
+              return pos ? { ...n, position: { x: pos.x, y: pos.y } } : n;
+            }),
+          };
+        }
         const scenarioDefaults = defaultScenarios(updated);
         const dashboardDefaults = defaultDashboards(updated);
         const sensitivityDefaults = defaultSensitivityConfigs(updated);
+        const optimisationDefaults = defaultOptimisationConfigs(updated);
         const persisted = persistAnalysis(
           updated,
           scenarioDefaults.scenarios,
@@ -983,6 +1168,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
           dashboardDefaults.activeDashboardId,
           sensitivityDefaults.sensitivityConfigs,
           sensitivityDefaults.activeSensitivityConfigId,
+          optimisationDefaults.optimisationConfigs,
+          optimisationDefaults.activeOptimisationConfigId,
         );
         set({
           model: persisted,
@@ -992,6 +1179,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
           activeDashboardId: dashboardDefaults.activeDashboardId,
           sensitivityConfigs: sensitivityDefaults.sensitivityConfigs,
           activeSensitivityConfigId: sensitivityDefaults.activeSensitivityConfigId,
+          optimisationConfigs: optimisationDefaults.optimisationConfigs,
+          activeOptimisationConfigId: optimisationDefaults.activeOptimisationConfigId,
           selected: null,
           localIssues: localValidate(persisted),
           validation: defaultValidation(),
@@ -1023,9 +1212,12 @@ export const useEditorStore = create<EditorState>((set, get) => {
     setRightSidebarMode: (mode) => set({ rightSidebarMode: mode }),
     startNewModel: () => {
       const fresh = cloneModel(blankModel);
+      fresh.id = `model_${Date.now()}`;
+      fresh.name = 'Untitled Model';
       const scenarioDefaults = defaultScenarios(fresh);
       const dashboardDefaults = defaultDashboards(fresh);
       const sensitivityDefaults = defaultSensitivityConfigs(fresh);
+      const optimisationDefaults = defaultOptimisationConfigs(fresh);
       set({
         model: fresh,
         scenarios: scenarioDefaults.scenarios,
@@ -1034,6 +1226,11 @@ export const useEditorStore = create<EditorState>((set, get) => {
         activeDashboardId: dashboardDefaults.activeDashboardId,
         sensitivityConfigs: sensitivityDefaults.sensitivityConfigs,
         activeSensitivityConfigId: sensitivityDefaults.activeSensitivityConfigId,
+        optimisationConfigs: optimisationDefaults.optimisationConfigs,
+        activeOptimisationConfigId: optimisationDefaults.activeOptimisationConfigId,
+        optimisationResults: null,
+        isRunningOptimisation: false,
+        optimisationProgress: null,
         selected: null,
         results: null,
         compareResults: null,
@@ -1054,6 +1251,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const scenarioDefaults = defaultScenarios(cloned);
       const dashboardDefaults = defaultDashboards(cloned);
       const sensitivityDefaults = defaultSensitivityConfigs(cloned);
+      const optimisationDefaults = defaultOptimisationConfigs(cloned);
       const persisted = persistAnalysis(
         cloned,
         scenarioDefaults.scenarios,
@@ -1062,6 +1260,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
         dashboardDefaults.activeDashboardId,
         sensitivityDefaults.sensitivityConfigs,
         sensitivityDefaults.activeSensitivityConfigId,
+        optimisationDefaults.optimisationConfigs,
+        optimisationDefaults.activeOptimisationConfigId,
       );
       set({
         model: persisted,
@@ -1071,6 +1271,11 @@ export const useEditorStore = create<EditorState>((set, get) => {
         activeDashboardId: dashboardDefaults.activeDashboardId,
         sensitivityConfigs: sensitivityDefaults.sensitivityConfigs,
         activeSensitivityConfigId: sensitivityDefaults.activeSensitivityConfigId,
+        optimisationConfigs: optimisationDefaults.optimisationConfigs,
+        activeOptimisationConfigId: optimisationDefaults.activeOptimisationConfigId,
+        optimisationResults: null,
+        isRunningOptimisation: false,
+        optimisationProgress: null,
         selected: null,
         results: null,
         compareResults: null,
@@ -1096,13 +1301,10 @@ export const useEditorStore = create<EditorState>((set, get) => {
           scenarios,
           activeScenarioId,
           model: persistAnalysis(
-            state.model,
-            scenarios,
-            activeScenarioId,
-            state.dashboards,
-            state.activeDashboardId,
-            state.sensitivityConfigs,
-            state.activeSensitivityConfigId,
+            state.model, scenarios, activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            state.sensitivityConfigs, state.activeSensitivityConfigId,
+            state.optimisationConfigs, state.activeOptimisationConfigId,
           ),
         };
       });
@@ -1129,13 +1331,10 @@ export const useEditorStore = create<EditorState>((set, get) => {
           scenarios,
           activeScenarioId,
           model: persistAnalysis(
-            state.model,
-            scenarios,
-            activeScenarioId,
-            state.dashboards,
-            state.activeDashboardId,
-            state.sensitivityConfigs,
-            state.activeSensitivityConfigId,
+            state.model, scenarios, activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            state.sensitivityConfigs, state.activeSensitivityConfigId,
+            state.optimisationConfigs, state.activeOptimisationConfigId,
           ),
         };
       });
@@ -1161,13 +1360,10 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return {
           scenarios,
           model: persistAnalysis(
-            state.model,
-            scenarios,
-            state.activeScenarioId,
-            state.dashboards,
-            state.activeDashboardId,
-            state.sensitivityConfigs,
-            state.activeSensitivityConfigId,
+            state.model, scenarios, state.activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            state.sensitivityConfigs, state.activeSensitivityConfigId,
+            state.optimisationConfigs, state.activeOptimisationConfigId,
           ),
         };
       });
@@ -1180,13 +1376,10 @@ export const useEditorStore = create<EditorState>((set, get) => {
           scenarios,
           activeScenarioId: baseline,
           model: persistAnalysis(
-            state.model,
-            scenarios,
-            baseline,
-            state.dashboards,
-            state.activeDashboardId,
-            state.sensitivityConfigs,
-            state.activeSensitivityConfigId,
+            state.model, scenarios, baseline,
+            state.dashboards, state.activeDashboardId,
+            state.sensitivityConfigs, state.activeSensitivityConfigId,
+            state.optimisationConfigs, state.activeOptimisationConfigId,
           ),
         };
       });
@@ -1194,7 +1387,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     setActiveScenario: (id) => {
       set((state) => ({
         activeScenarioId: id,
-        model: persistAnalysis(state.model, state.scenarios, id, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
+        model: persistAnalysis(state.model, state.scenarios, id, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId),
       }));
     },
     updateDefaultStyle: (nodeType, style) => {
@@ -1237,7 +1430,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return {
           dashboards,
           activeDashboardId: id,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId),
         };
       });
     },
@@ -1248,7 +1441,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         );
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId),
         };
       });
     },
@@ -1259,14 +1452,14 @@ export const useEditorStore = create<EditorState>((set, get) => {
         return {
           dashboards,
           activeDashboardId,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId),
         };
       });
     },
     setActiveDashboard: (id) => {
       set((state) => ({
         activeDashboardId: id,
-        model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId),
+        model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, id, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId),
       }));
     },
     createSensitivityConfig: () => {
@@ -1292,6 +1485,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.model, state.scenarios, state.activeScenarioId,
             state.dashboards, state.activeDashboardId,
             sensitivityConfigs, activeSensitivityConfigId,
+            state.optimisationConfigs, state.activeOptimisationConfigId,
           ),
         };
       });
@@ -1314,6 +1508,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.model, state.scenarios, state.activeScenarioId,
             state.dashboards, state.activeDashboardId,
             sensitivityConfigs, activeSensitivityConfigId,
+            state.optimisationConfigs, state.activeOptimisationConfigId,
           ),
         };
       });
@@ -1329,6 +1524,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.model, state.scenarios, state.activeScenarioId,
             state.dashboards, state.activeDashboardId,
             sensitivityConfigs, state.activeSensitivityConfigId,
+            state.optimisationConfigs, state.activeOptimisationConfigId,
           ),
         };
       });
@@ -1347,6 +1543,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
             state.model, state.scenarios, state.activeScenarioId,
             state.dashboards, state.activeDashboardId,
             sensitivityConfigs, activeSensitivityConfigId,
+            state.optimisationConfigs, state.activeOptimisationConfigId,
           ),
         };
       });
@@ -1358,6 +1555,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
           state.model, state.scenarios, state.activeScenarioId,
           state.dashboards, state.activeDashboardId,
           state.sensitivityConfigs, id,
+          state.optimisationConfigs, state.activeOptimisationConfigId,
         ),
       }));
     },
@@ -1388,6 +1586,127 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
       }
     },
+    createOptimisationConfig: () => {
+      set((state) => {
+        const outputOptions = state.model.nodes
+          .filter((n) => n.type !== 'text' && n.type !== 'cloud' && n.type !== 'cld_symbol' && n.type !== 'phantom')
+          .map((n) => n.name);
+        const next: OptimisationConfig = {
+          id: `optimisation_${Date.now()}`,
+          name: `Optimisation ${state.optimisationConfigs.length + 1}`,
+          mode: 'goal-seek',
+          output: outputOptions[0] ?? '',
+          metric: 'final',
+          target_value: 0,
+          parameters: [],
+          color: '#5c2d91',
+        };
+        const optimisationConfigs = [...state.optimisationConfigs, next];
+        const activeOptimisationConfigId = next.id;
+        return {
+          optimisationConfigs,
+          activeOptimisationConfigId,
+          model: persistAnalysis(
+            state.model, state.scenarios, state.activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            state.sensitivityConfigs, state.activeSensitivityConfigId,
+            optimisationConfigs, activeOptimisationConfigId,
+          ),
+        };
+      });
+    },
+    duplicateOptimisationConfig: (id) => {
+      set((state) => {
+        const source = state.optimisationConfigs.find((c) => c.id === id);
+        if (!source) return {};
+        const next: OptimisationConfig = {
+          ...structuredClone(source),
+          id: `optimisation_${Date.now()}`,
+          name: `${source.name} (copy)`,
+        };
+        const optimisationConfigs = [...state.optimisationConfigs, next];
+        const activeOptimisationConfigId = next.id;
+        return {
+          optimisationConfigs,
+          activeOptimisationConfigId,
+          model: persistAnalysis(
+            state.model, state.scenarios, state.activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            state.sensitivityConfigs, state.activeSensitivityConfigId,
+            optimisationConfigs, activeOptimisationConfigId,
+          ),
+        };
+      });
+    },
+    updateOptimisationConfig: (id, patch) => {
+      set((state) => {
+        const optimisationConfigs = state.optimisationConfigs.map((c) =>
+          c.id === id ? { ...c, ...patch } : c,
+        );
+        return {
+          optimisationConfigs,
+          model: persistAnalysis(
+            state.model, state.scenarios, state.activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            state.sensitivityConfigs, state.activeSensitivityConfigId,
+            optimisationConfigs, state.activeOptimisationConfigId,
+          ),
+        };
+      });
+    },
+    deleteOptimisationConfig: (id) => {
+      set((state) => {
+        const optimisationConfigs = state.optimisationConfigs.filter((c) => c.id !== id);
+        const activeOptimisationConfigId =
+          state.activeOptimisationConfigId === id
+            ? (optimisationConfigs[0]?.id ?? '')
+            : state.activeOptimisationConfigId;
+        return {
+          optimisationConfigs,
+          activeOptimisationConfigId,
+          optimisationResults: null,
+          model: persistAnalysis(
+            state.model, state.scenarios, state.activeScenarioId,
+            state.dashboards, state.activeDashboardId,
+            state.sensitivityConfigs, state.activeSensitivityConfigId,
+            optimisationConfigs, activeOptimisationConfigId,
+          ),
+        };
+      });
+    },
+    setActiveOptimisationConfig: (id) => {
+      set((state) => ({
+        activeOptimisationConfigId: id,
+        optimisationResults: null,
+        model: persistAnalysis(
+          state.model, state.scenarios, state.activeScenarioId,
+          state.dashboards, state.activeDashboardId,
+          state.sensitivityConfigs, state.activeSensitivityConfigId,
+          state.optimisationConfigs, id,
+        ),
+      }));
+    },
+    runActiveOptimisation: async () => {
+      const state = get();
+      const config = state.optimisationConfigs.find(
+        (c) => c.id === state.activeOptimisationConfigId,
+      );
+      if (!config) return;
+      set({ isRunningOptimisation: true, optimisationResults: null, optimisationProgress: null, apiError: null });
+      try {
+        const { runOptimisation } = await import('../lib/optimiser');
+        const result = await runOptimisation(
+          config,
+          state.model,
+          state.simConfig,
+          state.scenarios,
+          (current, total) => set({ optimisationProgress: { current, total } }),
+        );
+        set({ optimisationResults: result, isRunningOptimisation: false, optimisationProgress: null });
+      } catch (error) {
+        set({ isRunningOptimisation: false, optimisationProgress: null, apiError: 'Optimisation failed' });
+      }
+    },
     addDashboardCard: (dashboardId, card) => {
       set((state) => {
         const dashboards = state.dashboards.map((dashboard) => {
@@ -1412,6 +1731,15 @@ export const useEditorStore = create<EditorState>((set, get) => {
             title: card.title,
             variable: card.variable,
             table_rows: card.table_rows,
+            variables: card.variables,
+            scale_nodes: card.scale_nodes,
+            data_table_id: card.data_table_id,
+            x_column: card.x_column,
+            y_columns: card.y_columns,
+            group_column: card.group_column,
+            value_column: card.value_column,
+            aggregate_fn: card.aggregate_fn,
+            data_table_rows: card.data_table_rows,
             x: card.x ?? fallbackRect.x,
             y: card.y ?? fallbackRect.y,
             w: card.w ?? fallbackRect.w,
@@ -1421,7 +1749,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId),
         };
       });
     },
@@ -1436,7 +1764,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId),
         };
       });
     },
@@ -1457,7 +1785,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId),
         };
       });
     },
@@ -1470,7 +1798,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
         return {
           dashboards,
-          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId),
+          model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId),
         };
       });
     },
@@ -1535,4 +1863,14 @@ export const useEditorStore = create<EditorState>((set, get) => {
       pushHistory(before, snapshotFromState(get().model, get().selected));
     },
   };
+});
+
+// ── Auto-save to localStorage ──
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+useEditorStore.subscribe((state) => {
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    saveModelToStorage(state.model);
+    setActiveModelId(state.model.id);
+  }, 1000);
 });

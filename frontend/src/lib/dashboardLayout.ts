@@ -23,6 +23,14 @@ export type CanvasBounds = {
 export function defaultCardSize(type: DashboardCardType): { w: number; h: number } {
   if (type === 'kpi') return { w: 264, h: 156 };
   if (type === 'line') return { w: 576, h: 336 };
+  if (type === 'sparkline') return { w: 264, h: 120 };
+  if (type === 'comparison') return { w: 576, h: 336 };
+  if (type === 'heatmap') return { w: 648, h: 336 };
+  if (type === 'map') return { w: 576, h: 456 };
+  if (type === 'data_bar' || type === 'data_stacked_bar' || type === 'data_area') return { w: 576, h: 336 };
+  if (type === 'data_pie') return { w: 384, h: 384 };
+  if (type === 'data_table') return { w: 576, h: 372 };
+  if (type === 'data_pivot') return { w: 480, h: 336 };
   return { w: 576, h: 372 };
 }
 

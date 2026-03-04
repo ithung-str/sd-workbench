@@ -25,7 +25,7 @@ def test_rejects_attribute_access():
 
 def test_rejects_unsupported_function():
     with pytest.raises(UnsupportedExpressionError):
-        parse_equation("sin(x)")
+        parse_equation("eval(x)")
 
 
 

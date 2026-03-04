@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Badge,
   Button,
   Group,
   SegmentedControl,
@@ -17,6 +18,11 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconPlus,
+  IconPlayerPlay,
+  IconMessageCircle,
+  IconAlertTriangle,
+  IconCheck,
+  IconSearch as IconInspector,
 } from '@tabler/icons-react';
 import { ModelCanvas } from '../canvas/ModelCanvas';
 import { InspectorPanel } from '../inspector/InspectorPanelMantine';
@@ -24,12 +30,15 @@ import { FormulaPage } from '../formulas/FormulaPage';
 import { DashboardPage } from '../dashboard/DashboardPage';
 import { ScenarioPage } from '../scenarios/ScenarioPage';
 import { SensitivityPage } from '../sensitivity/SensitivityPage';
+import { OptimisationPage } from '../optimisation/OptimisationPage';
+import { DataPage } from '../data/DataPage';
 import { AIChatSidebar } from './AIChatSidebar';
 import { ImportExportControls } from '../io/ImportExportControls';
 import { IconStrip } from './IconStrip';
 import { FlyoutPanel } from './FlyoutPanel';
 import { BottomNavBar } from './BottomNavBar';
 import { SimulationPanel } from './SimulationPanel';
+import { ValidationList } from '../validation/ValidationList';
 import { modelPresets, type ModelPresetKey } from '../../lib/sampleModels';
 import { specEntries, specGroups, loadSpecContent } from '../../lib/specCatalog';
 import { useEditorStore, type RightSidebarMode } from '../../state/editorStore';
@@ -47,9 +56,21 @@ export function WorkbenchLayout() {
   const activeTab = useEditorStore((s) => s.activeTab);
   const rightSidebarMode = useEditorStore((s) => s.rightSidebarMode);
   const setRightSidebarMode = useEditorStore((s) => s.setRightSidebarMode);
+  const validation = useEditorStore((s) => s.validation);
+  const localIssues = useEditorStore((s) => s.localIssues);
+  const runValidate = useEditorStore((s) => s.runValidate);
+  const isValidating = useEditorStore((s) => s.isValidating);
+  const issueCount = localIssues.length + validation.errors.length + validation.warnings.length;
   const logoUrl = (import.meta.env.VITE_SC_LOGO_URL as string | undefined) || defaultLogoUrl;
 
   const isCanvas = activeTab === 'canvas';
+
+  // When leaving canvas, switch away from canvas-only sidebar modes
+  useEffect(() => {
+    if (!isCanvas && (rightSidebarMode === 'inspector' || rightSidebarMode === 'simulation')) {
+      setRightSidebarMode('chat');
+    }
+  }, [isCanvas, rightSidebarMode, setRightSidebarMode]);
 
   const presetOptions: Array<{ key: ModelPresetKey; label: string }> = [
     { key: 'blank', label: 'Unsaved diagram' },
@@ -186,11 +207,9 @@ export function WorkbenchLayout() {
 
       {/* Middle row: icon strip + flyout + main + right sidebar */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        {/* Left icon strip (always visible, 44px) */}
-        <IconStrip />
-
-        {/* Flyout panel (240px, conditional, overlays canvas) */}
-        <FlyoutPanel />
+        {/* Left icon strip + flyout: canvas only */}
+        {isCanvas && <IconStrip />}
+        {isCanvas && <FlyoutPanel />}
 
         {/* Main content area (flex: 1) */}
         <div
@@ -208,17 +227,21 @@ export function WorkbenchLayout() {
           {activeTab === 'dashboard' && <DashboardPage />}
           {activeTab === 'scenarios' && <ScenarioPage />}
           {activeTab === 'sensitivity' && <SensitivityPage />}
+          {activeTab === 'optimisation' && <OptimisationPage />}
+          {activeTab === 'data' && <DataPage />}
         </div>
 
-        {/* Right sidebar (300px, collapsible) */}
-        {rightOpened ? (
+        {/* Right sidebar */}
+        {rightOpened && (
           <div
             style={{
-              width: 300,
+              width: 400,
+              minWidth: 0,
               borderLeft: '1px solid #e7e7ee',
               display: 'flex',
               flexDirection: 'column',
               flexShrink: 0,
+              overflow: 'hidden',
               background: '#ffffff',
             }}
           >
@@ -227,10 +250,24 @@ export function WorkbenchLayout() {
                 size="xs"
                 value={rightSidebarMode}
                 onChange={(v) => setRightSidebarMode(v as RightSidebarMode)}
-                data={[
+                data={isCanvas ? [
                   { value: 'inspector', label: 'Inspector' },
                   { value: 'chat', label: 'AI Chat' },
                   { value: 'simulation', label: 'Simulate' },
+                  {
+                    value: 'validation',
+                    label: issueCount > 0
+                      ? `Issues (${issueCount})`
+                      : 'Issues',
+                  },
+                ] : [
+                  { value: 'chat', label: 'AI Chat' },
+                  {
+                    value: 'validation',
+                    label: issueCount > 0
+                      ? `Issues (${issueCount})`
+                      : 'Issues',
+                  },
                 ]}
                 styles={{ root: { flex: 1 } }}
               />
@@ -246,30 +283,126 @@ export function WorkbenchLayout() {
                 <IconChevronRight size={16} />
               </ActionIcon>
             </div>
-            {rightSidebarMode === 'inspector' && (
-              <ScrollArea style={{ flex: 1 }}>
+            {rightSidebarMode === 'inspector' && isCanvas && (
+              <ScrollArea
+                style={{ flex: 1 }}
+                type="auto"
+                offsetScrollbars
+                scrollbarSize={8}
+                styles={{ viewport: { overflowX: 'hidden' } }}
+              >
                 <div className="sidebar-panel-body sidebar-panel-body-right">
                   <InspectorPanel />
                 </div>
               </ScrollArea>
             )}
             {rightSidebarMode === 'chat' && <AIChatSidebar />}
-            {rightSidebarMode === 'simulation' && <SimulationPanel />}
+            {rightSidebarMode === 'simulation' && isCanvas && <SimulationPanel />}
+            {rightSidebarMode === 'validation' && (
+              <ScrollArea
+                style={{ flex: 1 }}
+                type="auto"
+                offsetScrollbars
+                scrollbarSize={8}
+                styles={{ viewport: { overflowX: 'hidden' } }}
+              >
+                <div className="sidebar-panel-body sidebar-panel-body-right">
+                  <Button
+                    leftSection={<IconCheck size={14} />}
+                    onClick={() => void runValidate()}
+                    disabled={isValidating}
+                    variant="light"
+                    size="xs"
+                    fullWidth
+                    mb="sm"
+                  >
+                    {isValidating ? 'Validating...' : 'Validate'}
+                  </Button>
+                  <ValidationList />
+                </div>
+              </ScrollArea>
+            )}
           </div>
-        ) : (
-          <ActionIcon
-            className="sidebar-reopen-tab sidebar-reopen-tab-right"
-            variant="filled"
-            color="deepPurple"
-            size="lg"
-            data-testid="right-expand"
-            aria-label="Expand right sidebar"
-            title="Expand right sidebar"
-            onClick={openRight}
-            style={{ position: 'fixed', right: 0, top: '50%', zIndex: 100 }}
-          >
-            <IconChevronLeft size={18} />
-          </ActionIcon>
+        )}
+        {!rightOpened && (
+          <div className="sidebar-collapsed-strip">
+            {isCanvas && (
+              <Tooltip label="Run Simulation" position="left" withArrow>
+                <ActionIcon
+                  size="lg"
+                  variant="subtle"
+                  color="violet"
+                  className="sidebar-collapsed-btn"
+                  onClick={() => {
+                    setRightSidebarMode('simulation');
+                    openRight();
+                    void useEditorStore.getState().runSimulate();
+                  }}
+                  aria-label="Run Simulation"
+                >
+                  <IconPlayerPlay size={18} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {isCanvas && (
+              <Tooltip label="Inspector" position="left" withArrow>
+                <ActionIcon
+                  size="lg"
+                  variant="subtle"
+                  className="sidebar-collapsed-btn"
+                  onClick={() => {
+                    setRightSidebarMode('inspector');
+                    openRight();
+                  }}
+                  aria-label="Inspector"
+                >
+                  <IconInspector size={18} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            <Tooltip label="AI Chat" position="left" withArrow>
+              <ActionIcon
+                size="lg"
+                variant="subtle"
+                className="sidebar-collapsed-btn"
+                onClick={() => {
+                  setRightSidebarMode('chat');
+                  openRight();
+                }}
+                aria-label="AI Chat"
+              >
+                <IconMessageCircle size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label={`Issues${issueCount > 0 ? ` (${issueCount})` : ''}`} position="left" withArrow>
+              <ActionIcon
+                size="lg"
+                variant="subtle"
+                className="sidebar-collapsed-btn"
+                color={issueCount > 0 ? 'red' : 'gray'}
+                onClick={() => {
+                  setRightSidebarMode('validation');
+                  openRight();
+                }}
+                aria-label="Issues"
+              >
+                <IconAlertTriangle size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <div style={{ flex: 1 }} />
+            <Tooltip label="Expand sidebar" position="left" withArrow>
+              <ActionIcon
+                size="lg"
+                variant="subtle"
+                className="sidebar-collapsed-btn"
+                data-testid="right-expand"
+                onClick={openRight}
+                aria-label="Expand right sidebar"
+              >
+                <IconChevronLeft size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </div>
         )}
       </div>
 

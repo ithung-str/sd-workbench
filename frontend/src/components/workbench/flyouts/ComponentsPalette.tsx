@@ -5,6 +5,7 @@ import {
   IconVariable,
   IconChartLine,
   IconLetterT,
+  IconTopologyRing,
 } from '@tabler/icons-react';
 import { useEditorStore } from '../../../state/editorStore';
 
@@ -18,6 +19,25 @@ const COMPONENT_TYPES = [
 
 export function ComponentsPalette() {
   const addNode = useEditorStore((s) => s.addNode);
+  const addCldSymbol = useEditorStore((s) => s.addCldSymbol);
+
+  const buttonStyle = {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    height: 68,
+    borderRadius: 6,
+    background: 'var(--mantine-color-gray-0)',
+    transition: 'background 120ms ease',
+  };
+
+  const handleEnter = (e: React.MouseEvent) => {
+    (e.currentTarget as HTMLButtonElement).style.background = 'var(--mantine-color-gray-1)';
+  };
+  const handleLeave = (e: React.MouseEvent) => {
+    (e.currentTarget as HTMLButtonElement).style.background = 'var(--mantine-color-gray-0)';
+  };
 
   return (
     <Stack gap={8}>
@@ -26,23 +46,9 @@ export function ComponentsPalette() {
           <UnstyledButton
             key={type}
             onClick={() => addNode(type)}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: 68,
-              borderRadius: 6,
-              border: '1px solid #e7e7ee',
-              background: '#fafafa',
-              transition: 'background 120ms ease',
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = '#f0f0f5';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = '#fafafa';
-            }}
+            style={buttonStyle}
+            onMouseEnter={handleEnter}
+            onMouseLeave={handleLeave}
           >
             <Icon size={22} color={color} stroke={1.8} />
             <Text size="xs" mt={4} c="dimmed" fw={500}>
@@ -50,6 +56,17 @@ export function ComponentsPalette() {
             </Text>
           </UnstyledButton>
         ))}
+        <UnstyledButton
+          onClick={() => addCldSymbol('R')}
+          style={buttonStyle}
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+        >
+          <IconTopologyRing size={22} color="#4c6ef5" stroke={1.8} />
+          <Text size="xs" mt={4} c="dimmed" fw={500}>
+            CLD
+          </Text>
+        </UnstyledButton>
       </SimpleGrid>
     </Stack>
   );

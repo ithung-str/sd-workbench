@@ -27,3 +27,7 @@
 .flyout-panel-body {
   padding: 8px;
 }
+
+.flyout-list-item:hover {
+  background: var(--mantine-color-gray-0) !important;
+}

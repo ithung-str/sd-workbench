@@ -17,7 +17,7 @@ type FunctionInputRow = {
   call: ParsedFunctionCall;
 };
 
-const FUNCTION_NAMES = ['PULSE TRAIN', 'STEP', 'RAMP', 'PULSE', 'DELAY1', 'DELAY3', 'DELAYN', 'DELAY', 'SMOOTH', 'SMOOTH3', 'SMOOTHN'];
+const FUNCTION_NAMES = ['IF_THEN_ELSE', 'PULSE TRAIN', 'STEP', 'RAMP', 'PULSE', 'DELAY_FIXED', 'DELAY1', 'DELAY3', 'DELAYN', 'DELAY', 'SMOOTH', 'SMOOTH3', 'SMOOTHN'];
 
 function splitArgs(raw: string): string[] {
   const args: string[] = [];
@@ -191,12 +191,12 @@ export function ResultsDock() {
   const setActiveDockTab = useEditorStore((s) => s.setActiveDockTab);
   const simConfig = useEditorStore((s) => s.simConfig);
   const setSimConfig = useEditorStore((s) => s.setSimConfig);
-  const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
-  const importedVensim = useEditorStore((s) => s.importedVensim);
-  const vensimSelectedOutputs = useEditorStore((s) => s.vensimSelectedOutputs);
-  const setVensimSelectedOutputs = useEditorStore((s) => s.setVensimSelectedOutputs);
-  const vensimParamOverrides = useEditorStore((s) => s.vensimParamOverrides);
-  const setVensimParamOverride = useEditorStore((s) => s.setVensimParamOverride);
+  const activeSimulationMode = 'native_json' as const;
+  const importedVensim = null as any;
+  const vensimSelectedOutputs: string[] = [];
+  const setVensimSelectedOutputs = (_outputs: string[]) => {};
+  const vensimParamOverrides: Record<string, number | string> = {};
+  const setVensimParamOverride = (_name: string, _value: number | string | undefined) => {};
   const runValidate = useEditorStore((s) => s.runValidate);
   const runSimulate = useEditorStore((s) => s.runSimulate);
   const isValidating = useEditorStore((s) => s.isValidating);

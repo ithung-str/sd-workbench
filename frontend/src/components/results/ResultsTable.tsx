@@ -30,6 +30,32 @@ export function ResultsTable({ results, compareRuns }: { results: SimulateRespon
     return Object.keys(first.series).filter((key) => key !== 'time');
   }, [compareRuns]);
 
+  // Group subscripted variables: "Population[North]", "Population[South]" → group under "Population"
+  const compareSelectData = useMemo(() => {
+    const groups: Record<string, string[]> = {};
+    const scalars: string[] = [];
+    for (const key of compareVariables) {
+      const match = key.match(/^(.+)\[(.+)\]$/);
+      if (match) {
+        const base = match[1];
+        if (!groups[base]) groups[base] = [];
+        groups[base].push(key);
+      } else {
+        scalars.push(key);
+      }
+    }
+    const items: Array<{ group?: string; value: string; label: string }> = [];
+    for (const scalar of scalars) {
+      items.push({ value: scalar, label: scalar });
+    }
+    for (const [group, members] of Object.entries(groups)) {
+      for (const member of members) {
+        items.push({ group, value: member, label: member });
+      }
+    }
+    return items;
+  }, [compareVariables]);
+
   if (compareRuns && compareRuns.length > 0) {
     const variable = compareVariable || compareVariables[0] || '';
     const rowCount = compareRuns[0].series.time?.length ?? 0;
@@ -39,7 +65,7 @@ export function ResultsTable({ results, compareRuns }: { results: SimulateRespon
           label="Variable"
           size="xs"
           value={variable}
-          data={compareVariables.map((value) => ({ value, label: value }))}
+          data={compareSelectData}
           onChange={(value) => value && setCompareVariable(value)}
           w={220}
         />

@@ -23,6 +23,7 @@ describe('CanvasComponentsBar', () => {
     useEditorStore.setState((state) => ({
       ...state,
       isCanvasLocked: false,
+      multiSelectedNodeIds: [],
     }));
   });
 
@@ -45,31 +46,30 @@ describe('CanvasComponentsBar', () => {
     expect(mockReactFlow.setViewport).toHaveBeenCalledTimes(1);
   });
 
-  it('align buttons disabled when fewer than 2 nodes selected', () => {
-    mockReactFlow.getNodes.mockReturnValue([]);
+  it('align buttons hidden when fewer than 2 nodes selected', () => {
+    useEditorStore.setState((state) => ({
+      ...state,
+      multiSelectedNodeIds: [],
+    }));
     render(
       <MantineProvider>
         <CanvasComponentsBar />
       </MantineProvider>,
     );
 
-    expect(screen.getByRole('button', { name: 'Align left' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Align right' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Align top' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Align bottom' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Align left' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Align right' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Align top' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Align bottom' })).toBeNull();
   });
 
-  it('align buttons call alignNodes with selected node ids', async () => {
+  it('align buttons shown and call alignNodes with multiSelectedNodeIds', async () => {
     const user = userEvent.setup();
-    mockReactFlow.getNodes.mockReturnValue([
-      { id: 'a', selected: true },
-      { id: 'b', selected: true },
-      { id: 'c', selected: false },
-    ]);
 
     const alignSpy = vi.fn();
     useEditorStore.setState((state) => ({
       ...state,
+      multiSelectedNodeIds: ['a', 'b'],
       alignNodes: alignSpy,
     }));
 
@@ -79,6 +79,8 @@ describe('CanvasComponentsBar', () => {
       </MantineProvider>,
     );
 
+    expect(screen.getByText('2 selected')).toBeTruthy();
+
     await user.click(screen.getByRole('button', { name: 'Align left' }));
     expect(alignSpy).toHaveBeenCalledWith('left', ['a', 'b']);
 
@@ -86,9 +88,15 @@ describe('CanvasComponentsBar', () => {
     expect(alignSpy).toHaveBeenCalledWith('top', ['a', 'b']);
   });
 
-  it('inserts CLD symbol and toggles lock', async () => {
+  it('shows delete button in multi-select mode', async () => {
     const user = userEvent.setup();
-    const startNodes = useEditorStore.getState().model.nodes.length;
+
+    const deleteSpy = vi.fn();
+    useEditorStore.setState((state) => ({
+      ...state,
+      multiSelectedNodeIds: ['a', 'b'],
+      deleteMultiSelected: deleteSpy,
+    }));
 
     render(
       <MantineProvider>
@@ -96,16 +104,22 @@ describe('CanvasComponentsBar', () => {
       </MantineProvider>,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Insert CLD' }));
+    await user.click(screen.getByRole('button', { name: 'Delete selected' }));
+    expect(deleteSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggles lock', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MantineProvider>
+        <CanvasComponentsBar />
+      </MantineProvider>,
+    );
+
     await user.click(screen.getByRole('button', { name: 'Lock canvas' }));
 
     const state = useEditorStore.getState();
     expect(state.isCanvasLocked).toBe(true);
-    expect(state.model.nodes.length).toBe(startNodes + 1);
-    const created = state.model.nodes[state.model.nodes.length - 1];
-    expect(created?.type).toBe('cld_symbol');
-    if (created?.type === 'cld_symbol') {
-      expect(created.symbol).toBe('R');
-    }
   });
 });

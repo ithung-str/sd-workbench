@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import * as mfaExport from '../../lib/mfaExport';
 import { bathtubInventoryModel, cloneModel } from '../../lib/sampleModels';
@@ -17,7 +17,7 @@ vi.mock('@mantine/notifications', () => ({
 const results: SimulateResponse = {
   ok: true,
   warnings: [],
-  metadata: { engine: 'pysd', row_count: 3, variables_returned: ['time', 'inflow', 'outflow', 'inventory'] },
+  metadata: { engine: 'euler', row_count: 3, variables_returned: ['time', 'inflow', 'outflow', 'inventory'] },
   series: {
     time: [0, 1, 2],
     inflow: [3, 4, 5],
@@ -34,7 +34,6 @@ beforeEach(() => {
     ...state,
     activeDockTab: 'chart',
     results,
-    activeSimulationMode: 'native_json',
   }));
 
   useUIStore.setState((state) => ({
@@ -129,56 +128,5 @@ describe('ResultsDock MFA yaml export', () => {
         mode: 'time_slice',
       }),
     );
-  });
-
-  it('shows Vensim time controls including SAVEPER and reset action', async () => {
-    useEditorStore.setState((state) => ({
-      ...state,
-      activeSimulationMode: 'vensim',
-      importedVensim: {
-        ok: true,
-        import_id: 'preset_2',
-        source: { filename: 'sample.mdl', format: 'vensim-mdl' },
-        capabilities: {
-          tier: 'T3',
-          supported: [],
-          partial: [],
-          unsupported: [],
-          detected_functions: [],
-          detected_time_settings: ['INITIAL TIME', 'FINAL TIME', 'TIME STEP', 'SAVEPER'],
-          details: [],
-          families: [],
-        },
-        warnings: [],
-        errors: [],
-        model_view: {
-          canonical: cloneModel(bathtubInventoryModel),
-          variables: [],
-          time_settings: { initial_time: 1, final_time: 20, time_step: 0.5, saveper: 2 },
-          import_gaps: {
-            dropped_variables: 0,
-            dropped_edges: 0,
-            unparsed_equations: 0,
-            unsupported_constructs: [],
-            samples: [],
-          },
-        },
-      },
-    }));
-
-    render(
-      <MantineProvider>
-        <ResultsDock />
-      </MantineProvider>,
-    );
-
-    // Sim config is now inside a Popover — open it first
-    const configButton = screen.getByRole('button', { name: /Time:.*dt=/ });
-    fireEvent.click(configButton);
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('SAVEPER')).toBeInTheDocument();
-    });
-    expect(screen.getByRole('button', { name: 'Reset MDL Settings' })).toBeInTheDocument();
   });
 });

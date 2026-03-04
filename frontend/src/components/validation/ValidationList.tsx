@@ -1,13 +1,13 @@
 import { useEditorStore } from '../../state/editorStore';
 import type { ValidationIssue, NodeModel } from '../../types/model';
 
-const UNIT_CODES = new Set(['UNIT_MISMATCH_FLOW_STOCK', 'UNIT_MISSING_FLOW', 'UNIT_MISSING_STOCK']);
+export const UNIT_CODES = new Set(['UNIT_MISMATCH_FLOW_STOCK', 'UNIT_MISSING_FLOW', 'UNIT_MISSING_STOCK']);
 
 function hasUnits(n: NodeModel): n is NodeModel & { units?: string } {
   return n.type === 'stock' || n.type === 'flow' || n.type === 'aux' || n.type === 'lookup';
 }
 
-function UnitQuickFix({ issue }: { issue: ValidationIssue }) {
+export function UnitQuickFix({ issue }: { issue: ValidationIssue }) {
   const model = useEditorStore((s) => s.model);
   const updateNode = useEditorStore((s) => s.updateNode);
   const runValidate = useEditorStore((s) => s.runValidate);

@@ -10,9 +10,10 @@ import {
   Stack,
   Text,
 } from '@mantine/core';
-import { IconCheck, IconPlayerPlay } from '@tabler/icons-react';
+import { IconPlayerPlay } from '@tabler/icons-react';
 import {
   CartesianGrid,
+  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -24,15 +25,65 @@ import { useEditorStore } from '../../state/editorStore';
 import type { NodeModel, SimulateResponse } from '../../types/model';
 
 const LINE_COLORS = [
-  '#7c3aed',
-  '#2563eb',
-  '#059669',
-  '#d97706',
-  '#dc2626',
-  '#0891b2',
-  '#7c2d12',
-  '#4338ca',
+  '#1b6ca8', '#d46a00', '#2f7d32', '#8a2be2',
+  '#d32f2f', '#00838f', '#c2185b', '#455a64',
 ];
+
+/** Format a number for display — compact with appropriate precision. */
+function fmt(value: number): string {
+  if (value == null || Number.isNaN(value)) return '—';
+  const abs = Math.abs(value);
+  if (abs === 0) return '0';
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (abs >= 10_000) return `${(value / 1_000).toFixed(1)}K`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
+  if (abs >= 100) return value.toFixed(1);
+  if (abs >= 1) return value.toFixed(2);
+  if (abs >= 0.01) return value.toFixed(4);
+  return value.toExponential(2);
+}
+
+/** Shorter format for Y-axis tick labels. */
+function fmtAxis(value: number): string {
+  if (value == null || Number.isNaN(value)) return '';
+  const abs = Math.abs(value);
+  if (abs === 0) return '0';
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
+  if (abs >= 1) return value.toFixed(1);
+  return value.toFixed(2);
+}
+
+type TooltipPayloadItem = {
+  name: string;
+  value: number;
+  color: string;
+  dataKey: string;
+};
+
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: number | string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div className="chart-tooltip">
+      <div className="chart-tooltip-label">t = {label}</div>
+      {payload.map((entry) => (
+        <div key={entry.dataKey} className="chart-tooltip-row">
+          <span className="chart-tooltip-dot" style={{ background: entry.color }} />
+          <span className="chart-tooltip-name">{entry.name}</span>
+          <span className="chart-tooltip-value">{fmt(entry.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type TypeFilter = 'all' | 'stock' | 'flow' | 'aux';
 
@@ -67,9 +118,7 @@ function getPlottableNodes(nodes: NodeModel[]): { name: string; type: NodeModel[
 export function SimulationPanel() {
   const simConfig = useEditorStore((s) => s.simConfig);
   const setSimConfig = useEditorStore((s) => s.setSimConfig);
-  const runValidate = useEditorStore((s) => s.runValidate);
   const runSimulate = useEditorStore((s) => s.runSimulate);
-  const isValidating = useEditorStore((s) => s.isValidating);
   const isSimulating = useEditorStore((s) => s.isSimulating);
   const results = useEditorStore((s) => s.results);
   const model = useEditorStore((s) => s.model);
@@ -136,27 +185,17 @@ export function SimulationPanel() {
     <Stack gap={0} h="100%" style={{ overflow: 'hidden' }}>
       {/* Buttons row */}
       <Box px="xs" pt="xs" pb={4}>
-        <Group gap={4} grow>
-          <Button
-            leftSection={<IconCheck size={14} />}
-            onClick={() => void runValidate()}
-            disabled={isValidating}
-            variant="light"
-            size="xs"
-          >
-            {isValidating ? 'Validating...' : 'Validate'}
-          </Button>
-          <Button
-            leftSection={<IconPlayerPlay size={14} />}
-            onClick={() => void runSimulate()}
-            disabled={isSimulating}
-            variant="filled"
-            color="violet"
-            size="xs"
-          >
-            {isSimulating ? 'Running...' : 'Simulate'}
-          </Button>
-        </Group>
+        <Button
+          leftSection={<IconPlayerPlay size={14} />}
+          onClick={() => void runSimulate()}
+          disabled={isSimulating}
+          variant="filled"
+          color="violet"
+          size="xs"
+          fullWidth
+        >
+          {isSimulating ? 'Running...' : 'Simulate'}
+        </Button>
       </Box>
 
       {/* Sim config row */}
@@ -205,11 +244,12 @@ export function SimulationPanel() {
           </Box>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rows}>
-              <CartesianGrid strokeDasharray="3 3" />
+            <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
               <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} width={45} />
-              <Tooltip />
+              <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 10 }} width={48} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
               {visibleKeys.map((key) => (
                 <Line
                   key={key}

@@ -1,8 +1,25 @@
-import { useRef, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { useEditorStore } from '../../state/editorStore';
 import { importSpreadsheet, exportXmile } from '../../lib/api';
 import { blankModel } from '../../lib/sampleModels';
+import {
+  listSavedModels,
+  loadModelFromStorage,
+  deleteModelFromStorage,
+  setActiveModelId,
+} from '../../lib/modelStorage';
 import type { ModelDocument } from '../../types/model';
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 export function ImportExportControls({
   mode = 'inline',
@@ -15,6 +32,7 @@ export function ImportExportControls({
   const loadModel = useEditorStore((s) => s.loadModel);
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
   const spreadsheetInputRef = useRef<HTMLInputElement | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
 
   const onExportJson = () => {
     const blob = new Blob([JSON.stringify(model, null, 2)], { type: 'application/json' });
@@ -33,6 +51,7 @@ export function ImportExportControls({
     const text = await file.text();
     const parsed = JSON.parse(text) as ModelDocument;
     loadModel(parsed);
+    setActiveModelId(parsed.id);
     e.target.value = '';
     onActionComplete?.();
   };
@@ -81,10 +100,60 @@ export function ImportExportControls({
     onActionComplete?.();
   };
 
+  const onLoadSaved = (id: string) => {
+    const saved = loadModelFromStorage(id);
+    if (saved) {
+      loadModel(saved);
+      setActiveModelId(id);
+    }
+    setShowSaved(false);
+    onActionComplete?.();
+  };
+
+  const onDeleteSaved = (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"?`)) return;
+    deleteModelFromStorage(id);
+    setShowSaved((prev) => prev); // force re-render
+  };
+
   if (mode === 'menu') {
+    const savedModels = showSaved ? listSavedModels() : [];
     return (
       <div className="hamburger-menu-actions">
         <button type="button" onClick={onNewModel}>New Model</button>
+        <button type="button" onClick={() => setShowSaved(!showSaved)}>
+          {showSaved ? 'Hide Saved Models' : 'Saved Models'}
+        </button>
+        {showSaved && (
+          <div className="saved-models-list">
+            {savedModels.length === 0 && (
+              <span className="saved-models-empty">No saved models</span>
+            )}
+            {savedModels.map((entry) => (
+              <div
+                key={entry.id}
+                className={`saved-model-item${entry.id === model.id ? ' active' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="saved-model-load"
+                  onClick={() => onLoadSaved(entry.id)}
+                >
+                  <span className="saved-model-name">{entry.name}</span>
+                  <span className="saved-model-time">{timeAgo(entry.updatedAt)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="saved-model-delete"
+                  onClick={() => onDeleteSaved(entry.id, entry.name)}
+                  title="Delete"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <hr />
         <button type="button" onClick={onExportJson}>Export JSON</button>
         <button type="button" onClick={onExportXmile}>Export XMILE</button>

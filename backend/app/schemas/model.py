@@ -86,6 +86,15 @@ class ImportedMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+
+class DimensionDefinition(BaseModel):
+    id: str
+    name: str
+    elements: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class BaseNode(BaseModel):
     id: str
     type: str
@@ -98,6 +107,8 @@ class BaseNode(BaseModel):
     layout: Optional[LayoutMetadata] = None
     annotation: Optional[AnnotationMetadata] = None
     source_id: Optional[str] = None
+    dimensions: list[str] = Field(default_factory=list)
+    equation_overrides: dict[str, str] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -108,6 +119,8 @@ class StockNode(BaseNode):
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     non_negative: Optional[bool] = None
+    longitude: Optional[float] = None
+    latitude: Optional[float] = None
 
 
 class AuxNode(BaseNode):
@@ -251,15 +264,29 @@ class ScenarioDefinition(BaseModel):
 
 class DashboardCard(BaseModel):
     id: str
-    type: Literal["kpi", "line", "table"]
+    type: Literal[
+        "kpi", "line", "table", "map", "heatmap", "sparkline", "comparison",
+        "data_bar", "data_stacked_bar", "data_area", "data_pie", "data_table", "data_pivot",
+    ]
     title: str
     variable: str
     order: int
     table_rows: Optional[int] = None
+    variables: Optional[list[str]] = None
+    scale_nodes: Optional[bool] = None
     x: Optional[float] = None
     y: Optional[float] = None
     w: Optional[float] = None
     h: Optional[float] = None
+    time_index: Optional[int] = None
+    # Data-table-backed card fields
+    data_table_id: Optional[str] = None
+    x_column: Optional[str] = None
+    y_columns: Optional[list[str]] = None
+    group_column: Optional[str] = None
+    value_column: Optional[str] = None
+    aggregate_fn: Optional[Literal["sum", "avg", "count", "min", "max"]] = None
+    data_table_rows: Optional[int] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -277,6 +304,7 @@ class AnalysisDefaults(BaseModel):
     baseline_scenario_id: Optional[str] = None
     active_dashboard_id: Optional[str] = None
     active_sensitivity_config_id: Optional[str] = None
+    active_optimisation_config_id: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -296,10 +324,49 @@ class SensitivityConfigSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class OptimisationObjectiveSchema(BaseModel):
+    id: str
+    output: str
+    metric: Literal["final", "max", "min", "mean"]
+    direction: Literal["minimize", "maximize"]
+    weight: float = 1.0
+    target_value: Optional[float] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OptimisationParameterRange(BaseModel):
+    name: str
+    low: float
+    high: float
+    steps: int
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OptimisationConfigSchema(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    color: Optional[str] = None
+    mode: Literal["goal-seek", "multi-objective", "policy"]
+    output: Optional[str] = None
+    target_value: Optional[float] = None
+    metric: Optional[Literal["final", "max", "min", "mean"]] = None
+    objectives: list[OptimisationObjectiveSchema] = Field(default_factory=list)
+    parameters: list[OptimisationParameterRange] = Field(default_factory=list)
+    policy_output: Optional[str] = None
+    policy_metric: Optional[Literal["final", "max", "min", "mean"]] = None
+    policy_direction: Optional[Literal["minimize", "maximize"]] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class AnalysisConfig(BaseModel):
     scenarios: list[ScenarioDefinition] = Field(default_factory=list)
     dashboards: list[DashboardDefinition] = Field(default_factory=list)
     sensitivity_configs: list[SensitivityConfigSchema] = Field(default_factory=list)
+    optimisation_configs: list[OptimisationConfigSchema] = Field(default_factory=list)
     defaults: AnalysisDefaults = Field(default_factory=AnalysisDefaults)
 
     model_config = ConfigDict(extra="forbid")
@@ -334,6 +401,7 @@ class ModelDocument(BaseModel):
     nodes: list[Node]
     edges: list[Edge] = Field(default_factory=list)
     outputs: list[str] = Field(default_factory=list)
+    dimensions: list[DimensionDefinition] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 

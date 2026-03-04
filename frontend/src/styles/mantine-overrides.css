@@ -117,10 +117,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   padding: 6px 10px;
   border-bottom: 1px solid #dee2e6;
   background: #ffffff;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .sidebar-panel-title {
@@ -194,7 +196,17 @@
 }
 
 .sidebar-panel-body-right {
-  padding: 6px 8px 8px;
+  padding: 10px 14px 12px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.sidebar-panel-body-right > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .sidebar-panel-body-right .mantine-Stack-root {
@@ -240,37 +252,51 @@
   border-radius: 8px;
 }
 
-.sidebar-reopen-tab {
-  position: absolute;
-  top: 96px;
-  width: 34px;
-  height: 38px;
-  min-width: 34px;
-  min-height: 38px;
-  border-radius: 10px;
-  z-index: 1400;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
-  background: #5e35b1 !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(44, 24, 84, 0.25) !important;
+.sidebar-reopen-edge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+  border: none;
+  border-left: 1px solid #e7e7ee;
+  background: #f3f3f8;
+  color: #9090a0;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+  align-self: stretch;
 }
 
-.sidebar-reopen-tab-left {
-  left: 10px;
+.sidebar-reopen-edge:hover {
+  background: #eaeaf2;
+  color: #5e35b1;
 }
 
-.sidebar-reopen-tab-right {
-  right: 10px;
-}
-
-.sidebar-reopen-tab:focus-visible {
+.sidebar-reopen-edge:focus-visible {
   outline: 2px solid #5f3dc4;
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
-.sidebar-reopen-tab:hover {
-  background: #4b2a8f !important;
-  color: #ffffff !important;
+/* Collapsed right sidebar icon strip */
+.sidebar-collapsed-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  width: 44px;
+  flex-shrink: 0;
+  border-left: 1px solid #e7e7ee;
+  background: #f7f7fa;
+}
+
+.sidebar-collapsed-btn {
+  color: #666;
+}
+
+.sidebar-collapsed-btn:hover {
+  color: #5e35b1;
+  background: rgba(93, 53, 177, 0.08);
 }
 
 .canvas-components-panel {

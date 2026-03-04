@@ -1,4 +1,4 @@
-import type { FunctionCatalogEntry, VensimImportResponse } from '../../types/model';
+import type { FunctionCatalogEntry } from '../../types/model';
 
 const CORE_FUNCTIONS: FunctionCatalogEntry[] = [
   {
@@ -65,39 +65,87 @@ const CORE_FUNCTIONS: FunctionCatalogEntry[] = [
     description: 'Single pulse of specified volume and width.',
     source: 'core',
   },
+  {
+    key: 'pulse_train',
+    displayName: 'pulse_train',
+    template: 'pulse_train(height, first_time, interval, last_time)',
+    category: 'Time Inputs',
+    description: 'Periodic pulses at regular intervals.',
+    source: 'core',
+  },
+  {
+    key: 'if_then_else',
+    displayName: 'if_then_else',
+    template: 'if_then_else(condition, true_value, false_value)',
+    category: 'Conditional',
+    description: 'Returns true_value if condition is non-zero, otherwise false_value.',
+    source: 'core',
+  },
+  {
+    key: 'delay1',
+    displayName: 'delay1',
+    template: 'delay1(input, delay_time)',
+    category: 'Delays',
+    description: 'First-order exponential delay.',
+    source: 'core',
+  },
+  {
+    key: 'delay3',
+    displayName: 'delay3',
+    template: 'delay3(input, delay_time)',
+    category: 'Delays',
+    description: 'Third-order S-shaped delay.',
+    source: 'core',
+  },
+  {
+    key: 'delayn',
+    displayName: 'delayn',
+    template: 'delayn(input, delay_time, order)',
+    category: 'Delays',
+    description: 'Nth-order delay with configurable order.',
+    source: 'core',
+  },
+  {
+    key: 'smooth',
+    displayName: 'smooth',
+    template: 'smooth(input, smooth_time)',
+    category: 'Delays',
+    description: 'Exponential smoothing (alias for delay1).',
+    source: 'core',
+  },
+  {
+    key: 'smooth3',
+    displayName: 'smooth3',
+    template: 'smooth3(input, smooth_time)',
+    category: 'Delays',
+    description: 'Third-order smoothing (alias for delay3).',
+    source: 'core',
+  },
+  {
+    key: 'delay_fixed',
+    displayName: 'delay_fixed',
+    template: 'delay_fixed(input, delay_time, initial_value)',
+    category: 'Delays',
+    description: 'Pipeline delay — exact time shift of input.',
+    source: 'core',
+  },
+  {
+    key: 'sin',
+    displayName: 'sin',
+    template: 'sin(x)',
+    category: 'Math',
+    description: 'Sine function (x in radians).',
+    source: 'core',
+  },
+  {
+    key: 'cos',
+    displayName: 'cos',
+    template: 'cos(x)',
+    category: 'Math',
+    description: 'Cosine function (x in radians).',
+    source: 'core',
+  },
 ];
-
-const KNOWN_TEMPLATES: Record<string, string> = {
-  min: 'min(a, b)',
-  max: 'max(a, b)',
-  abs: 'abs(x)',
-  exp: 'exp(x)',
-  log: 'log(x)',
-  step: 'step(height, time)',
-  ramp: 'ramp(slope, start, end)',
-  pulse: 'pulse(volume, first_time, width)',
-  pulse_train: 'pulse_train(volume, first_time, interval, width, end_time)',
-  delay1: 'delay1(input, delay_time)',
-  delay3: 'delay3(input, delay_time)',
-  delayn: 'delayn(input, delay_time, order)',
-  smooth: 'smooth(input, smooth_time)',
-  smooth3: 'smooth3(input, smooth_time)',
-  smoothn: 'smoothn(input, smooth_time, order)',
-  random_uniform: 'random_uniform(min, max, seed)',
-  random_normal: 'random_normal(mean, stddev, seed)',
-};
-
-const FAMILY_TO_CATEGORY: Record<string, FunctionCatalogEntry['category']> = {
-  time: 'Time Inputs',
-  'time settings': 'Time Inputs',
-  delays: 'Delays/Smoothing',
-  smoothing: 'Delays/Smoothing',
-  stochastic: 'Stochastic',
-  random: 'Stochastic',
-  lookup: 'Lookups',
-  lookups: 'Lookups',
-  math: 'Math',
-};
 
 export const coreFunctions = CORE_FUNCTIONS;
 
@@ -111,66 +159,9 @@ function normalizeFunctionName(name: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
-function inferCategory(normalizedName: string, family?: string): FunctionCatalogEntry['category'] {
-  const familyKey = family?.trim().toLowerCase();
-  if (familyKey && FAMILY_TO_CATEGORY[familyKey]) {
-    return FAMILY_TO_CATEGORY[familyKey];
-  }
-  if (normalizedName.startsWith('delay') || normalizedName.startsWith('smooth')) return 'Delays/Smoothing';
-  if (normalizedName.startsWith('random')) return 'Stochastic';
-  if (normalizedName.includes('lookup')) return 'Lookups';
-  if (normalizedName === 'step' || normalizedName === 'ramp' || normalizedName.startsWith('pulse')) return 'Time Inputs';
-  return 'Other Detected';
-}
-
-function templateForFunction(normalizedName: string): string {
-  const known = KNOWN_TEMPLATES[normalizedName];
-  if (known) return known;
-  if (!normalizedName) return 'function_name(x)';
-  return `${normalizedName}(x)`;
-}
-
-function catalogFromVensim(importedVensim: VensimImportResponse): FunctionCatalogEntry[] {
-  const fromDetails = importedVensim.capabilities.details ?? [];
-  if (fromDetails.length > 0) {
-    return fromDetails.map((detail) => {
-      const normalizedName = normalizeFunctionName(detail.function);
-      return {
-        key: normalizedName,
-        displayName: detail.function,
-        template: templateForFunction(normalizedName),
-        category: inferCategory(normalizedName, detail.family),
-        description: detail.notes || `Detected Vensim function in ${detail.family} family.`,
-        source: 'vensim',
-      } satisfies FunctionCatalogEntry;
-    });
-  }
-
-  return importedVensim.capabilities.detected_functions.map((fn) => {
-    const normalizedName = normalizeFunctionName(fn);
-    return {
-      key: normalizedName,
-      displayName: fn,
-      template: templateForFunction(normalizedName),
-      category: inferCategory(normalizedName),
-      description: 'Detected from imported Vensim model.',
-      source: 'vensim',
-    } satisfies FunctionCatalogEntry;
-  });
-}
-
-export function buildContextFunctions(
-  activeSimulationMode: 'native_json' | 'vensim',
-  importedVensim: VensimImportResponse | null,
-): FunctionCatalogEntry[] {
-  const merged = [...CORE_FUNCTIONS];
-
-  if (activeSimulationMode === 'vensim' && importedVensim) {
-    merged.push(...catalogFromVensim(importedVensim));
-  }
-
+export function buildContextFunctions(): FunctionCatalogEntry[] {
   const deduped = new Map<string, FunctionCatalogEntry>();
-  for (const entry of merged) {
+  for (const entry of CORE_FUNCTIONS) {
     const key = normalizeFunctionName(entry.key || entry.displayName);
     if (!deduped.has(key)) {
       deduped.set(key, { ...entry, key });

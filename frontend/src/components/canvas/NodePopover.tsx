@@ -15,8 +15,6 @@ type Props = {
 export function NodePopover({ nodeId, screenX, screenY, onClose }: Props) {
   const model = useEditorStore((s) => s.model);
   const updateNode = useEditorStore((s) => s.updateNode);
-  const activeSimulationMode = useEditorStore((s) => s.activeSimulationMode);
-  const importedVensim = useEditorStore((s) => s.importedVensim);
   const ref = useRef<HTMLDivElement>(null);
 
   const node = model.nodes.find((n) => n.id === nodeId);
@@ -27,8 +25,8 @@ export function NodePopover({ nodeId, screenX, screenY, onClose }: Props) {
     [node, model],
   );
   const availableFunctions = useMemo(
-    () => buildContextFunctions(activeSimulationMode, importedVensim),
-    [activeSimulationMode, importedVensim],
+    () => buildContextFunctions(),
+    [],
   );
   const stockFlowEquation = useMemo(
     () => (node?.type === 'stock' ? getStockFlowEquation(node.id, model) : null),
