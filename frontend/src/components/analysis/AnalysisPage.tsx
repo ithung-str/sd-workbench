@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
+  ReactFlowProvider,
   type Connection,
   type Edge,
   type Node,
@@ -189,7 +190,7 @@ export function AnalysisPage() {
   }
 
   return (
-    <Box style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <AnalysisToolbar
         pipeline={activePipeline}
         isRunning={isRunningPipeline}
@@ -198,22 +199,24 @@ export function AnalysisPage() {
         onAddNode={handleAddNode}
         onRun={() => void runPipeline()}
       />
-      <Box style={{ flex: 1, position: 'relative' }}>
-        <ReactFlow
-          nodes={flowNodes}
-          edges={flowEdges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onConnect={onConnect}
-          onEdgesDelete={onEdgesDelete}
-          onNodesDelete={onNodesDelete}
-          fitView
-          deleteKeyCode="Delete"
-        >
-          <Background />
-          <Controls />
-        </ReactFlow>
-      </Box>
-    </Box>
+      <div style={{ flex: 1, width: '100%', height: '100%' }}>
+        <ReactFlowProvider>
+          <ReactFlow
+            nodes={flowNodes}
+            edges={flowEdges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onConnect={onConnect}
+            onEdgesDelete={onEdgesDelete}
+            onNodesDelete={onNodesDelete}
+            fitView
+            deleteKeyCode="Delete"
+          >
+            <Background />
+            <Controls />
+          </ReactFlow>
+        </ReactFlowProvider>
+      </div>
+    </div>
   );
 }
