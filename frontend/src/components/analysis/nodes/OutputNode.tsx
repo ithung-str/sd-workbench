@@ -48,12 +48,13 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--mini">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden' }}>
           <div className="node-zoom-mini node-zoom-content">
             <IconTableFilled size={14} color="#e67700" />
             <Text size="xs" fw={600} c="orange.8" truncate>{data.name || 'Output'}</Text>
           </div>
+          <Handle type="target" position={Position.Left} />
         </Box>
       </div>
     );
@@ -62,7 +63,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   // ── Summary view ──
   if (zoomLevel === 'summary') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--summary">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden', minWidth: 180 }}>
           <div className="node-zoom-summary node-zoom-content">
             <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

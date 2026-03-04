@@ -63,12 +63,14 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--mini">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden' }}>
           <div className="node-zoom-mini node-zoom-content">
             <IconCode size={14} color="#862e9c" />
             <Text size="xs" fw={600} c="violet.8" truncate>{data.name || 'Code'}</Text>
           </div>
+          <Handle type="target" position={Position.Left} />
+          <Handle type="source" position={Position.Right} />
         </Box>
       </div>
     );
@@ -77,7 +79,7 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
   // ── Summary view ──
   if (zoomLevel === 'summary') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--summary">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden', minWidth: 180 }}>
           <div className="node-zoom-summary node-zoom-content">
             <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

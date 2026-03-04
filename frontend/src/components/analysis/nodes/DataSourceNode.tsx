@@ -50,12 +50,13 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--mini">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden' }}>
           <div className="node-zoom-mini node-zoom-content">
             <IconDatabase size={14} color="#0b7285" />
             <Text size="xs" fw={600} c="cyan.8" truncate>{data.name || 'Data Source'}</Text>
           </div>
+          <Handle type="source" position={Position.Right} />
         </Box>
       </div>
     );
@@ -64,7 +65,7 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
   // ── Summary view ──
   if (zoomLevel === 'summary') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--summary">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden', minWidth: 180 }}>
           <div className="node-zoom-summary node-zoom-content">
             <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
