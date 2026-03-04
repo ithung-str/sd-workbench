@@ -218,6 +218,39 @@ export async function importSpreadsheet(file: File): Promise<{ ok: boolean; mode
   return parseJson(res);
 }
 
+export type ExecutePipelineRequest = {
+  pipeline_id: string;
+  run_from?: string | null;
+  nodes: Array<{
+    id: string;
+    type: 'data_source' | 'code' | 'output';
+    code?: string;
+    data_table?: { columns: Array<{ key: string; label: string; type: string }>; rows: unknown[][] };
+  }>;
+  edges: Array<{ source: string; target: string }>;
+};
+
+export type NodeResultResponse = {
+  ok: boolean;
+  preview?: { columns: Array<{ key: string; label: string; type: string }>; rows: unknown[][] };
+  shape?: number[];
+  logs?: string;
+  error?: string;
+};
+
+export type ExecutePipelineResponse = {
+  results: Record<string, NodeResultResponse>;
+};
+
+export async function executePipeline(req: ExecutePipelineRequest): Promise<ExecutePipelineResponse> {
+  const res = await fetch(`${API_BASE}/api/analysis/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  return parseJson(res);
+}
+
 export async function exportXmile(model: ModelDocument, simConfig?: { start: number; stop: number; dt: number; method: 'euler' }): Promise<{ ok: boolean; xml: string }> {
   const normalized = modelForBackend(model);
   const res = await fetch(`${API_BASE}/api/imports/export/xmile`, {
