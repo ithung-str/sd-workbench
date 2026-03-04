@@ -1836,8 +1836,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
       try {
         const execNodes = [];
         for (const node of filteredNodes) {
-          // Skip note nodes — they're documentation only
-          if (node.type === 'note') continue;
+          // Skip note and group nodes — they're documentation/organization only
+          if (node.type === 'note' || node.type === 'group') continue;
           if (node.type === 'data_source' && node.data_table_id) {
             const { loadDataTable } = await import('../lib/dataTableStorage');
             const table = await loadDataTable(node.data_table_id);
@@ -1845,6 +1845,12 @@ export const useEditorStore = create<EditorState>((set, get) => {
               id: node.id,
               type: node.type as 'data_source',
               data_table: table ? { columns: table.columns, rows: table.rows } : undefined,
+            });
+          } else if (node.type === 'sql') {
+            execNodes.push({
+              id: node.id,
+              type: 'sql' as const,
+              sql: node.sql,
             });
           } else {
             execNodes.push({

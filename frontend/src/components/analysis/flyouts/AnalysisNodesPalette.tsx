@@ -1,5 +1,5 @@
 import { Divider, SimpleGrid, Stack, Text, UnstyledButton } from '@mantine/core';
-import { IconCode, IconDatabase, IconMarkdown, IconTableFilled, IconChartBar, IconChartLine, IconReportAnalytics, IconPuzzle } from '@tabler/icons-react';
+import { IconCode, IconDatabase, IconBoxMultiple, IconMarkdown, IconSql, IconTableFilled, IconChartBar, IconChartLine, IconReportAnalytics, IconPuzzle } from '@tabler/icons-react';
 import type { AnalysisComponent, AnalysisNodeType } from '../../../types/model';
 
 type PaletteItem = {
@@ -18,7 +18,9 @@ type Props = {
 const SOURCE_AND_CODE: PaletteItem[] = [
   { type: 'data_source', label: 'Data Source', color: '#0b7285', icon: IconDatabase },
   { type: 'code', label: 'Code', color: '#862e9c', icon: IconCode },
+  { type: 'sql', label: 'SQL', color: '#1971c2', icon: IconSql },
   { type: 'note', label: 'Note', color: '#e67700', icon: IconMarkdown },
+  { type: 'group', label: 'Group', color: '#4263eb', icon: IconBoxMultiple },
 ];
 
 const OUTPUT_TYPES: PaletteItem[] = [

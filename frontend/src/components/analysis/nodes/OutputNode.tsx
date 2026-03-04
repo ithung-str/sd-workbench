@@ -1,17 +1,25 @@
 import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
 import { ActionIcon, Box, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
 import { IconTableFilled, IconTrash } from '@tabler/icons-react';
-import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid } from 'recharts';
+import {
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
+  XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid,
+} from 'recharts';
 import type { NodeResultResponse } from '../../../lib/api';
+import type { ChartConfig } from '../../../types/model';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { RunMenu } from './RunMenu';
+import { ChartConfigPanel } from './ChartConfigPanel';
 import './analysisNodes.css';
 
+const COLORS = ['#4263eb', '#2f9e44', '#e67700', '#c2255c', '#0b7285'];
+
 type OutputData = {
-  output_mode?: 'table' | 'bar' | 'line' | 'stats';
+  output_mode?: 'table' | 'bar' | 'line' | 'scatter' | 'stats';
   name?: string;
   description?: string;
+  chart_config?: ChartConfig;
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
@@ -20,9 +28,40 @@ type OutputData = {
   zoomLevel?: ZoomLevel;
 };
 
+type ColumnInfo = { key: string; label: string; type: string };
+
 function statusClass(result?: NodeResultResponse): string {
   if (!result) return 'node-card--none';
   return result.ok ? 'node-card--ok' : 'node-card--error';
+}
+
+function aggregate(
+  rows: Record<string, unknown>[],
+  xCol: string,
+  yCols: string[],
+  agg: ChartConfig['aggregation'],
+): Record<string, unknown>[] {
+  if (!agg || agg === 'none') return rows;
+  const groups = new Map<string, Record<string, unknown>[]>();
+  for (const row of rows) {
+    const key = String(row[xCol] ?? '');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(row);
+  }
+  const result: Record<string, unknown>[] = [];
+  for (const [key, group] of groups) {
+    const entry: Record<string, unknown> = { [xCol]: key };
+    for (const yc of yCols) {
+      const vals = group.map((r) => Number(r[yc])).filter((v) => !isNaN(v));
+      if (agg === 'sum') entry[yc] = vals.reduce((a, b) => a + b, 0);
+      else if (agg === 'mean') entry[yc] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+      else if (agg === 'count') entry[yc] = vals.length;
+      else if (agg === 'min') entry[yc] = vals.length ? Math.min(...vals) : 0;
+      else if (agg === 'max') entry[yc] = vals.length ? Math.max(...vals) : 0;
+    }
+    result.push(entry);
+  }
+  return result;
 }
 
 export function OutputNode({ data }: NodeProps<OutputData>) {
@@ -30,20 +69,28 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   const preview = result?.ok ? result.preview : null;
   const mode = data.output_mode ?? 'table';
   const zoomLevel = data.zoomLevel ?? 'full';
+  const chartConfig = data.chart_config ?? {};
 
-  const chartData = preview
+  const columns: ColumnInfo[] = preview
+    ? preview.columns.map((c) =>
+        typeof c === 'string'
+          ? { key: c, label: c, type: 'string' }
+          : { key: c.key, label: c.label, type: c.type ?? 'string' },
+      )
+    : [];
+
+  const rawChartData = preview
     ? preview.rows.map((row) => {
         const entry: Record<string, unknown> = {};
-        preview.columns.forEach((col, i) => {
-          const key = typeof col === 'string' ? col : col.key;
-          entry[key] = row[i];
-        });
+        columns.forEach((col, i) => { entry[col.key] = row[i]; });
         return entry;
       })
     : [];
 
-  const numericCols = preview?.columns.filter((c) => typeof c !== 'string' && c.type === 'number').map((c) => (typeof c === 'string' ? c : c.key)) ?? [];
-  const xCol = preview?.columns[0] ? (typeof preview.columns[0] === 'string' ? preview.columns[0] : preview.columns[0].key) : '';
+  const xCol = chartConfig.xColumn ?? (columns[0]?.key ?? '');
+  const numericCols = columns.filter((c) => c.type === 'number').map((c) => c.key);
+  const yCols = chartConfig.yColumns?.length ? chartConfig.yColumns : numericCols.slice(0, 5);
+  const chartData = aggregate(rawChartData, xCol, yCols, chartConfig.aggregation);
 
   // ── Mini view ──
   if (zoomLevel === 'mini') {
@@ -137,10 +184,19 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               { value: 'table', label: 'Table' },
               { value: 'bar', label: 'Bar' },
               { value: 'line', label: 'Line' },
+              { value: 'scatter', label: 'Scatter' },
               { value: 'stats', label: 'Stats' },
             ]}
           />
         </Box>
+
+        {(mode === 'bar' || mode === 'line' || mode === 'scatter') && preview && (
+          <ChartConfigPanel
+            config={chartConfig}
+            columns={columns}
+            onChange={(cfg) => data.onUpdate({ chart_config: cfg })}
+          />
+        )}
 
         <Box px={12} pb={4}>
           <Textarea
@@ -201,8 +257,8 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               <XAxis dataKey={xCol} tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <RechartsTooltip />
-              {numericCols.slice(0, 5).map((col, i) => (
-                <Bar key={col} dataKey={col} fill={['#4263eb', '#2f9e44', '#e67700', '#c2255c', '#0b7285'][i % 5]} />
+              {yCols.map((col, i) => (
+                <Bar key={col} dataKey={col} fill={COLORS[i % COLORS.length]} />
               ))}
             </BarChart>
           </ResponsiveContainer>
@@ -217,10 +273,24 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               <XAxis dataKey={xCol} tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <RechartsTooltip />
-              {numericCols.slice(0, 5).map((col, i) => (
-                <Line key={col} type="monotone" dataKey={col} stroke={['#4263eb', '#2f9e44', '#e67700', '#c2255c', '#0b7285'][i % 5]} dot={false} />
+              {yCols.map((col, i) => (
+                <Line key={col} type="monotone" dataKey={col} stroke={COLORS[i % COLORS.length]} dot={false} />
               ))}
             </LineChart>
+          </ResponsiveContainer>
+        </Box>
+      )}
+
+      {preview && mode === 'scatter' && (
+        <Box style={{ height: 200, padding: 8 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart>
+              <CartesianGrid stroke="#f0f0f0" />
+              <XAxis dataKey={xCol} name={xCol} tick={{ fontSize: 10 }} />
+              <YAxis dataKey={yCols[0] ?? ''} name={yCols[0] ?? ''} tick={{ fontSize: 10 }} />
+              <RechartsTooltip />
+              <Scatter data={chartData} fill={COLORS[0]} />
+            </ScatterChart>
           </ResponsiveContainer>
         </Box>
       )}

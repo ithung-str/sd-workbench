@@ -223,8 +223,9 @@ export type ExecutePipelineRequest = {
   run_from?: string | null;
   nodes: Array<{
     id: string;
-    type: 'data_source' | 'code' | 'output';
+    type: 'data_source' | 'code' | 'sql' | 'output';
     code?: string;
+    sql?: string;
     data_table?: { columns: Array<{ key: string; label: string; type: string }>; rows: unknown[][] };
   }>;
   edges: Array<{ source: string; target: string }>;
@@ -286,6 +287,32 @@ export async function savePipelineResults(pipelineId: string, results: Record<st
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ results }),
   }).catch(() => {});
+}
+
+export type PaginatedPreview = {
+  ok: boolean;
+  columns?: Array<{ key: string; label: string; type: string }>;
+  rows?: unknown[][];
+  total_rows?: number;
+  offset?: number;
+  limit?: number;
+  error?: string;
+};
+
+export async function fetchNodePreview(
+  pipelineId: string,
+  nodeId: string,
+  offset = 0,
+  limit = 100,
+): Promise<PaginatedPreview> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/analysis/pipelines/${pipelineId}/nodes/${nodeId}/preview?offset=${offset}&limit=${limit}`,
+    );
+    return parseJson(res);
+  } catch {
+    return { ok: false, error: 'Failed to fetch preview' };
+  }
 }
 
 export async function exportXmile(model: ModelDocument, simConfig?: { start: number; stop: number; dt: number; method: 'euler' }): Promise<{ ok: boolean; xml: string }> {

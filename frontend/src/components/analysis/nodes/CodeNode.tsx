@@ -54,7 +54,7 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
 
       disposeRef.current = monaco.languages.registerCompletionItemProvider('python', {
         triggerCharacters: ['.', '[', "'", '"'],
-        provideCompletionItems(model, position) {
+        provideCompletionItems(model: any, position: any) {
           const textUntilPosition = model.getValueInRange({
             startLineNumber: position.lineNumber,
             startColumn: 1,

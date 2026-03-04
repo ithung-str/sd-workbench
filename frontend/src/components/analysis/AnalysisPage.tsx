@@ -18,23 +18,28 @@ import 'reactflow/dist/style.css';
 import { Box, Button, Group, Select, Text } from '@mantine/core';
 import { IconPlus } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
-import type { AnalysisNodeType, AnalysisNode as AnalysisNodeT, AnalysisEdge as AnalysisEdgeT } from '../../types/model';
+import type { AnalysisNodeType, AnalysisNode as AnalysisNodeT, AnalysisEdge as AnalysisEdgeT, PipelineCheckpoint } from '../../types/model';
 import { loadPipelineResults } from '../../lib/api';
 import { parseCSV } from '../../lib/csvParser';
 import { saveDataTable } from '../../lib/dataTableStorage';
 import { AnalysisToolbar } from './AnalysisToolbar';
 import { AnalysisIconStrip, type AnalysisFlyout } from './AnalysisIconStrip';
 import { AnalysisFlyoutPanel } from './AnalysisFlyoutPanel';
+import { VariableInspector } from './VariableInspector';
 import { DataSourceNode } from './nodes/DataSourceNode';
 import { CodeNode } from './nodes/CodeNode';
+import { SqlNode } from './nodes/SqlNode';
 import { OutputNode } from './nodes/OutputNode';
 import { NoteNode } from './nodes/NoteNode';
+import { GroupNode } from './nodes/GroupNode';
 
 const nodeTypes: NodeTypes = {
   data_source: DataSourceNode,
   code: CodeNode,
+  sql: SqlNode,
   output: OutputNode,
   note: NoteNode,
+  group: GroupNode,
 };
 
 export type RunScope = 'this' | 'upstream' | 'downstream' | 'connected' | 'all' | 'smart';
@@ -113,14 +118,19 @@ function pipelineNodesToFlow(
   onDelete: (nodeId: string) => void,
   onRunScope: (nodeId: string, scope: RunScope) => void,
   onSaveComponent: (name: string, code: string) => void,
+  onToggleGroupCollapse: (groupId: string) => void,
   selectedNodeId: string | null,
   zoomLevel: ZoomLevel,
 ): Node[] {
-  return nodes.map((n) => {
-    // Compute input variable info for code nodes
+  // Determine which nodes are hidden (inside collapsed groups)
+  const collapsedGroupIds = new Set(nodes.filter((n) => n.type === 'group' && n.collapsed).map((n) => n.id));
+  const visibleNodes = nodes.filter((n) => !n.parentGroup || !collapsedGroupIds.has(n.parentGroup));
+
+  return visibleNodes.map((n) => {
+    // Compute input variable info for code and sql nodes
     const parentIds = edges.filter((e) => e.target === n.id).map((e) => e.source);
     let inputVars: { varName: string; label: string; columns?: string[] }[] = [];
-    if (n.type === 'code' && parentIds.length > 0) {
+    if ((n.type === 'code' || n.type === 'sql') && parentIds.length > 0) {
       if (parentIds.length === 1) {
         inputVars = [{ varName: 'df_in', label: 'DataFrame', columns: resultColumns(results[parentIds[0]]) }];
       } else {
@@ -131,6 +141,9 @@ function pipelineNodesToFlow(
         }));
       }
     }
+
+    // For group nodes, compute child count
+    const childCount = n.type === 'group' ? nodes.filter((c) => c.parentGroup === n.id).length : undefined;
 
     return {
       id: n.id,
@@ -143,22 +156,26 @@ function pipelineNodesToFlow(
         selected: n.id === selectedNodeId,
         zoomLevel,
         inputVars,
+        childCount,
         onUpdate: (patch: Record<string, unknown>) => onUpdate(n.id, patch),
         onDelete: () => onDelete(n.id),
         onRunScope: (scope: RunScope) => onRunScope(n.id, scope),
         onSaveComponent: n.type === 'code' ? onSaveComponent : undefined,
+        onToggleCollapse: n.type === 'group' ? () => onToggleGroupCollapse(n.id) : undefined,
       },
     };
   });
 }
 
-function pipelineEdgesToFlow(edges: AnalysisEdgeT[]): Edge[] {
-  return edges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    animated: true,
-  }));
+function pipelineEdgesToFlow(edges: AnalysisEdgeT[], visibleNodeIds: Set<string>): Edge[] {
+  return edges
+    .filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      animated: true,
+    }));
 }
 
 /** Inner component that has access to useReactFlow. */
@@ -208,8 +225,10 @@ function AnalysisCanvas() {
         y: position.y,
         ...(type === 'data_source' && opts?.tableId ? { data_table_id: opts.tableId, name: opts.tableName ?? '' } : {}),
         ...(type === 'code' ? { code: opts?.code ?? '# df_in: input DataFrame from upstream node\n# df_out: output DataFrame to pass downstream\n\ndf_out = df_in\n', w: 420, h: 400 } : {}),
+        ...(type === 'sql' ? { sql: '-- Input tables: df_in (single parent) or df_in1, df_in2, ...\n\nSELECT * FROM df_in\n', w: 420, h: 350 } : {}),
         ...(type === 'output' ? { w: 380, h: 320, ...(opts?.outputMode ? { output_mode: opts.outputMode } : {}) } : {}),
         ...(type === 'note' ? { content: '', w: 300, h: 200 } : {}),
+        ...(type === 'group' ? { w: 500, h: 400, groupColor: 'blue' } : {}),
       };
       updatePipeline(activePipeline.id, { nodes: [...activePipeline.nodes, newNode] });
     },
@@ -283,15 +302,68 @@ function AnalysisCanvas() {
     [activePipeline, runPipeline, analysisResults],
   );
 
+  const handleToggleGroupCollapse = useCallback(
+    (groupId: string) => {
+      if (!activePipeline) return;
+      const nodes = activePipeline.nodes.map((n) =>
+        n.id === groupId ? { ...n, collapsed: !n.collapsed } : n,
+      );
+      updatePipeline(activePipeline.id, { nodes });
+    },
+    [activePipeline, updatePipeline],
+  );
+
+  /** Group the currently selected nodes into a new group node. */
+  const handleGroupSelectedNodes = useCallback(
+    (selectedIds: string[]) => {
+      if (!activePipeline || selectedIds.length < 2) return;
+      const selectedNodes = activePipeline.nodes.filter((n) => selectedIds.includes(n.id) && n.type !== 'group');
+      if (selectedNodes.length < 2) return;
+      // Compute bounding box
+      const xs = selectedNodes.map((n) => n.x);
+      const ys = selectedNodes.map((n) => n.y);
+      const ws = selectedNodes.map((n) => n.w ?? 300);
+      const hs = selectedNodes.map((n) => n.h ?? 200);
+      const minX = Math.min(...xs) - 20;
+      const minY = Math.min(...ys) - 40;
+      const maxX = Math.max(...xs.map((x, i) => x + ws[i])) + 20;
+      const maxY = Math.max(...ys.map((y, i) => y + hs[i])) + 20;
+
+      const groupId = `group_${Date.now()}`;
+      const groupNode: AnalysisNodeT = {
+        id: groupId,
+        type: 'group',
+        name: 'New Group',
+        x: minX,
+        y: minY,
+        w: maxX - minX,
+        h: maxY - minY,
+      };
+
+      const nodes = [
+        ...activePipeline.nodes.map((n) =>
+          selectedIds.includes(n.id) && n.type !== 'group' ? { ...n, parentGroup: groupId } : n,
+        ),
+        groupNode,
+      ];
+      updatePipeline(activePipeline.id, { nodes });
+    },
+    [activePipeline, updatePipeline],
+  );
+
   // Derive flow nodes/edges from pipeline state
   const derivedFlowNodes = useMemo(
-    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, selectedNodeId, zoomLevel) : [],
-    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, selectedNodeId, zoomLevel],
+    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, selectedNodeId, zoomLevel) : [],
+    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, selectedNodeId, zoomLevel],
   );
 
   const derivedFlowEdges = useMemo(
-    () => activePipeline ? pipelineEdgesToFlow(activePipeline.edges) : [],
-    [activePipeline],
+    () => {
+      if (!activePipeline) return [];
+      const visibleIds = new Set(derivedFlowNodes.map((n) => n.id));
+      return pipelineEdgesToFlow(activePipeline.edges, visibleIds);
+    },
+    [activePipeline, derivedFlowNodes],
   );
 
   // Local state for ReactFlow
@@ -406,16 +478,45 @@ function AnalysisCanvas() {
     [fitBounds],
   );
 
-  // Keyboard shortcut: Cmd+Enter runs smart scope on selected node
+  const [multiSelectedIds, setMultiSelectedIds] = useState<string[]>([]);
+
+  // Keyboard shortcut: Cmd+Enter runs smart scope on selected node, Ctrl+G groups
   const onCanvasKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && selectedNodeId) {
         e.preventDefault();
         handleRunScope(selectedNodeId, 'smart');
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'g' && multiSelectedIds.length >= 2) {
+        e.preventDefault();
+        handleGroupSelectedNodes(multiSelectedIds);
+      }
     },
-    [selectedNodeId, handleRunScope],
+    [selectedNodeId, handleRunScope, multiSelectedIds, handleGroupSelectedNodes],
   );
+
+  const handleCreateCheckpoint = useCallback(() => {
+    if (!activePipeline) return;
+    const cp: PipelineCheckpoint = {
+      id: `cp_${Date.now()}`,
+      name: `Checkpoint ${(activePipeline.checkpoints?.length ?? 0) + 1}`,
+      timestamp: Date.now(),
+      nodes: JSON.parse(JSON.stringify(activePipeline.nodes)),
+      edges: JSON.parse(JSON.stringify(activePipeline.edges)),
+    };
+    const existing = activePipeline.checkpoints ?? [];
+    // Keep at most 20 checkpoints
+    const checkpoints = [...existing, cp].slice(-20);
+    updatePipeline(activePipeline.id, { checkpoints });
+  }, [activePipeline, updatePipeline]);
+
+  const handleRestoreCheckpoint = useCallback((cp: PipelineCheckpoint) => {
+    if (!activePipeline) return;
+    updatePipeline(activePipeline.id, {
+      nodes: JSON.parse(JSON.stringify(cp.nodes)),
+      edges: JSON.parse(JSON.stringify(cp.edges)),
+    });
+  }, [activePipeline, updatePipeline]);
 
   if (!activePipeline) return null;
 
@@ -426,6 +527,8 @@ function AnalysisCanvas() {
         isRunning={isRunningPipeline}
         onUpdatePipeline={updatePipeline}
         onRun={() => void runPipeline()}
+        onCreateCheckpoint={handleCreateCheckpoint}
+        onRestoreCheckpoint={handleRestoreCheckpoint}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <AnalysisIconStrip activeFlyout={activeFlyout} onToggle={handleToggleFlyout} />
@@ -469,6 +572,7 @@ function AnalysisCanvas() {
             onNodeDoubleClick={onNodeDoubleClick}
             onSelectionChange={({ nodes: sel }) => {
               setSelectedNodeId(sel.length === 1 ? sel[0].id : null);
+              setMultiSelectedIds(sel.map((n) => n.id));
             }}
             fitView
             deleteKeyCode={['Delete', 'Backspace']}
@@ -477,6 +581,13 @@ function AnalysisCanvas() {
             <Controls />
           </ReactFlow>
         </div>
+        {selectedNodeId && activePipeline.nodes.find((n) => n.id === selectedNodeId) && (
+          <VariableInspector
+            node={activePipeline.nodes.find((n) => n.id === selectedNodeId)!}
+            result={analysisResults[selectedNodeId]}
+            onClose={() => setSelectedNodeId(null)}
+          />
+        )}
       </div>
     </div>
   );

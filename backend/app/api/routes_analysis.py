@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.analysis.cache import pipeline_cache
 from app.analysis.executor import execute_node
+from app.analysis.sql_executor import execute_sql
 from app.db import connect
 from app.schemas.analysis import (
     ExecutePipelineRequest,
@@ -91,8 +92,8 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
             failed.add(node_id)
             continue
 
-        # Note node (documentation only, skip execution)
-        if node.type == "note":
+        # Note and group nodes (documentation/organization only, skip execution)
+        if node.type in ("note", "group"):
             results[node_id] = NodeResultResponse(ok=True)
             continue
 
@@ -154,6 +155,40 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
                 failed.add(node_id)
             continue
 
+        # SQL node
+        if node.type == "sql":
+            sql_query = node.sql or ""
+            sql_inputs: dict[str, pd.DataFrame] = {}
+            if len(parents) == 1:
+                parent_df = pipeline_cache.get(req.pipeline_id, parents[0])
+                if parent_df is not None:
+                    # Get parent node name for table alias
+                    parent_node = nodes_by_id.get(parents[0])
+                    table_name = (parent_node.code if parent_node and hasattr(parent_node, 'code') else None) or "df_in"
+                    sql_inputs["df_in"] = parent_df
+            else:
+                for i, pid in enumerate(parents):
+                    parent_df = pipeline_cache.get(req.pipeline_id, pid)
+                    if parent_df is not None:
+                        sql_inputs[f"df_in{i + 1}"] = parent_df
+
+            if not sql_inputs:
+                results[node_id] = NodeResultResponse(ok=False, error="No input data")
+                failed.add(node_id)
+                continue
+
+            sql_result = execute_sql(sql=sql_query, inputs=sql_inputs)
+            if sql_result.ok and sql_result.output_df is not None:
+                pipeline_cache.set(req.pipeline_id, node_id, sql_result.output_df)
+                results[node_id] = NodeResultResponse(
+                    ok=True, preview=_df_preview(sql_result.output_df),
+                    shape=list(sql_result.output_df.shape),
+                )
+            else:
+                results[node_id] = NodeResultResponse(ok=False, error=sql_result.error)
+                failed.add(node_id)
+            continue
+
     return ExecutePipelineResponse(results=results)
 
 
@@ -202,3 +237,30 @@ def clear_pipeline_results(pipeline_id: str) -> dict:
             (pipeline_id,),
         )
     return {"ok": True}
+
+
+# ── Paginated data preview ──
+
+
+@router.get("/pipelines/{pipeline_id}/nodes/{node_id}/preview")
+def get_node_preview(pipeline_id: str, node_id: str, offset: int = 0, limit: int = 100) -> dict:
+    """Fetch paginated rows from a cached node DataFrame."""
+    df = pipeline_cache.get(pipeline_id, node_id)
+    if df is None:
+        return {"ok": False, "error": "No cached data for this node"}
+    limit = min(limit, 1000)  # Cap at 1000 rows per page
+    total_rows = len(df)
+    slice_df = df.iloc[offset : offset + limit]
+    columns = [
+        {"key": col, "label": col, "type": "number" if pd.api.types.is_numeric_dtype(df[col]) else "string"}
+        for col in df.columns
+    ]
+    rows = slice_df.values.tolist()
+    return {
+        "ok": True,
+        "columns": columns,
+        "rows": rows,
+        "total_rows": total_rows,
+        "offset": offset,
+        "limit": limit,
+    }

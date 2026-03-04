@@ -5,15 +5,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class AnalysisNodeSchema(BaseModel):
     id: str
-    type: Literal["data_source", "code", "output", "note"]
+    type: Literal["data_source", "code", "sql", "output", "note", "group"]
     x: float = 0
     y: float = 0
     w: Optional[float] = None
     h: Optional[float] = None
     data_table_id: Optional[str] = None
     code: Optional[str] = None
+    sql: Optional[str] = None
     content: Optional[str] = None
-    output_mode: Optional[Literal["table", "bar", "line"]] = None
+    output_mode: Optional[Literal["table", "bar", "line", "scatter"]] = None
+    chart_config: Optional[dict] = None
+    parent_group: Optional[str] = None
+    collapsed: Optional[bool] = None
+    group_color: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -53,8 +58,9 @@ class DataTablePayload(BaseModel):
 
 class ExecuteNode(BaseModel):
     id: str
-    type: Literal["data_source", "code", "output", "note"]
+    type: Literal["data_source", "code", "sql", "output", "note", "group"]
     code: Optional[str] = None
+    sql: Optional[str] = None
     data_table: Optional[DataTablePayload] = None
 
 
