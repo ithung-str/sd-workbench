@@ -279,3 +279,88 @@ export async function exportXmile(model: ModelDocument, simConfig?: { start: num
   });
   return parseJson(res);
 }
+
+// ── Data Tables API ──
+
+import type { DataTable, DataTableMeta } from '../types/dataTable';
+
+export async function apiListDataTables(params?: {
+  search?: string;
+  source?: string;
+  tag?: string;
+}): Promise<DataTableMeta[]> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
+  if (params?.source) query.set('source', params.source);
+  if (params?.tag) query.set('tag', params.tag);
+  const qs = query.toString();
+  const res = await fetch(`${API_BASE}/api/data/tables${qs ? '?' + qs : ''}`);
+  return parseJson(res);
+}
+
+export async function apiGetDataTable(id: string): Promise<DataTable> {
+  const res = await fetch(`${API_BASE}/api/data/tables/${id}`);
+  return parseJson(res);
+}
+
+export async function apiCreateDataTable(table: {
+  id?: string;
+  name: string;
+  source: string;
+  description?: string;
+  tags?: string[];
+  columns: { key: string; label: string; type: string }[];
+  rows: (string | number | null)[][];
+  googleSheets?: { spreadsheetId: string; spreadsheetUrl: string; sheetName: string; sheetId: number };
+  original_filename?: string;
+}): Promise<DataTableMeta> {
+  const res = await fetch(`${API_BASE}/api/data/tables`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(table),
+  });
+  return parseJson(res);
+}
+
+export async function apiUpsertDataTable(id: string, table: {
+  name: string;
+  source: string;
+  description?: string;
+  tags?: string[];
+  columns: { key: string; label: string; type: string }[];
+  rows: (string | number | null)[][];
+  googleSheets?: { spreadsheetId: string; spreadsheetUrl: string; sheetName: string; sheetId: number };
+  original_filename?: string;
+}): Promise<DataTableMeta> {
+  const res = await fetch(`${API_BASE}/api/data/tables/${id}/upsert`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...table, id }),
+  });
+  return parseJson(res);
+}
+
+export async function apiUpdateDataTable(id: string, updates: {
+  name?: string;
+  description?: string;
+  tags?: string[];
+}): Promise<DataTableMeta> {
+  const res = await fetch(`${API_BASE}/api/data/tables/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return parseJson(res);
+}
+
+export async function apiDeleteDataTable(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/data/tables/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw body?.detail ?? 'Delete failed';
+  }
+}
+
+export function apiDataTableCsvUrl(id: string): string {
+  return `${API_BASE}/api/data/tables/${id}/export/csv`;
+}

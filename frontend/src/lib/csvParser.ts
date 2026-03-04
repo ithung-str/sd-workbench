@@ -53,6 +53,8 @@ export function parseCSV(file: File): Promise<DataTable> {
           id: `dt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           name: baseName,
           source: 'csv',
+          description: '',
+          tags: [],
           columns,
           rows,
           createdAt: now,

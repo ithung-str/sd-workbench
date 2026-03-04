@@ -136,6 +136,8 @@ export function sheetDataToDataTable(
     id: `dt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     name: `${spreadsheetTitle} - ${sheetName}`,
     source: 'google_sheets',
+    description: '',
+    tags: [],
     columns,
     rows,
     createdAt: now,
