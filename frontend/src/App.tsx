@@ -10,6 +10,7 @@ const PATH_TO_TAB: Record<string, WorkbenchTab> = {
   '/scenarios': 'scenarios',
   '/sensitivity': 'sensitivity',
   '/data': 'data',
+  '/analysis': 'analysis',
 };
 
 export default function App() {

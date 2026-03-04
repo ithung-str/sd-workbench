@@ -47,7 +47,7 @@ import type {
 } from '../types/model';
 
 export type DockTab = 'validation' | 'chart' | 'table' | 'compare';
-export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity' | 'optimisation' | 'data';
+export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity' | 'optimisation' | 'data' | 'analysis';
 export type RightSidebarMode = 'inspector' | 'chat' | 'simulation' | 'validation';
 
 type Selection =

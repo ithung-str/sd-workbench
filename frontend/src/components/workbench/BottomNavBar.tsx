@@ -8,6 +8,7 @@ import {
   IconChartDots3,
   IconTarget,
   IconTable,
+  IconCode,
 } from '@tabler/icons-react';
 import { useEditorStore, type WorkbenchTab } from '../../state/editorStore';
 import '../../styles/bottom-nav.css';
@@ -25,6 +26,7 @@ const TABS: Array<{
   { value: 'sensitivity', label: 'Sensitivity', icon: <IconChartDots3 size={14} />, activeColor: '#c2255c' },
   { value: 'optimisation', label: 'Optimise', icon: <IconTarget size={14} />, activeColor: '#5c2d91' },
   { value: 'data', label: 'Data', icon: <IconTable size={14} />, activeColor: '#0b7285' },
+  { value: 'analysis', label: 'Analysis', icon: <IconCode size={14} />, activeColor: '#862e9c' },
 ];
 
 export function BottomNavBar() {

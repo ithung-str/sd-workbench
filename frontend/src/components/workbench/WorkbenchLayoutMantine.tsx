@@ -22,6 +22,7 @@ import {
   IconMessageCircle,
   IconAlertTriangle,
   IconCheck,
+  IconDeviceFloppy,
   IconSearch as IconInspector,
 } from '@tabler/icons-react';
 import { ModelCanvas } from '../canvas/ModelCanvas';
@@ -32,6 +33,7 @@ import { ScenarioPage } from '../scenarios/ScenarioPage';
 import { SensitivityPage } from '../sensitivity/SensitivityPage';
 import { OptimisationPage } from '../optimisation/OptimisationPage';
 import { DataPage } from '../data/DataPage';
+import { AnalysisPage } from '../analysis/AnalysisPage';
 import { AIChatSidebar } from './AIChatSidebar';
 import { ImportExportControls } from '../io/ImportExportControls';
 import { IconStrip } from './IconStrip';
@@ -40,6 +42,7 @@ import { BottomNavBar } from './BottomNavBar';
 import { SimulationPanel } from './SimulationPanel';
 import { ValidationList } from '../validation/ValidationList';
 import { modelPresets, type ModelPresetKey } from '../../lib/sampleModels';
+import { listSavedModels, loadModelFromStorage, setActiveModelId } from '../../lib/modelStorage';
 import { specEntries, specGroups, loadSpecContent } from '../../lib/specCatalog';
 import { useEditorStore, type RightSidebarMode } from '../../state/editorStore';
 
@@ -80,9 +83,19 @@ export function WorkbenchLayout() {
     { key: 'supplyChain', label: 'Supply Chain' },
   ];
 
+  const savedModels = listSavedModels();
+
   const selectedNative = presetOptions.find((option) => model.name === modelPresets[option.key].name)?.key ?? 'blank';
+  // Determine current picker value: saved model, preset, or blank
+  const savedMatch = savedModels.find((s) => s.id === model.id);
+  const pickerValue = savedMatch ? `saved:${savedMatch.id}` : selectedNative;
+
+  const savedGroup = savedModels.length > 0
+    ? [{ group: 'My Models', items: savedModels.map((s) => ({ value: `saved:${s.id}`, label: s.name || s.id })) }]
+    : [];
 
   const pickerData = [
+    ...savedGroup,
     { group: 'Presets', items: presetOptions.map((opt) => ({ value: opt.key, label: opt.label })) },
     ...specGroups().map((group) => ({
       group: `Spec: ${group}`,
@@ -94,13 +107,19 @@ export function WorkbenchLayout() {
 
   const handlePickerChange = (value: string | null) => {
     if (!value) return;
-    if (value.startsWith('spec:')) {
+    if (value.startsWith('saved:')) {
+      const id = value.replace('saved:', '');
+      const saved = loadModelFromStorage(id);
+      if (saved) {
+        loadModel(saved);
+        setActiveModelId(id);
+      }
+    } else if (value.startsWith('spec:')) {
       const specId = value.replace('spec:', '');
       const entry = specEntries.find((e) => e.id === specId);
       if (!entry) return;
       const content = loadSpecContent(entry);
       if (!content) return;
-      // Open AI chat sidebar and send the spec as a prompt
       const store = useEditorStore.getState();
       store.setRightSidebarMode('chat');
       openRight();
@@ -158,23 +177,66 @@ export function WorkbenchLayout() {
           </div>
         </Group>
 
-        {/* Center: Model picker */}
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+        {/* Center: Model name + picker */}
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
+          <input
+            value={model.name}
+            onChange={(e) => {
+              useEditorStore.setState((s) => ({
+                model: { ...s.model, name: e.target.value },
+              }));
+            }}
+            placeholder="Untitled model"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              color: '#3D1F6F',
+              width: 180,
+              textAlign: 'right',
+              outline: 'none',
+              padding: '2px 4px',
+              borderRadius: 4,
+            }}
+            onFocus={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.boxShadow = '0 0 0 1px #D1C4E9'; }}
+            onBlur={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}
+          />
+          <Text size="xs" c="dimmed">|</Text>
           <Select
             aria-label="Model picker"
-            value={selectedNative}
+            value={pickerValue}
             onChange={handlePickerChange}
             data={pickerData}
-            w={280}
+            w={240}
             size="xs"
             searchable
             maxDropdownHeight={400}
-            placeholder="Select a model or specification..."
+            placeholder="Load preset..."
           />
         </div>
 
         {/* Right: New button + Menu */}
         <Group gap="xs" style={{ flexShrink: 0 }}>
+          <Tooltip label="Save model to file">
+            <ActionIcon
+              variant="subtle"
+              size="lg"
+              color="gray"
+              onClick={() => {
+                const blob = new Blob([JSON.stringify(model, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${model.name || model.id}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              aria-label="Save model"
+            >
+              <IconDeviceFloppy size={18} />
+            </ActionIcon>
+          </Tooltip>
           <Tooltip label="Start a new blank model">
             <Button
               size="compact-xs"
@@ -229,6 +291,7 @@ export function WorkbenchLayout() {
           {activeTab === 'sensitivity' && <SensitivityPage />}
           {activeTab === 'optimisation' && <OptimisationPage />}
           {activeTab === 'data' && <DataPage />}
+          {activeTab === 'analysis' && <AnalysisPage />}
         </div>
 
         {/* Right sidebar */}
