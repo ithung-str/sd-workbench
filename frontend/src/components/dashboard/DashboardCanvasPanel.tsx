@@ -515,16 +515,20 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
   }, [selectedCardId, onSelectCard]);
 
   // Drag logic
-  const beginDrag = (event: React.PointerEvent<HTMLButtonElement>, cardId: string) => {
+  const beginDrag = (event: React.PointerEvent<HTMLElement>, cardId: string) => {
     const rect = cardLayoutRef.current[cardId];
     if (!rect || !canvasRef.current) return;
-    const canvasBounds = canvasRef.current.getBoundingClientRect();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    const canvasEl = canvasRef.current;
+    const canvasBounds = canvasEl.getBoundingClientRect();
+    const scrollParent = canvasEl.parentElement;
+    const scrollTop = scrollParent?.scrollTop ?? 0;
+    const scrollLeft = scrollParent?.scrollLeft ?? 0;
     setDragState({
       cardId,
       pointerId: event.pointerId,
-      offsetX: event.clientX - canvasBounds.left - rect.x,
-      offsetY: event.clientY - canvasBounds.top - rect.y,
+      offsetX: event.clientX - canvasBounds.left + scrollLeft - rect.x,
+      offsetY: event.clientY - canvasBounds.top + scrollTop - rect.y,
       origin: rect,
     });
   };
@@ -534,28 +538,23 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
 
     const onPointerMove = (event: PointerEvent) => {
       if (!canvasRef.current) return;
-      const canvasBounds = canvasRef.current.getBoundingClientRect();
+      const canvasEl = canvasRef.current;
+      const canvasBounds = canvasEl.getBoundingClientRect();
+      const scrollParent = canvasEl.parentElement;
+      const scrollTop = scrollParent?.scrollTop ?? 0;
+      const scrollLeft = scrollParent?.scrollLeft ?? 0;
       const currentRect = cardLayoutRef.current[dragState.cardId];
       if (!currentRect) return;
 
-      const nextRect = clampRectToBounds(
-        {
-          ...currentRect,
-          x: event.clientX - canvasBounds.left - dragState.offsetX,
-          y: event.clientY - canvasBounds.top - dragState.offsetY,
-        },
-        {
-          width: canvasBounds.width,
-          height: canvasHeight,
-        },
-      );
+      const rawX = event.clientX - canvasBounds.left + scrollLeft - dragState.offsetX;
+      const rawY = event.clientY - canvasBounds.top + scrollTop - dragState.offsetY;
 
       setCardLayout((prev) => ({
         ...prev,
         [dragState.cardId]: {
           ...currentRect,
-          x: Math.round(nextRect.x / DASHBOARD_GRID_SIZE) * DASHBOARD_GRID_SIZE,
-          y: Math.round(nextRect.y / DASHBOARD_GRID_SIZE) * DASHBOARD_GRID_SIZE,
+          x: Math.max(0, Math.round(rawX / DASHBOARD_GRID_SIZE) * DASHBOARD_GRID_SIZE),
+          y: Math.max(0, Math.round(rawY / DASHBOARD_GRID_SIZE) * DASHBOARD_GRID_SIZE),
         },
       }));
     };
@@ -705,29 +704,28 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
             }}
           >
             <Stack gap={4} h="100%">
-              <Group justify="space-between" wrap="nowrap">
+              <Group
+                justify="space-between"
+                wrap="nowrap"
+                onPointerDown={(event) => { event.stopPropagation(); beginDrag(event, card.id); }}
+                style={{ cursor: dragState?.cardId === card.id ? 'grabbing' : 'grab', userSelect: 'none' }}
+              >
                 <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                  <ActionIcon
-                    variant="subtle"
-                    size="xs"
-                    aria-label="Drag card"
-                    title="Drag card"
-                    onPointerDown={(event) => beginDrag(event, card.id)}
+                  <IconGripVertical
+                    size={12}
                     style={{
-                      cursor: dragState?.cardId === card.id ? 'grabbing' : 'grab',
-                      opacity: isHovered ? 1 : 0,
+                      opacity: isHovered ? 0.5 : 0,
                       transition: 'opacity 0.15s ease',
-                      pointerEvents: isHovered ? 'auto' : 'none',
+                      flexShrink: 0,
                     }}
-                  >
-                    <IconGripVertical size={12} />
-                  </ActionIcon>
+                  />
                   <Text fw={500} size="sm" c="dimmed" lineClamp={1}>{card.title}</Text>
                 </Group>
                 <ActionIcon
                   variant="subtle"
                   size="xs"
                   color="red"
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => { e.stopPropagation(); onDeleteCard(activeDashboardId, card.id); }}
                   style={{
                     opacity: isHovered ? 1 : 0,

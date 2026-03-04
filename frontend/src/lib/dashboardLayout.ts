@@ -3,6 +3,7 @@ import type { DashboardCard, DashboardCardType } from '../types/model';
 export const DASHBOARD_GRID_SIZE = 24;
 export const MIN_CARD_WIDTH = 168;
 export const MIN_CARD_HEIGHT = 120;
+export const CARD_GAP = 12;
 const DEFAULT_CANVAS_WIDTH = 1400;
 const DEFAULT_CANVAS_HEIGHT = 1200;
 const DEFAULT_PADDING = 24;
@@ -48,8 +49,8 @@ export function snapToGrid(value: number, gridSize = DASHBOARD_GRID_SIZE): numbe
   return Math.round(value / gridSize) * gridSize;
 }
 
-export function rectsOverlap(a: Rect, b: Rect): boolean {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+export function rectsOverlap(a: Rect, b: Rect, gap = CARD_GAP): boolean {
+  return a.x < b.x + b.w + gap && a.x + a.w + gap > b.x && a.y < b.y + b.h + gap && a.y + a.h + gap > b.y;
 }
 
 export function clampRectToBounds(rect: Rect, bounds: CanvasBounds): Rect {
