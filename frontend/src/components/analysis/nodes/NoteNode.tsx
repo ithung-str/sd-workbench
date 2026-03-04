@@ -1,0 +1,183 @@
+import { useState, useRef, useEffect } from 'react';
+import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
+import { ActionIcon, Box, Text, Tooltip } from '@mantine/core';
+import { IconMarkdown, IconTrash } from '@tabler/icons-react';
+import type { ZoomLevel } from '../AnalysisPage';
+import './analysisNodes.css';
+
+type NoteData = {
+  content?: string;
+  name?: string;
+  onUpdate: (patch: Record<string, unknown>) => void;
+  onDelete?: () => void;
+  selected?: boolean;
+  zoomLevel?: ZoomLevel;
+};
+
+/** Simple markdown-ish renderer: headings, bold, italic, code, lists, links. */
+function renderMarkdown(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      // Headings
+      if (line.startsWith('### ')) return `<h4 style="margin:4px 0;font-size:13px">${esc(line.slice(4))}</h4>`;
+      if (line.startsWith('## ')) return `<h3 style="margin:4px 0;font-size:14px">${esc(line.slice(3))}</h3>`;
+      if (line.startsWith('# ')) return `<h2 style="margin:6px 0;font-size:16px">${esc(line.slice(2))}</h2>`;
+      // Unordered list
+      if (/^[-*] /.test(line)) return `<li style="margin-left:16px;font-size:12px">${inlineFormat(line.slice(2))}</li>`;
+      // Ordered list
+      const ol = line.match(/^(\d+)\. (.+)/);
+      if (ol) return `<li style="margin-left:16px;font-size:12px" value="${ol[1]}">${inlineFormat(ol[2])}</li>`;
+      // Blank line
+      if (!line.trim()) return '<br/>';
+      // Paragraph
+      return `<p style="margin:2px 0;font-size:12px;line-height:1.5">${inlineFormat(line)}</p>`;
+    })
+    .join('\n');
+}
+
+function esc(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function inlineFormat(s: string): string {
+  let out = esc(s);
+  // Code
+  out = out.replace(/`([^`]+)`/g, '<code style="background:#f1f3f5;padding:1px 4px;border-radius:3px;font-size:11px">$1</code>');
+  // Bold
+  out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Links
+  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:#1971c2">$1</a>');
+  return out;
+}
+
+export function NoteNode({ data }: NodeProps<NoteData>) {
+  const [editing, setEditing] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const zoomLevel = data.zoomLevel ?? 'full';
+  const content = data.content ?? '';
+
+  useEffect(() => {
+    if (editing && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.selectionStart = textareaRef.current.value.length;
+    }
+  }, [editing]);
+
+  // ── Mini view ──
+  if (zoomLevel === 'mini') {
+    return (
+      <div className="analysis-node analysis-node--mini">
+        <Box className="node-card node-card--none" style={{ background: '#fffde7', borderRadius: 8, border: '1px solid #e0d97e', overflow: 'hidden' }}>
+          <div className="node-zoom-mini node-zoom-content">
+            <IconMarkdown size={14} color="#e67700" />
+            <Text size="xs" fw={600} c="orange.8" truncate>{data.name || 'Note'}</Text>
+          </div>
+        </Box>
+      </div>
+    );
+  }
+
+  // ── Summary view ──
+  if (zoomLevel === 'summary') {
+    return (
+      <div className="analysis-node analysis-node--summary">
+        <Box className="node-card node-card--none" style={{ background: '#fffde7', borderRadius: 8, border: '1px solid #e0d97e', overflow: 'hidden', minWidth: 180 }}>
+          <div className="node-zoom-summary node-zoom-content">
+            <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <IconMarkdown size={14} color="#e67700" />
+              <Text size="xs" fw={600} c="orange.8" truncate>{data.name || 'Note'}</Text>
+            </Box>
+            {content && (
+              <Text size="xs" c="dimmed" mt={4} lineClamp={3}>{content.slice(0, 120)}</Text>
+            )}
+          </div>
+        </Box>
+      </div>
+    );
+  }
+
+  // ── Full view ──
+  return (
+    <div className="analysis-node" style={{ width: '100%', height: '100%' }}>
+      <NodeResizer minWidth={200} minHeight={120} isVisible={data.selected} />
+      <Box
+        className="node-card node-card--none"
+        style={{
+          background: '#fffde7',
+          border: '1px solid #e0d97e',
+          borderRadius: 8,
+          overflow: 'hidden',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* Header */}
+        <Box style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid #f0e68c' }}>
+          <IconMarkdown size={14} color="#e67700" />
+          <input
+            type="text"
+            value={data.name ?? ''}
+            placeholder="Note"
+            onChange={(e) => data.onUpdate({ name: e.target.value })}
+            style={{
+              border: 'none', background: 'transparent', fontWeight: 600, fontSize: 12,
+              color: '#e67700', outline: 'none', flex: 1, padding: 0, minWidth: 0,
+            }}
+          />
+          <div className="node-controls" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+            {data.onDelete && (
+              <Tooltip label="Delete node">
+                <ActionIcon size="xs" variant="subtle" color="red" onClick={data.onDelete}>
+                  <IconTrash size={12} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+          </div>
+        </Box>
+
+        {/* Content: edit or render */}
+        <Box
+          style={{ flex: 1, overflow: 'auto', cursor: editing ? undefined : 'text' }}
+          onDoubleClick={() => !editing && setEditing(true)}
+        >
+          {editing ? (
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => data.onUpdate({ content: e.target.value })}
+              onBlur={() => setEditing(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setEditing(false);
+                // Allow normal typing without node deletion
+                e.stopPropagation();
+              }}
+              style={{
+                width: '100%', height: '100%', border: 'none', outline: 'none',
+                resize: 'none', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5,
+                padding: '8px 12px', background: 'transparent',
+              }}
+            />
+          ) : (
+            <Box px={12} py={8} style={{ minHeight: 40 }}>
+              {content ? (
+                <div
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
+                  style={{ lineHeight: 1.5 }}
+                />
+              ) : (
+                <Text size="xs" c="dimmed" fs="italic">Double-click to add notes...</Text>
+              )}
+            </Box>
+          )}
+        </Box>
+
+        {/* Optional handles for connecting to context */}
+        <Handle type="target" position={Position.Left} style={{ opacity: 0.3 }} />
+        <Handle type="source" position={Position.Right} style={{ opacity: 0.3 }} />
+      </Box>
+    </div>
+  );
+}

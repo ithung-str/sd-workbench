@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import {
   executeAiCommandStream,
   executePipeline,
+  loadPipelineResults,
+  savePipelineResults,
   runMonteCarlo,
   runOATSensitivity,
   simulateModel,
@@ -1810,6 +1812,12 @@ export const useEditorStore = create<EditorState>((set, get) => {
         analysisResults: {},
         model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, id, state.analysisComponents),
       }));
+      // Load cached results from backend
+      void loadPipelineResults(id).then((cached) => {
+        if (Object.keys(cached).length > 0) {
+          set({ analysisResults: cached });
+        }
+      });
     },
     runPipeline: async (nodeIds) => {
       const { pipelines, activePipelineId } = get();
@@ -1828,6 +1836,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
       try {
         const execNodes = [];
         for (const node of filteredNodes) {
+          // Skip note nodes — they're documentation only
+          if (node.type === 'note') continue;
           if (node.type === 'data_source' && node.data_table_id) {
             const { loadDataTable } = await import('../lib/dataTableStorage');
             const table = await loadDataTable(node.data_table_id);
@@ -1853,14 +1863,17 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
 
         // Merge results (partial run keeps previous results for nodes not in scope)
+        let finalResults: Record<string, any>;
         if (nodeIdSet) {
-          set((state) => ({
-            analysisResults: { ...state.analysisResults, ...response.results },
-            isRunningPipeline: false,
-          }));
+          const merged = { ...get().analysisResults, ...response.results };
+          set({ analysisResults: merged, isRunningPipeline: false });
+          finalResults = merged;
         } else {
           set({ analysisResults: response.results, isRunningPipeline: false });
+          finalResults = response.results;
         }
+        // Persist results to backend cache
+        void savePipelineResults(pipeline.id, finalResults);
       } catch {
         set({ isRunningPipeline: false });
       }

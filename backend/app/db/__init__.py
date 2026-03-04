@@ -33,6 +33,14 @@ def init_db() -> None:
                 created_at    TEXT NOT NULL,
                 updated_at    TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS pipeline_results (
+                pipeline_id   TEXT NOT NULL,
+                node_id       TEXT NOT NULL,
+                result_json   TEXT NOT NULL,
+                updated_at    TEXT NOT NULL,
+                PRIMARY KEY (pipeline_id, node_id)
+            );
         """)
 
 

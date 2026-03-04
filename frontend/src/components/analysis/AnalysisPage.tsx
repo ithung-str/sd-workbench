@@ -19,6 +19,7 @@ import { Box, Button, Group, Select, Text } from '@mantine/core';
 import { IconPlus } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
 import type { AnalysisNodeType, AnalysisNode as AnalysisNodeT, AnalysisEdge as AnalysisEdgeT } from '../../types/model';
+import { loadPipelineResults } from '../../lib/api';
 import { parseCSV } from '../../lib/csvParser';
 import { saveDataTable } from '../../lib/dataTableStorage';
 import { AnalysisToolbar } from './AnalysisToolbar';
@@ -27,11 +28,13 @@ import { AnalysisFlyoutPanel } from './AnalysisFlyoutPanel';
 import { DataSourceNode } from './nodes/DataSourceNode';
 import { CodeNode } from './nodes/CodeNode';
 import { OutputNode } from './nodes/OutputNode';
+import { NoteNode } from './nodes/NoteNode';
 
 const nodeTypes: NodeTypes = {
   data_source: DataSourceNode,
   code: CodeNode,
   output: OutputNode,
+  note: NoteNode,
 };
 
 export type RunScope = 'this' | 'upstream' | 'downstream' | 'connected' | 'all' | 'smart';
@@ -172,6 +175,17 @@ function AnalysisCanvas() {
   const activePipeline = pipelines.find((p) => p.id === activePipelineId) ?? null;
   const [canvasDragOver, setCanvasDragOver] = useState(false);
   const [activeFlyout, setActiveFlyout] = useState<AnalysisFlyout>(null);
+
+  // Load cached results from backend on mount (if results are empty)
+  useEffect(() => {
+    if (activePipelineId && Object.keys(analysisResults).length === 0) {
+      void loadPipelineResults(activePipelineId).then((cached) => {
+        if (Object.keys(cached).length > 0) {
+          useEditorStore.setState({ analysisResults: cached });
+        }
+      });
+    }
+  }, [activePipelineId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const { screenToFlowPosition, fitBounds } = useReactFlow();
@@ -195,6 +209,7 @@ function AnalysisCanvas() {
         ...(type === 'data_source' && opts?.tableId ? { data_table_id: opts.tableId, name: opts.tableName ?? '' } : {}),
         ...(type === 'code' ? { code: opts?.code ?? '# df_in: input DataFrame from upstream node\n# df_out: output DataFrame to pass downstream\n\ndf_out = df_in\n', w: 420, h: 400 } : {}),
         ...(type === 'output' ? { w: 380, h: 320, ...(opts?.outputMode ? { output_mode: opts.outputMode } : {}) } : {}),
+        ...(type === 'note' ? { content: '', w: 300, h: 200 } : {}),
       };
       updatePipeline(activePipeline.id, { nodes: [...activePipeline.nodes, newNode] });
     },

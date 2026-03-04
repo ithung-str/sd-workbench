@@ -270,6 +270,24 @@ export async function executePipeline(req: ExecutePipelineRequest): Promise<Exec
   return parseJson(res);
 }
 
+export async function loadPipelineResults(pipelineId: string): Promise<Record<string, NodeResultResponse>> {
+  try {
+    const res = await fetch(`${API_BASE}/api/analysis/pipelines/${pipelineId}/results`);
+    const body = await parseJson<{ results: Record<string, NodeResultResponse> }>(res);
+    return body.results;
+  } catch {
+    return {};
+  }
+}
+
+export async function savePipelineResults(pipelineId: string, results: Record<string, NodeResultResponse>): Promise<void> {
+  await fetch(`${API_BASE}/api/analysis/pipelines/${pipelineId}/results`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ results }),
+  }).catch(() => {});
+}
+
 export async function exportXmile(model: ModelDocument, simConfig?: { start: number; stop: number; dt: number; method: 'euler' }): Promise<{ ok: boolean; xml: string }> {
   const normalized = modelForBackend(model);
   const res = await fetch(`${API_BASE}/api/imports/export/xmile`, {

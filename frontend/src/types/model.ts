@@ -319,7 +319,7 @@ export type SensitivityConfig = {
   seed?: number;
 };
 
-export type AnalysisNodeType = 'data_source' | 'code' | 'output';
+export type AnalysisNodeType = 'data_source' | 'code' | 'output' | 'note';
 
 export type AnalysisNode = {
   id: string;
@@ -331,6 +331,7 @@ export type AnalysisNode = {
   h?: number;
   code?: string;
   description?: string;
+  content?: string;
   data_table_id?: string;
 };
 

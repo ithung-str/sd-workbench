@@ -1,10 +1,14 @@
 from collections import defaultdict
+import json
+from datetime import datetime, timezone
 
 import pandas as pd
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from app.analysis.cache import pipeline_cache
 from app.analysis.executor import execute_node
+from app.db import connect
 from app.schemas.analysis import (
     ExecutePipelineRequest,
     ExecutePipelineResponse,
@@ -87,6 +91,11 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
             failed.add(node_id)
             continue
 
+        # Note node (documentation only, skip execution)
+        if node.type == "note":
+            results[node_id] = NodeResultResponse(ok=True)
+            continue
+
         # Data Source node
         if node.type == "data_source":
             if not node.data_table:
@@ -146,3 +155,50 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
             continue
 
     return ExecutePipelineResponse(results=results)
+
+
+# ── Pipeline result caching ──
+
+
+class SaveResultsRequest(BaseModel):
+    results: dict[str, dict]
+
+
+@router.get("/pipelines/{pipeline_id}/results")
+def get_pipeline_results(pipeline_id: str) -> dict:
+    """Load cached results for a pipeline."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT node_id, result_json FROM pipeline_results WHERE pipeline_id = ?",
+            (pipeline_id,),
+        ).fetchall()
+    results = {}
+    for row in rows:
+        results[row["node_id"]] = json.loads(row["result_json"])
+    return {"results": results}
+
+
+@router.put("/pipelines/{pipeline_id}/results")
+def save_pipeline_results(pipeline_id: str, body: SaveResultsRequest) -> dict:
+    """Save/update cached results for a pipeline (merge with existing)."""
+    now = datetime.now(timezone.utc).isoformat()
+    with connect() as conn:
+        for node_id, result in body.results.items():
+            conn.execute(
+                """INSERT OR REPLACE INTO pipeline_results
+                   (pipeline_id, node_id, result_json, updated_at)
+                   VALUES (?, ?, ?, ?)""",
+                (pipeline_id, node_id, json.dumps(result), now),
+            )
+    return {"ok": True}
+
+
+@router.delete("/pipelines/{pipeline_id}/results")
+def clear_pipeline_results(pipeline_id: str) -> dict:
+    """Clear all cached results for a pipeline."""
+    with connect() as conn:
+        conn.execute(
+            "DELETE FROM pipeline_results WHERE pipeline_id = ?",
+            (pipeline_id,),
+        )
+    return {"ok": True}

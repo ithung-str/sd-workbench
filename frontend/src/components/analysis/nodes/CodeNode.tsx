@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps, NodeResizer } from 'reactflow';
 import { ActionIcon, Box, Select, Text, Textarea, TextInput, Table, ScrollArea, Tooltip } from '@mantine/core';
 import { IconCode, IconDeviceFloppy, IconTrash } from '@tabler/icons-react';
-import Editor from '@monaco-editor/react';
+import Editor, { type Monaco } from '@monaco-editor/react';
 import type { NodeResultResponse } from '../../../lib/api';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
@@ -37,12 +37,129 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
   const [showSave, setShowSave] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const zoomLevel = data.zoomLevel ?? 'full';
+  const disposeRef = useRef<{ dispose(): void } | null>(null);
 
   const handleCodeChange = useCallback(
     (value: string | undefined) => {
       data.onUpdate({ code: value ?? '' });
     },
     [data],
+  );
+
+  /** Register Monaco completion provider for df_in column names + pandas API. */
+  const handleEditorMount = useCallback(
+    (_editor: unknown, monaco: Monaco) => {
+      // Dispose previous provider if re-mounted
+      disposeRef.current?.dispose();
+
+      disposeRef.current = monaco.languages.registerCompletionItemProvider('python', {
+        triggerCharacters: ['.', '[', "'", '"'],
+        provideCompletionItems(model, position) {
+          const textUntilPosition = model.getValueInRange({
+            startLineNumber: position.lineNumber,
+            startColumn: 1,
+            endLineNumber: position.lineNumber,
+            endColumn: position.column,
+          });
+          const word = model.getWordUntilPosition(position);
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: word.startColumn,
+            endColumn: word.endColumn,
+          };
+
+          const suggestions: any[] = [];
+          const inputVars = data.inputVars ?? [];
+
+          // If user typed a df variable name followed by dot or bracket
+          for (const iv of inputVars) {
+            const cols = iv.columns ?? [];
+
+            // df_in. → suggest column access patterns
+            if (textUntilPosition.endsWith(`${iv.varName}.`)) {
+              // Common pandas DataFrame methods
+              for (const method of [
+                { label: 'head()', detail: 'First 5 rows' },
+                { label: 'tail()', detail: 'Last 5 rows' },
+                { label: 'describe()', detail: 'Summary statistics' },
+                { label: 'info()', detail: 'DataFrame info' },
+                { label: 'shape', detail: 'Row x column dimensions' },
+                { label: 'columns', detail: 'Column names' },
+                { label: 'dtypes', detail: 'Column data types' },
+                { label: 'groupby()', detail: 'Group by columns' },
+                { label: 'merge()', detail: 'Merge DataFrames' },
+                { label: 'sort_values()', detail: 'Sort by column' },
+                { label: 'drop_duplicates()', detail: 'Remove duplicates' },
+                { label: 'fillna()', detail: 'Fill missing values' },
+                { label: 'dropna()', detail: 'Drop missing values' },
+                { label: 'rename()', detail: 'Rename columns' },
+                { label: 'apply()', detail: 'Apply function' },
+                { label: 'value_counts()', detail: 'Count unique values' },
+                { label: 'pivot_table()', detail: 'Create pivot table' },
+                { label: 'melt()', detail: 'Unpivot wide to long' },
+                { label: 'query()', detail: 'Filter with string expr' },
+                { label: 'assign()', detail: 'Add new columns' },
+              ]) {
+                suggestions.push({
+                  label: method.label,
+                  kind: monaco.languages.CompletionItemKind.Method,
+                  insertText: method.label,
+                  detail: method.detail,
+                  range,
+                });
+              }
+              // Column names as attributes
+              for (const col of cols) {
+                suggestions.push({
+                  label: col,
+                  kind: monaco.languages.CompletionItemKind.Field,
+                  insertText: col,
+                  detail: `Column: ${col}`,
+                  range,
+                });
+              }
+            }
+
+            // df_in["  or  df_in[' → suggest column names as strings
+            if (textUntilPosition.match(new RegExp(`${iv.varName}\\[["']$`))) {
+              for (const col of cols) {
+                suggestions.push({
+                  label: col,
+                  kind: monaco.languages.CompletionItemKind.Value,
+                  insertText: col,
+                  detail: `Column: ${col}`,
+                  range,
+                });
+              }
+            }
+          }
+
+          // Top-level: suggest variable names and common imports
+          if (!textUntilPosition.includes('.') || suggestions.length === 0) {
+            for (const iv of inputVars) {
+              suggestions.push({
+                label: iv.varName,
+                kind: monaco.languages.CompletionItemKind.Variable,
+                insertText: iv.varName,
+                detail: `Input DataFrame${iv.columns ? ` (${iv.columns.length} cols)` : ''}`,
+                range,
+              });
+            }
+            suggestions.push({
+              label: 'df_out',
+              kind: monaco.languages.CompletionItemKind.Variable,
+              insertText: 'df_out',
+              detail: 'Output DataFrame (assign your result here)',
+              range,
+            });
+          }
+
+          return { suggestions };
+        },
+      });
+    },
+    [data.inputVars],
   );
 
   const handleSave = () => {
@@ -222,6 +339,7 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
               theme="vs-light"
               value={data.code ?? ''}
               onChange={handleCodeChange}
+              onMount={handleEditorMount}
               options={{
                 minimap: { enabled: false },
                 fontSize: 12,
@@ -230,6 +348,8 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
                 wordWrap: 'on',
                 padding: { top: 8 },
                 overviewRulerLanes: 0,
+                quickSuggestions: true,
+                suggestOnTriggerCharacters: true,
               }}
             />
           </Box>

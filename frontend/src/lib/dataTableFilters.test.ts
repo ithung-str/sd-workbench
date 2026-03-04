@@ -6,6 +6,8 @@ const TABLE: DataTable = {
   id: 't1',
   name: 'Test',
   source: 'csv',
+  description: '',
+  tags: [],
   columns: [
     { key: 'name', label: 'Name', type: 'string' },
     { key: 'age', label: 'Age', type: 'number' },
