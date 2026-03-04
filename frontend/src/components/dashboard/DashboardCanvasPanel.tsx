@@ -5,12 +5,18 @@ import {
   Badge,
   Box,
   Card,
+  Checkbox,
   Group,
+  MultiSelect,
+  NumberInput,
+  Popover,
+  Select,
   Stack,
   Table,
   Text,
+  TextInput,
 } from '@mantine/core';
-import { IconGripVertical } from '@tabler/icons-react';
+import { IconGripVertical, IconPencil, IconTrash } from '@tabler/icons-react';
 import {
   CartesianGrid,
   Legend,
@@ -64,6 +70,25 @@ const CARD_TYPE_LABEL: Record<DashboardCardType, string> = {
   data_table: 'DATA',
   data_pivot: 'PIVOT',
 };
+
+const CARD_TYPE_DATA = [
+  { value: 'kpi', label: 'KPI', group: 'Simulation' },
+  { value: 'line', label: 'Line Chart', group: 'Simulation' },
+  { value: 'table', label: 'Sim Table', group: 'Simulation' },
+  { value: 'sparkline', label: 'Sparkline', group: 'Simulation' },
+  { value: 'comparison', label: 'Comparison', group: 'Simulation' },
+  { value: 'heatmap', label: 'Heatmap', group: 'Simulation' },
+  { value: 'map', label: 'Stock-Flow Map', group: 'Simulation' },
+  { value: 'data_bar', label: 'Bar Chart', group: 'Data Table' },
+  { value: 'data_stacked_bar', label: 'Stacked Bar', group: 'Data Table' },
+  { value: 'data_area', label: 'Area Chart', group: 'Data Table' },
+  { value: 'data_pie', label: 'Pie Chart', group: 'Data Table' },
+  { value: 'data_table', label: 'Data Table', group: 'Data Table' },
+  { value: 'data_pivot', label: 'Pivot Table', group: 'Data Table' },
+];
+
+const SINGLE_VAR_TYPES: DashboardCardType[] = ['kpi', 'line', 'table', 'sparkline'];
+const MULTI_VAR_TYPES: DashboardCardType[] = ['heatmap', 'comparison'];
 
 const CANVAS_MIN_HEIGHT = 720;
 const COMPARISON_COLORS = ['#1b6ca8', '#d46a00', '#2f7d32', '#8a2be2', '#d32f2f', '#00838f'];
@@ -422,9 +447,11 @@ type Props = {
   selectedRun: ScenarioRunResult | null;
   activeDashboardId: string;
   onUpdateCard: (dashboardId: string, cardId: string, patch: Partial<DashboardCard>) => void;
+  onDeleteCard: (dashboardId: string, cardId: string) => void;
+  variableOptions: Array<{ value: string; label: string }>;
 };
 
-export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, onUpdateCard }: Props) {
+export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, onUpdateCard, onDeleteCard, variableOptions }: Props) {
   const sortedCards = useMemo(
     () => cards.slice().sort((a, b) => a.order - b.order),
     [cards],
@@ -445,6 +472,7 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
   const [cardLayout, setCardLayout] = useState<Record<string, Rect>>({});
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const cardLayoutRef = useRef<Record<string, Rect>>({});
 
@@ -671,7 +699,7 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
           >
             <Stack gap="xs" h="100%">
               <Group justify="space-between" wrap="nowrap">
-                <Group gap={6} wrap="nowrap">
+                <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
                   <ActionIcon
                     variant="subtle"
                     aria-label="Drag card"
@@ -683,7 +711,89 @@ export function DashboardCanvasPanel({ cards, selectedRun, activeDashboardId, on
                   </ActionIcon>
                   <Text fw={700} lineClamp={1}>{card.title}</Text>
                 </Group>
-                <Badge variant="light">{CARD_TYPE_LABEL[card.type] ?? card.type.toUpperCase()}</Badge>
+                <Group gap={4} wrap="nowrap">
+                  <Badge variant="light" size="sm">{CARD_TYPE_LABEL[card.type] ?? card.type.toUpperCase()}</Badge>
+                  <Popover
+                    opened={editingCardId === card.id}
+                    onChange={(opened) => setEditingCardId(opened ? card.id : null)}
+                    width={260}
+                    position="bottom-end"
+                    shadow="md"
+                  >
+                    <Popover.Target>
+                      <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        onClick={() => setEditingCardId(editingCardId === card.id ? null : card.id)}
+                      >
+                        <IconPencil size={14} />
+                      </ActionIcon>
+                    </Popover.Target>
+                    <Popover.Dropdown>
+                      <Stack gap={6}>
+                        <TextInput
+                          label="Title"
+                          size="xs"
+                          value={card.title}
+                          onChange={(e) => onUpdateCard(activeDashboardId, card.id, { title: e.currentTarget.value })}
+                        />
+                        <Select
+                          label="Type"
+                          size="xs"
+                          value={card.type}
+                          onChange={(value) => { if (value) onUpdateCard(activeDashboardId, card.id, { type: value as DashboardCardType }); }}
+                          data={CARD_TYPE_DATA}
+                        />
+                        {SINGLE_VAR_TYPES.includes(card.type) && (
+                          <Select
+                            label="Variable"
+                            size="xs"
+                            value={card.variable}
+                            data={variableOptions}
+                            searchable
+                            onChange={(value) => { if (value) onUpdateCard(activeDashboardId, card.id, { variable: value }); }}
+                          />
+                        )}
+                        {MULTI_VAR_TYPES.includes(card.type) && (
+                          <MultiSelect
+                            label="Variables"
+                            size="xs"
+                            value={card.variables ?? []}
+                            data={variableOptions}
+                            searchable
+                            onChange={(values) => onUpdateCard(activeDashboardId, card.id, { variables: values })}
+                          />
+                        )}
+                        {card.type === 'table' && (
+                          <NumberInput
+                            label="Table Rows"
+                            size="xs"
+                            value={card.table_rows ?? 10}
+                            min={1}
+                            max={200}
+                            onChange={(value) => onUpdateCard(activeDashboardId, card.id, { table_rows: Number(value) || 10 })}
+                          />
+                        )}
+                        {card.type === 'map' && (
+                          <Checkbox
+                            size="xs"
+                            label="Scale stock dots by value"
+                            checked={card.scale_nodes ?? false}
+                            onChange={(e) => onUpdateCard(activeDashboardId, card.id, { scale_nodes: e.currentTarget.checked })}
+                          />
+                        )}
+                      </Stack>
+                    </Popover.Dropdown>
+                  </Popover>
+                  <ActionIcon
+                    variant="subtle"
+                    size="sm"
+                    color="red"
+                    onClick={() => onDeleteCard(activeDashboardId, card.id)}
+                  >
+                    <IconTrash size={14} />
+                  </ActionIcon>
+                </Group>
               </Group>
               <Box style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                 <CardContent card={card} run={selectedRun} dataTableCache={dataTableCache} />

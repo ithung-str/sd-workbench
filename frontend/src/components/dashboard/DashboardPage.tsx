@@ -1,22 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActionIcon,
   Badge,
   Box,
   Button,
   Group,
-  ScrollArea,
   Select,
   Text,
   Title,
-  Tooltip,
 } from '@mantine/core';
-import { IconCards, IconPlayerPlay, IconX } from '@tabler/icons-react';
+import { IconPlayerPlay } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
 import type { ScenarioRunResult } from '../../types/model';
 import { DashboardCanvasPanel } from './DashboardCanvasPanel';
-import { DashboardEditorPanel } from './DashboardEditorPanel';
 import { DashboardListPanel } from './DashboardListPanel';
+import { DashboardToolbar } from './DashboardToolbar';
 
 function dedupeRuns(runs: ScenarioRunResult[]): ScenarioRunResult[] {
   const seen = new Set<string>();
@@ -38,7 +35,6 @@ export function DashboardPage() {
   const updateDashboard = useEditorStore((s) => s.updateDashboard);
   const deleteDashboard = useEditorStore((s) => s.deleteDashboard);
   const addDashboardCard = useEditorStore((s) => s.addDashboardCard);
-  const moveDashboardCard = useEditorStore((s) => s.moveDashboardCard);
   const deleteDashboardCard = useEditorStore((s) => s.deleteDashboardCard);
   const updateDashboardCard = useEditorStore((s) => s.updateDashboardCard);
   const runScenarioBatch = useEditorStore((s) => s.runScenarioBatch);
@@ -47,7 +43,6 @@ export function DashboardPage() {
   const activeScenarioId = useEditorStore((s) => s.activeScenarioId);
 
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
-  const [editorOpen, setEditorOpen] = useState(false);
 
   const activeDashboard = dashboards.find((d) => d.id === activeDashboardId) ?? null;
 
@@ -169,93 +164,28 @@ export function DashboardPage() {
           />
         </Box>
 
-        {/* Canvas area (with flyout overlay) */}
-        <Box style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
-          {/* Editor flyout */}
-          {editorOpen && activeDashboard && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                bottom: 0,
-                width: 280,
-                background: '#ffffff',
-                borderRight: '1px solid #e7e7ee',
-                boxShadow: '2px 0 8px rgba(0,0,0,0.06)',
-                zIndex: 5,
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  borderBottom: '1px solid #e7e7ee',
-                  minHeight: 40,
-                }}
-              >
-                <Text size="sm" fw={600}>Edit Cards</Text>
-                <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => setEditorOpen(false)}>
-                  <IconX size={14} />
-                </ActionIcon>
-              </div>
-              <ScrollArea style={{ flex: 1 }} offsetScrollbars scrollbarSize={6}>
-                <DashboardEditorPanel
-                  dashboard={activeDashboard}
-                  variableOptions={variableOptions}
-                  onUpdateDashboard={updateDashboard}
-                  onAddCard={addDashboardCard}
-                  onUpdateCard={updateDashboardCard}
-                  onMoveCard={moveDashboardCard}
-                  onDeleteCard={deleteDashboardCard}
-                />
-              </ScrollArea>
-            </div>
-          )}
-
-          {/* Flyout toggle button (top-left of canvas) */}
+        {/* Right: toolbar + canvas */}
+        <Box style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {activeDashboard && (
-            <Tooltip label={editorOpen ? 'Close editor' : 'Edit cards'} position="right">
-              <ActionIcon
-                variant={editorOpen ? 'filled' : 'light'}
-                color="violet"
-                size="md"
-                onClick={() => setEditorOpen((o) => !o)}
-                style={{
-                  position: 'absolute',
-                  top: 8,
-                  left: editorOpen ? 288 : 8,
-                  zIndex: 6,
-                  transition: 'left 0.15s ease',
-                }}
-              >
-                <IconCards size={16} />
-              </ActionIcon>
-            </Tooltip>
+            <DashboardToolbar
+              dashboard={activeDashboard}
+              variableOptions={variableOptions}
+              onUpdateDashboard={updateDashboard}
+              onAddCard={addDashboardCard}
+            />
           )}
-
-          {/* Canvas */}
-          <Box style={{ height: '100%', overflow: 'auto' }}>
+          <Box style={{ flex: 1, overflow: 'auto' }}>
             {activeDashboard ? (
               <DashboardCanvasPanel
                 cards={activeDashboard.cards}
                 selectedRun={selectedRun}
                 activeDashboardId={activeDashboard.id}
                 onUpdateCard={updateDashboardCard}
+                onDeleteCard={deleteDashboardCard}
+                variableOptions={variableOptions}
               />
             ) : (
-              <Box
-                style={{
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
+              <Box style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Text size="sm" c="dimmed">Create a dashboard to get started</Text>
               </Box>
             )}
