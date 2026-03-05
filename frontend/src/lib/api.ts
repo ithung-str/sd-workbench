@@ -424,3 +424,35 @@ export async function apiDeleteDataTable(id: string): Promise<void> {
 export function apiDataTableCsvUrl(id: string): string {
   return `${API_BASE}/api/data/tables/${id}/export/csv`;
 }
+
+// ── AI Node Describe ──
+
+export type NodeDescribeRequest = {
+  node_type: string;
+  code?: string;
+  sql?: string;
+  columns?: string[];
+  current_name?: string;
+  current_description?: string;
+  input_columns?: string[];
+};
+
+export type NodeDescribeResponse = {
+  ok: boolean;
+  name?: string;
+  description?: string;
+  error?: string;
+};
+
+export async function aiDescribeNode(req: NodeDescribeRequest): Promise<NodeDescribeResponse> {
+  try {
+    const res = await fetch(`${API_BASE}/api/ai/describe-node`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    return parseJson(res);
+  } catch {
+    return { ok: false, error: 'Failed to reach AI service' };
+  }
+}

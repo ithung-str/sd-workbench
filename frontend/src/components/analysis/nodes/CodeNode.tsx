@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps, NodeResizer } from 'reactflow';
 import { ActionIcon, Box, Select, Text, Textarea, TextInput, Table, ScrollArea, Tooltip } from '@mantine/core';
-import { IconCode, IconDeviceFloppy, IconTrash } from '@tabler/icons-react';
+import { IconCode, IconDeviceFloppy, IconSparkles, IconTrash } from '@tabler/icons-react';
 import Editor, { type Monaco } from '@monaco-editor/react';
 import type { NodeResultResponse } from '../../../lib/api';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
@@ -21,6 +21,7 @@ type CodeData = {
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
   onSaveComponent?: (name: string, code: string) => void;
+  onAutoDescribe?: () => void;
   result?: NodeResultResponse;
   selected?: boolean;
   inputVars?: InputVar[];
@@ -273,6 +274,13 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
             {data.onRunScope && <RunMenu onRunScope={data.onRunScope} />}
             {result && (
               <Box style={{ width: 8, height: 8, borderRadius: '50%', background: result.ok ? '#2f9e44' : '#e03131' }} />
+            )}
+            {data.onAutoDescribe && (
+              <Tooltip label="AI suggest name & description">
+                <ActionIcon size="xs" variant="subtle" color="violet" onClick={data.onAutoDescribe}>
+                  <IconSparkles size={12} />
+                </ActionIcon>
+              </Tooltip>
             )}
             {data.onDelete && (
               <Tooltip label="Delete node">

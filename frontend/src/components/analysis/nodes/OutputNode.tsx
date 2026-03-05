@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
 import { ActionIcon, Badge, Box, Button, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
-import { IconCamera, IconTableFilled, IconTrash, IconX } from '@tabler/icons-react';
+import { IconCamera, IconSparkles, IconTableFilled, IconTrash, IconX } from '@tabler/icons-react';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
   XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid,
@@ -28,6 +28,7 @@ type OutputData = {
   onRunScope?: (scope: RunScope) => void;
   onSnapshotMock?: () => void;
   onClearMock?: () => void;
+  onAutoDescribe?: () => void;
   isMockPreview?: boolean;
   result?: NodeResultResponse;
   selected?: boolean;
@@ -253,6 +254,13 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
           )}
           {result && (
             <Box style={{ width: 8, height: 8, borderRadius: '50%', background: result.ok ? '#2f9e44' : '#e03131' }} />
+          )}
+          {data.onAutoDescribe && (
+            <MantineTooltip label="AI suggest name & description">
+              <ActionIcon size="xs" variant="subtle" color="violet" onClick={data.onAutoDescribe}>
+                <IconSparkles size={12} />
+              </ActionIcon>
+            </MantineTooltip>
           )}
           {data.onDelete && (
             <MantineTooltip label="Delete node">

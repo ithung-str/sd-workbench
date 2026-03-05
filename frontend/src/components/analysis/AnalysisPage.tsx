@@ -19,7 +19,7 @@ import { Box, Button, Group, Select, Text } from '@mantine/core';
 import { IconPlus } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
 import type { AnalysisNodeType, AnalysisNode as AnalysisNodeT, AnalysisEdge as AnalysisEdgeT, PipelineCheckpoint } from '../../types/model';
-import { loadPipelineResults, fetchNodePreview, type NodeResultResponse } from '../../lib/api';
+import { loadPipelineResults, fetchNodePreview, aiDescribeNode, type NodeResultResponse } from '../../lib/api';
 import { parseCSV } from '../../lib/csvParser';
 import { saveDataTable } from '../../lib/dataTableStorage';
 import { parseSpreadsheetId, writeSheetData } from '../../lib/googleSheetsApi';
@@ -164,6 +164,7 @@ function pipelineNodesToFlow(
   onClearMock: (nodeId: string) => void,
   onGenerateMock: (nodeId: string) => void,
   onExportToSheets: (nodeId: string) => void,
+  onAutoDescribe: (nodeId: string) => void,
   pipelineId: string,
   selectedNodeId: string | null,
   zoomLevel: ZoomLevel,
@@ -220,6 +221,7 @@ function pipelineNodesToFlow(
         onClearMock: n.mockValue ? () => onClearMock(n.id) : undefined,
         onGenerateMock: n.type === 'data_source' ? () => onGenerateMock(n.id) : undefined,
         onExportToSheets: n.type === 'sheets_export' ? () => onExportToSheets(n.id) : undefined,
+        onAutoDescribe: () => onAutoDescribe(n.id),
         pipelineId,
         isMockPreview: effective?.isMock ?? false,
       },
@@ -464,6 +466,51 @@ function AnalysisCanvas() {
     [activePipeline],
   );
 
+  /** Ask AI to suggest a name and description for a node. */
+  const handleAutoDescribe = useCallback(
+    async (nodeId: string) => {
+      if (!activePipeline) return;
+      const node = activePipeline.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+
+      // Gather upstream column context
+      const parentIds = activePipeline.edges.filter((e) => e.target === nodeId).map((e) => e.source);
+      const inputColumns: string[] = [];
+      for (const pid of parentIds) {
+        const resolved = resolveEffectiveResult(pid, activePipeline.nodes, activePipeline.edges, analysisResults);
+        const cols = resolved ? resultColumns(resolved.result) : undefined;
+        if (cols) inputColumns.push(...cols);
+      }
+
+      // For data_source nodes, get table column names
+      let tableColumns: string[] | undefined;
+      if (node.type === 'data_source') {
+        const effective = resolveEffectiveResult(nodeId, activePipeline.nodes, activePipeline.edges, analysisResults);
+        tableColumns = effective ? resultColumns(effective.result) : undefined;
+      }
+
+      const resp = await aiDescribeNode({
+        node_type: node.type,
+        code: node.code ?? undefined,
+        sql: node.sql ?? undefined,
+        columns: tableColumns,
+        current_name: node.name ?? undefined,
+        current_description: node.description ?? undefined,
+        input_columns: inputColumns.length > 0 ? inputColumns : undefined,
+      });
+
+      if (resp.ok) {
+        const patch: Record<string, unknown> = {};
+        if (resp.name) patch.name = resp.name;
+        if (resp.description) patch.description = resp.description;
+        if (Object.keys(patch).length > 0) {
+          handleUpdateNode(nodeId, patch);
+        }
+      }
+    },
+    [activePipeline, analysisResults, handleUpdateNode],
+  );
+
   const handleRunScope = useCallback(
     (nodeId: string, scope: RunScope) => {
       if (!activePipeline) return;
@@ -524,8 +571,8 @@ function AnalysisCanvas() {
 
   // Derive flow nodes/edges from pipeline state
   const derivedFlowNodes = useMemo(
-    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, activePipeline.id, selectedNodeId, zoomLevel) : [],
-    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, selectedNodeId, zoomLevel],
+    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleAutoDescribe, activePipeline.id, selectedNodeId, zoomLevel) : [],
+    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleAutoDescribe, selectedNodeId, zoomLevel],
   );
 
   const derivedFlowEdges = useMemo(

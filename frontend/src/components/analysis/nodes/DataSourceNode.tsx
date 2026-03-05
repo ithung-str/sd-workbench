@@ -20,6 +20,7 @@ type DataSourceData = {
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
   onGenerateMock?: () => void;
+  onAutoDescribe?: () => void;
   result?: NodeResultResponse;
   isMockPreview?: boolean;
   selected?: boolean;
@@ -133,6 +134,13 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
           {data.onRunScope && <RunMenu onRunScope={data.onRunScope} />}
           {result && (
             <Box style={{ width: 8, height: 8, borderRadius: '50%', background: result.ok ? '#2f9e44' : '#e03131' }} />
+          )}
+          {data.onAutoDescribe && (
+            <Tooltip label="AI suggest name & description">
+              <ActionIcon size="xs" variant="subtle" color="violet" onClick={data.onAutoDescribe}>
+                <IconSparkles size={12} />
+              </ActionIcon>
+            </Tooltip>
           )}
           {data.onDelete && (
             <Tooltip label="Delete node">
