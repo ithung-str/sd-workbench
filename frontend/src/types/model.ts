@@ -319,7 +319,7 @@ export type SensitivityConfig = {
   seed?: number;
 };
 
-export type AnalysisNodeType = 'data_source' | 'code' | 'sql' | 'output' | 'note' | 'group';
+export type AnalysisNodeType = 'data_source' | 'code' | 'sql' | 'output' | 'note' | 'group' | 'sheets_export' | 'publish';
 
 export type ChartConfig = {
   xColumn?: string;
@@ -348,6 +348,14 @@ export type AnalysisNode = {
   collapsed?: boolean;
   /** For group nodes: visual color */
   groupColor?: string;
+  /** For sheets_export nodes: target spreadsheet URL */
+  spreadsheet_url?: string;
+  /** For sheets_export nodes: target sheet name */
+  sheet_name?: string;
+  /** For publish nodes: published data table ID */
+  publish_table_id?: string;
+  /** For publish nodes: overwrite vs append */
+  publish_mode?: 'overwrite' | 'append';
 };
 
 export type AnalysisEdge = {

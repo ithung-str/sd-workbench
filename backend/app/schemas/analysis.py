@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class AnalysisNodeSchema(BaseModel):
     id: str
-    type: Literal["data_source", "code", "sql", "output", "note", "group"]
+    type: Literal["data_source", "code", "sql", "output", "note", "group", "sheets_export", "publish"]
     x: float = 0
     y: float = 0
     w: Optional[float] = None
@@ -19,6 +19,10 @@ class AnalysisNodeSchema(BaseModel):
     parent_group: Optional[str] = None
     collapsed: Optional[bool] = None
     group_color: Optional[str] = None
+    spreadsheet_url: Optional[str] = None
+    sheet_name: Optional[str] = None
+    publish_table_id: Optional[str] = None
+    publish_mode: Optional[Literal["overwrite", "append"]] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -58,10 +62,13 @@ class DataTablePayload(BaseModel):
 
 class ExecuteNode(BaseModel):
     id: str
-    type: Literal["data_source", "code", "sql", "output", "note", "group"]
+    type: Literal["data_source", "code", "sql", "output", "note", "group", "sheets_export", "publish"]
     code: Optional[str] = None
     sql: Optional[str] = None
     data_table: Optional[DataTablePayload] = None
+    publish_table_name: Optional[str] = None
+    publish_table_id: Optional[str] = None
+    publish_mode: Optional[Literal["overwrite", "append"]] = None
 
 
 class ExecuteEdge(BaseModel):

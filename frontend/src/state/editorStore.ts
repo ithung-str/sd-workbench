@@ -1852,6 +1852,19 @@ export const useEditorStore = create<EditorState>((set, get) => {
               type: 'sql' as const,
               sql: node.sql,
             });
+          } else if (node.type === 'publish') {
+            execNodes.push({
+              id: node.id,
+              type: 'publish' as const,
+              publish_table_name: node.name || undefined,
+              publish_table_id: node.publish_table_id || undefined,
+              publish_mode: node.publish_mode || 'overwrite',
+            });
+          } else if (node.type === 'sheets_export') {
+            execNodes.push({
+              id: node.id,
+              type: 'sheets_export' as const,
+            });
           } else {
             execNodes.push({
               id: node.id,
@@ -1878,6 +1891,26 @@ export const useEditorStore = create<EditorState>((set, get) => {
           set({ analysisResults: response.results, isRunningPipeline: false });
           finalResults = response.results;
         }
+        // Update publish nodes with their assigned table IDs
+        const updatedNodes = [...pipeline.nodes];
+        let nodesChanged = false;
+        for (const node of updatedNodes) {
+          if (node.type === 'publish' && !node.publish_table_id) {
+            const res = finalResults[node.id];
+            if (res?.ok && res.logs) {
+              const match = res.logs.match(/\(id: ([^)]+)\)/);
+              if (match) {
+                const idx = updatedNodes.indexOf(node);
+                updatedNodes[idx] = { ...node, publish_table_id: match[1] };
+                nodesChanged = true;
+              }
+            }
+          }
+        }
+        if (nodesChanged) {
+          get().updatePipeline(pipeline.id, { nodes: updatedNodes });
+        }
+
         // Persist results to backend cache
         void savePipelineResults(pipeline.id, finalResults);
       } catch {

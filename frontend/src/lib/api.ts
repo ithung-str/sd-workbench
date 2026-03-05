@@ -223,10 +223,13 @@ export type ExecutePipelineRequest = {
   run_from?: string | null;
   nodes: Array<{
     id: string;
-    type: 'data_source' | 'code' | 'sql' | 'output';
+    type: 'data_source' | 'code' | 'sql' | 'output' | 'sheets_export' | 'publish';
     code?: string;
     sql?: string;
     data_table?: { columns: Array<{ key: string; label: string; type: string }>; rows: unknown[][] };
+    publish_table_name?: string;
+    publish_table_id?: string;
+    publish_mode?: 'overwrite' | 'append';
   }>;
   edges: Array<{ source: string; target: string }>;
 };

@@ -32,6 +32,8 @@ import { SqlNode } from './nodes/SqlNode';
 import { OutputNode } from './nodes/OutputNode';
 import { NoteNode } from './nodes/NoteNode';
 import { GroupNode } from './nodes/GroupNode';
+import { SheetsExportNode } from './nodes/SheetsExportNode';
+import { PublishNode } from './nodes/PublishNode';
 
 const nodeTypes: NodeTypes = {
   data_source: DataSourceNode,
@@ -40,6 +42,8 @@ const nodeTypes: NodeTypes = {
   output: OutputNode,
   note: NoteNode,
   group: GroupNode,
+  sheets_export: SheetsExportNode,
+  publish: PublishNode,
 };
 
 export type RunScope = 'this' | 'upstream' | 'downstream' | 'connected' | 'all' | 'smart';
@@ -229,6 +233,8 @@ function AnalysisCanvas() {
         ...(type === 'output' ? { w: 380, h: 320, ...(opts?.outputMode ? { output_mode: opts.outputMode } : {}) } : {}),
         ...(type === 'note' ? { content: '', w: 300, h: 200 } : {}),
         ...(type === 'group' ? { w: 500, h: 400, groupColor: 'blue' } : {}),
+        ...(type === 'sheets_export' ? { w: 320, h: 280, sheet_name: 'Sheet1' } : {}),
+        ...(type === 'publish' ? { w: 300, h: 240, publish_mode: 'overwrite' as const } : {}),
       };
       updatePipeline(activePipeline.id, { nodes: [...activePipeline.nodes, newNode] });
     },

@@ -10,6 +10,7 @@ from app.analysis.cache import pipeline_cache
 from app.analysis.executor import execute_node
 from app.analysis.sql_executor import execute_sql
 from app.db import connect
+from app.services import data_service
 from app.schemas.analysis import (
     ExecutePipelineRequest,
     ExecutePipelineResponse,
@@ -187,6 +188,85 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
             else:
                 results[node_id] = NodeResultResponse(ok=False, error=sql_result.error)
                 failed.add(node_id)
+            continue
+
+        # Publish node (save DataFrame as a data asset)
+        if node.type == "publish":
+            if parents:
+                parent_df = pipeline_cache.get(req.pipeline_id, parents[0])
+                if parent_df is not None:
+                    pipeline_cache.set(req.pipeline_id, node_id, parent_df)
+                    preview = _df_preview(parent_df)
+                    shape = list(parent_df.shape)
+
+                    # Persist to data catalog
+                    table_name = node.publish_table_name or f"Published {node_id}"
+                    table_id = node.publish_table_id
+                    columns_meta = [
+                        {"key": col, "label": col, "type": "number" if pd.api.types.is_numeric_dtype(parent_df[col]) else "string"}
+                        for col in parent_df.columns
+                    ]
+                    rows_data = parent_df.values.tolist()
+                    now = datetime.now(timezone.utc).isoformat()
+
+                    if table_id and node.publish_mode == "append":
+                        # Append: load existing + concat
+                        existing = data_service.get_table(table_id)
+                        if existing:
+                            existing_rows = json.loads(existing["rows_json"]) if existing.get("rows_json") else []
+                            rows_data = existing_rows + rows_data
+                            data_service.update_table(table_id, {"rows_json": json.dumps(rows_data), "updated_at": now})
+                            results[node_id] = NodeResultResponse(
+                                ok=True, preview=preview, shape=shape,
+                                logs=f"Appended {len(parent_df)} rows to '{table_name}' (total: {len(rows_data)})",
+                            )
+                            continue
+
+                    # Overwrite or create new
+                    table_data = {
+                        "name": table_name,
+                        "source": "pipeline",
+                        "description": f"Published from pipeline '{req.pipeline_id}'",
+                        "tags_json": json.dumps(["pipeline", "published"]),
+                        "columns_json": json.dumps(columns_meta),
+                        "rows_json": json.dumps(rows_data),
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+
+                    if table_id:
+                        data_service.update_table(table_id, {
+                            "name": table_name,
+                            "columns_json": json.dumps(columns_meta),
+                            "rows_json": json.dumps(rows_data),
+                            "updated_at": now,
+                        })
+                    else:
+                        table_id = f"dt_{node_id}_{int(datetime.now(timezone.utc).timestamp())}"
+                        table_data["id"] = table_id
+                        data_service.create_table(table_data)
+
+                    results[node_id] = NodeResultResponse(
+                        ok=True, preview=preview, shape=shape,
+                        logs=f"Published as '{table_name}' (id: {table_id})",
+                    )
+                    continue
+            results[node_id] = NodeResultResponse(ok=False, error="No input data")
+            failed.add(node_id)
+            continue
+
+        # Sheets export node (pass-through; actual export is client-side via OAuth)
+        if node.type == "sheets_export":
+            if parents:
+                parent_df = pipeline_cache.get(req.pipeline_id, parents[0])
+                if parent_df is not None:
+                    pipeline_cache.set(req.pipeline_id, node_id, parent_df)
+                    results[node_id] = NodeResultResponse(
+                        ok=True, preview=_df_preview(parent_df), shape=list(parent_df.shape),
+                    )
+                    continue
+            results[node_id] = NodeResultResponse(ok=False, error="No input data")
+            failed.add(node_id)
             continue
 
     return ExecutePipelineResponse(results=results)
