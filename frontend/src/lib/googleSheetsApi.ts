@@ -173,3 +173,81 @@ export async function refreshGoogleSheetsTable(
     createdAt: existing.createdAt,
   };
 }
+
+/**
+ * Write a 2D array of values to a Google Sheets worksheet.
+ * Clears the sheet first, then writes header + data rows.
+ */
+export async function writeSheetData(
+  spreadsheetId: string,
+  sheetTitle: string,
+  headers: string[],
+  rows: (string | number | null)[][],
+  accessToken: string,
+): Promise<{ updatedRows: number }> {
+  const range = `${sheetTitle}`;
+
+  // Clear existing content
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:clear`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+
+  // Write new data
+  const values = [headers, ...rows.map((row) => row.map((v) => v ?? ''))];
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ range, majorDimension: 'ROWS', values }),
+    },
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to write sheet data: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  return { updatedRows: data.updatedRows ?? rows.length };
+}
+
+/**
+ * Append rows to an existing Google Sheets worksheet (after existing data).
+ */
+export async function appendSheetData(
+  spreadsheetId: string,
+  sheetTitle: string,
+  rows: (string | number | null)[][],
+  accessToken: string,
+): Promise<{ updatedRows: number }> {
+  const range = `${sheetTitle}`;
+  const values = rows.map((row) => row.map((v) => v ?? ''));
+
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ range, majorDimension: 'ROWS', values }),
+    },
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to append sheet data: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  return { updatedRows: data.updates?.updatedRows ?? rows.length };
+}

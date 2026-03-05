@@ -14,7 +14,7 @@ type SheetsExportData = {
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
-  onExportToSheets?: () => void;
+  onExportToSheets?: () => Promise<void> | void;
   result?: NodeResultResponse;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
@@ -36,7 +36,7 @@ export function SheetsExportNode({ data }: NodeProps<SheetsExportData>) {
     setExporting(true);
     setExportStatus(null);
     try {
-      data.onExportToSheets();
+      await data.onExportToSheets();
       setExportStatus('Exported');
     } catch {
       setExportStatus('Failed');

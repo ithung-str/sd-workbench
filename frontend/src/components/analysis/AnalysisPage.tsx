@@ -19,9 +19,10 @@ import { Box, Button, Group, Select, Text } from '@mantine/core';
 import { IconPlus } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
 import type { AnalysisNodeType, AnalysisNode as AnalysisNodeT, AnalysisEdge as AnalysisEdgeT, PipelineCheckpoint } from '../../types/model';
-import { loadPipelineResults, type NodeResultResponse } from '../../lib/api';
+import { loadPipelineResults, fetchNodePreview, type NodeResultResponse } from '../../lib/api';
 import { parseCSV } from '../../lib/csvParser';
 import { saveDataTable } from '../../lib/dataTableStorage';
+import { parseSpreadsheetId, writeSheetData } from '../../lib/googleSheetsApi';
 import { AnalysisToolbar } from './AnalysisToolbar';
 import { AnalysisIconStrip, type AnalysisFlyout } from './AnalysisIconStrip';
 import { AnalysisFlyoutPanel } from './AnalysisFlyoutPanel';
@@ -114,6 +115,42 @@ function resultColumns(result: any): string[] | undefined {
   return result.preview.columns.map((c: any) => typeof c === 'string' ? c : c.key);
 }
 
+/** Resolve the effective result for a node: real result > own mock > propagated upstream mock. */
+function resolveEffectiveResult(
+  nodeId: string,
+  nodes: AnalysisNodeT[],
+  edges: AnalysisEdgeT[],
+  results: Record<string, any>,
+  _visited?: Set<string>,
+): { result: any; isMock: boolean } | undefined {
+  // Real result takes priority
+  if (results[nodeId]) return { result: results[nodeId], isMock: false };
+
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node) return undefined;
+
+  // Own mock value
+  if (node.mockValue) {
+    return {
+      result: { ok: true, preview: node.mockValue.preview, shape: node.mockValue.shape, value_kind: node.mockValue.kind, generic_value: node.mockValue.generic_value },
+      isMock: true,
+    };
+  }
+
+  // For output/publish/sheets_export nodes, propagate from single upstream parent
+  const visited = _visited ?? new Set<string>();
+  if (visited.has(nodeId)) return undefined;
+  visited.add(nodeId);
+
+  const parentIds = edges.filter((e) => e.target === nodeId).map((e) => e.source);
+  if (parentIds.length === 1) {
+    const upstream = resolveEffectiveResult(parentIds[0], nodes, edges, results, visited);
+    if (upstream) return { result: upstream.result, isMock: true };
+  }
+
+  return undefined;
+}
+
 function pipelineNodesToFlow(
   nodes: AnalysisNodeT[],
   edges: AnalysisEdgeT[],
@@ -125,6 +162,9 @@ function pipelineNodesToFlow(
   onToggleGroupCollapse: (groupId: string) => void,
   onSnapshotMock: (nodeId: string) => void,
   onClearMock: (nodeId: string) => void,
+  onGenerateMock: (nodeId: string) => void,
+  onExportToSheets: (nodeId: string) => void,
+  pipelineId: string,
   selectedNodeId: string | null,
   zoomLevel: ZoomLevel,
 ): Node[] {
@@ -137,19 +177,27 @@ function pipelineNodesToFlow(
     const parentIds = edges.filter((e) => e.target === n.id).map((e) => e.source);
     let inputVars: { varName: string; label: string; columns?: string[] }[] = [];
     if ((n.type === 'code' || n.type === 'sql') && parentIds.length > 0) {
+      // Use real results or fall back to mock data for column info
+      const parentResult = (pid: string) => {
+        const resolved = resolveEffectiveResult(pid, nodes, edges, results);
+        return resolved ? resultColumns(resolved.result) : undefined;
+      };
       if (parentIds.length === 1) {
-        inputVars = [{ varName: 'df_in', label: 'DataFrame', columns: resultColumns(results[parentIds[0]]) }];
+        inputVars = [{ varName: 'df_in', label: 'DataFrame', columns: parentResult(parentIds[0]) }];
       } else {
         inputVars = parentIds.map((pid, i) => ({
           varName: `df_in${i + 1}`,
           label: 'DataFrame',
-          columns: resultColumns(results[pid]),
+          columns: parentResult(pid),
         }));
       }
     }
 
     // For group nodes, compute child count
     const childCount = n.type === 'group' ? nodes.filter((c) => c.parentGroup === n.id).length : undefined;
+
+    // Resolve effective result (real > mock > propagated)
+    const effective = resolveEffectiveResult(n.id, nodes, edges, results);
 
     return {
       id: n.id,
@@ -158,7 +206,7 @@ function pipelineNodesToFlow(
       ...(n.w && n.h ? { style: { width: n.w, height: n.h } } : {}),
       data: {
         ...n,
-        result: results[n.id] ?? (n.mockValue ? { ok: true, preview: n.mockValue.preview, shape: n.mockValue.shape, value_kind: n.mockValue.kind, generic_value: n.mockValue.generic_value } : undefined),
+        result: effective?.result,
         selected: n.id === selectedNodeId,
         zoomLevel,
         inputVars,
@@ -170,7 +218,10 @@ function pipelineNodesToFlow(
         onToggleCollapse: n.type === 'group' ? () => onToggleGroupCollapse(n.id) : undefined,
         onSnapshotMock: () => onSnapshotMock(n.id),
         onClearMock: n.mockValue ? () => onClearMock(n.id) : undefined,
-        isMockPreview: !results[n.id] && !!n.mockValue,
+        onGenerateMock: n.type === 'data_source' ? () => onGenerateMock(n.id) : undefined,
+        onExportToSheets: n.type === 'sheets_export' ? () => onExportToSheets(n.id) : undefined,
+        pipelineId,
+        isMockPreview: effective?.isMock ?? false,
       },
     };
   });
@@ -329,6 +380,90 @@ function AnalysisCanvas() {
     [handleUpdateNode],
   );
 
+  /** Auto-generate synthetic mock data for a data_source node based on its table schema. */
+  const handleGenerateMock = useCallback(
+    async (nodeId: string) => {
+      if (!activePipeline) return;
+      const node = activePipeline.nodes.find((n) => n.id === nodeId);
+      if (!node?.data_table_id) return;
+
+      const { loadDataTable } = await import('../../lib/dataTableStorage');
+      const table = await loadDataTable(node.data_table_id);
+      if (!table || table.columns.length === 0) return;
+
+      const SAMPLE_ROWS = 5;
+      const cols = table.columns;
+      const rows: (string | number | null)[][] = [];
+      for (let r = 0; r < SAMPLE_ROWS; r++) {
+        const row: (string | number | null)[] = [];
+        for (const col of cols) {
+          if (col.type === 'number') {
+            row.push(Math.round(Math.random() * 1000) / 10);
+          } else if (col.type === 'date') {
+            const d = new Date(2024, 0, 1 + r * 30);
+            row.push(d.toISOString().slice(0, 10));
+          } else {
+            row.push(`${col.label}_${r + 1}`);
+          }
+        }
+        rows.push(row);
+      }
+
+      const mockValue = {
+        kind: 'dataframe' as const,
+        preview: {
+          columns: cols.map((c) => ({ key: c.key, label: c.label, type: c.type })),
+          rows,
+        },
+        shape: [SAMPLE_ROWS, cols.length],
+      };
+      handleUpdateNode(nodeId, { mockValue });
+    },
+    [activePipeline, handleUpdateNode],
+  );
+
+  /** Export a sheets_export node's data to Google Sheets. */
+  const handleExportToSheets = useCallback(
+    async (nodeId: string) => {
+      if (!activePipeline) return;
+      const node = activePipeline.nodes.find((n) => n.id === nodeId);
+      if (!node?.spreadsheet_url) {
+        window.alert('Please set a spreadsheet URL first.');
+        return;
+      }
+      const spreadsheetId = parseSpreadsheetId(node.spreadsheet_url);
+      if (!spreadsheetId) {
+        window.alert('Invalid Google Sheets URL.');
+        return;
+      }
+      const sheetName = node.sheet_name || 'Sheet1';
+
+      // Fetch full data from backend cache
+      const preview = await fetchNodePreview(activePipeline.id, nodeId, 0, 10000);
+      if (!preview.ok || !preview.columns || !preview.rows) {
+        window.alert('No data to export. Run the pipeline first.');
+        return;
+      }
+
+      try {
+        const { getCachedGoogleToken } = await import('../../lib/googleAuth');
+        const token = getCachedGoogleToken();
+        if (!token) {
+          window.alert('Please authenticate with Google first by importing a Google Sheet in the Data tab.');
+          return;
+        }
+
+        const headers = preview.columns.map((c) => c.key);
+        const rows = preview.rows as (string | number | null)[][];
+        await writeSheetData(spreadsheetId, sheetName, headers, rows, token);
+        window.alert(`Exported ${rows.length} rows to "${sheetName}".`);
+      } catch (err) {
+        window.alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    },
+    [activePipeline],
+  );
+
   const handleRunScope = useCallback(
     (nodeId: string, scope: RunScope) => {
       if (!activePipeline) return;
@@ -389,8 +524,8 @@ function AnalysisCanvas() {
 
   // Derive flow nodes/edges from pipeline state
   const derivedFlowNodes = useMemo(
-    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, selectedNodeId, zoomLevel) : [],
-    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, selectedNodeId, zoomLevel],
+    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, activePipeline.id, selectedNodeId, zoomLevel) : [],
+    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, selectedNodeId, zoomLevel],
   );
 
   const derivedFlowEdges = useMemo(

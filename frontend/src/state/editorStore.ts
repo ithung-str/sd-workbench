@@ -1895,11 +1895,11 @@ export const useEditorStore = create<EditorState>((set, get) => {
         const updatedNodes = [...pipeline.nodes];
         let nodesChanged = false;
         for (const node of updatedNodes) {
-          if (node.type === 'publish' && !node.publish_table_id) {
+          if (node.type === 'publish') {
             const res = finalResults[node.id];
             if (res?.ok && res.logs) {
               const match = res.logs.match(/\(id: ([^)]+)\)/);
-              if (match) {
+              if (match && match[1] !== node.publish_table_id) {
                 const idx = updatedNodes.indexOf(node);
                 updatedNodes[idx] = { ...node, publish_table_id: match[1] };
                 nodesChanged = true;

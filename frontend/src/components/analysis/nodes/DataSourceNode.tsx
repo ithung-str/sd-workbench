@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
-import { ActionIcon, Box, SegmentedControl, Select, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
-import { IconDatabase, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Box, Button, SegmentedControl, Select, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
+import { IconDatabase, IconSparkles, IconTrash } from '@tabler/icons-react';
 import { listDataTables } from '../../../lib/dataTableStorage';
 import type { DataTableMeta } from '../../../types/dataTable';
 import type { NodeResultResponse } from '../../../lib/api';
@@ -19,7 +19,9 @@ type DataSourceData = {
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
+  onGenerateMock?: () => void;
   result?: NodeResultResponse;
+  isMockPreview?: boolean;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
 };
@@ -174,6 +176,26 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
             styles={{ input: { fontSize: 11, border: 'none', padding: 0, background: 'transparent' } }}
           />
         </Box>
+
+        {data.data_table_id && !result && data.onGenerateMock && (
+          <Box px={12} pb={8}>
+            <Button
+              size="compact-xs"
+              variant="light"
+              color="violet"
+              leftSection={<IconSparkles size={12} />}
+              onClick={data.onGenerateMock}
+            >
+              Generate mock data
+            </Button>
+          </Box>
+        )}
+
+        {data.isMockPreview && (
+          <Box px={12} pb={4}>
+            <Text size="xs" c="violet" fs="italic">Mock preview</Text>
+          </Box>
+        )}
       </div>
 
       <Handle type="source" position={Position.Right} />

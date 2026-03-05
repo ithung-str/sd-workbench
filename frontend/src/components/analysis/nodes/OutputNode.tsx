@@ -1,11 +1,12 @@
+import { useCallback, useState } from 'react';
 import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
-import { ActionIcon, Badge, Box, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
+import { ActionIcon, Badge, Box, Button, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
 import { IconCamera, IconTableFilled, IconTrash, IconX } from '@tabler/icons-react';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
   XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid,
 } from 'recharts';
-import type { NodeResultResponse } from '../../../lib/api';
+import { fetchNodePreview, type NodeResultResponse } from '../../../lib/api';
 import type { ChartConfig } from '../../../types/model';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
@@ -16,10 +17,12 @@ import './analysisNodes.css';
 const COLORS = ['#4263eb', '#2f9e44', '#e67700', '#c2255c', '#0b7285'];
 
 type OutputData = {
+  id?: string;
   output_mode?: 'table' | 'bar' | 'line' | 'scatter' | 'stats';
   name?: string;
   description?: string;
   chart_config?: ChartConfig;
+  pipelineId?: string;
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
@@ -120,6 +123,28 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   const mode = data.output_mode ?? 'table';
   const zoomLevel = data.zoomLevel ?? 'full';
   const chartConfig = data.chart_config ?? {};
+
+  // Paginated loading for large datasets
+  const [extraRows, setExtraRows] = useState<unknown[][]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const totalRows = result?.shape?.[0] ?? 0;
+  const previewRowCount = preview?.rows?.length ?? 0;
+  const displayRows = preview?.rows ? [...preview.rows, ...extraRows] : [];
+  const hasMoreRows = totalRows > previewRowCount + extraRows.length;
+
+  const handleLoadMore = useCallback(async () => {
+    if (!data.pipelineId || !data.id || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const offset = previewRowCount + extraRows.length;
+      const page = await fetchNodePreview(data.pipelineId, data.id, offset, 200);
+      if (page.ok && page.rows) {
+        setExtraRows((prev) => [...prev, ...page.rows!]);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [data.pipelineId, data.id, previewRowCount, extraRows.length, loadingMore]);
 
   const columns: ColumnInfo[] = preview?.columns
     ? preview.columns.map((c) =>
@@ -307,7 +332,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {preview.rows.map((row, i) => (
+              {displayRows.map((row, i) => (
                 <Table.Tr key={i}>
                   {(row as unknown[]).map((cell, j) => (
                     <Table.Td key={j} style={{ padding: '2px 8px' }}>{cell != null ? String(cell) : ''}</Table.Td>
@@ -316,6 +341,13 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               ))}
             </Table.Tbody>
           </Table>
+          {hasMoreRows && (
+            <Box py={4} style={{ textAlign: 'center' }}>
+              <Button size="compact-xs" variant="subtle" loading={loadingMore} onClick={handleLoadMore}>
+                Load more ({totalRows - displayRows.length} remaining)
+              </Button>
+            </Box>
+          )}
         </ScrollArea>
       )}
 
