@@ -28,7 +28,8 @@ export async function saveDataTable(table: DataTable): Promise<void> {
 export async function loadDataTable(id: string): Promise<DataTable | null> {
   try {
     return await apiGetDataTable(id);
-  } catch {
+  } catch (err) {
+    console.warn('[dataTableStorage] Failed to load table', id, err);
     return null;
   }
 }
@@ -36,7 +37,8 @@ export async function loadDataTable(id: string): Promise<DataTable | null> {
 export async function listDataTables(): Promise<DataTableMeta[]> {
   try {
     return await apiListDataTables();
-  } catch {
+  } catch (err) {
+    console.warn('[dataTableStorage] Failed to list tables:', err);
     return [];
   }
 }

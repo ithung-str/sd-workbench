@@ -54,7 +54,7 @@ import type {
 
 export type DockTab = 'validation' | 'chart' | 'table' | 'compare';
 export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity' | 'optimisation' | 'data' | 'analysis';
-export type RightSidebarMode = 'inspector' | 'chat' | 'simulation' | 'validation';
+export type RightSidebarMode = 'inspector' | 'chat' | 'simulation' | 'validation' | 'analysis-inspector';
 
 type Selection =
   | { kind: 'node'; id: string }
@@ -212,6 +212,7 @@ type EditorState = {
   pipelines: AnalysisPipeline[];
   activePipelineId: string | null;
   analysisResults: Record<string, NodeResultResponse>;
+  selectedAnalysisNodeId: string | null;
   isRunningPipeline: boolean;
   createPipeline: (name?: string) => void;
   updatePipeline: (id: string, patch: Partial<AnalysisPipeline>) => void;
@@ -541,6 +542,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     pipelines: (initialModel.metadata?.analysis as any)?.pipelines ?? [],
     activePipelineId: (initialModel.metadata?.analysis as any)?.defaults?.active_pipeline_id ?? null,
     analysisResults: {},
+    selectedAnalysisNodeId: null,
     isRunningPipeline: false,
     analysisComponents: (initialModel.metadata?.analysis as any)?.analysis_components ?? [],
     optimisationResults: null,
@@ -1320,6 +1322,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         activePipelineId: activePipelineFromModel,
         analysisComponents: componentsFromModel,
         analysisResults: {},
+        selectedAnalysisNodeId: null,
         isRunningPipeline: false,
         optimisationResults: null,
         isRunningOptimisation: false,
@@ -1810,6 +1813,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
       set((state) => ({
         activePipelineId: id,
         analysisResults: {},
+        selectedAnalysisNodeId: null,
         model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, id, state.analysisComponents),
       }));
       // Load cached results from backend
@@ -1827,9 +1831,9 @@ export const useEditorStore = create<EditorState>((set, get) => {
       // Filter to subset if nodeIds provided
       const nodeIdSet = nodeIds ? new Set(nodeIds) : null;
       const filteredNodes = nodeIdSet ? pipeline.nodes.filter((n) => nodeIdSet.has(n.id)) : pipeline.nodes;
-      const filteredEdges = nodeIdSet
-        ? pipeline.edges.filter((e) => nodeIdSet.has(e.source) && nodeIdSet.has(e.target))
-        : pipeline.edges;
+      // Always send all edges so pass-through nodes (output, publish, sheets_export)
+      // can find their parent's cached data from previous runs.
+      const filteredEdges = pipeline.edges;
 
       set({ isRunningPipeline: true, ...(nodeIdSet ? {} : { analysisResults: {} }) });
 

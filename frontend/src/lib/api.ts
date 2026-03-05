@@ -444,6 +444,142 @@ export type NodeDescribeResponse = {
   error?: string;
 };
 
+// ── Notebook Import ──
+
+export type NotebookCell = {
+  index: number;
+  cell_type: 'code' | 'markdown' | 'raw';
+  source: string;
+  outputs_text?: string | null;
+};
+
+export type ParseNotebookResponse = {
+  ok: boolean;
+  name: string;
+  cells: NotebookCell[];
+  error?: string;
+};
+
+export type SourceHint = {
+  source_type: 'csv' | 'excel' | 'google_sheets' | 'url' | 'unknown';
+  filename?: string | null;
+  url?: string | null;
+};
+
+export type ExportHint = {
+  export_type: 'google_sheets' | 'file' | 'unknown';
+  url?: string | null;
+  sheet_name?: string | null;
+  filename?: string | null;
+};
+
+export type TransformNodeDef = {
+  type: 'data_source' | 'code' | 'sql' | 'output' | 'note' | 'group' | 'sheets_export' | 'publish';
+  name: string;
+  description: string;
+  code?: string | null;
+  sql?: string | null;
+  content?: string | null;
+  output_mode?: 'table' | 'bar' | 'line' | 'scatter' | 'stats' | null;
+  original_cells: number[];
+  source_hint?: SourceHint | null;
+  export_hint?: ExportHint | null;
+};
+
+export type TransformEdgeDef = {
+  from_index: number;
+  to_index: number;
+};
+
+export type TransformNotebookResponse = {
+  ok: boolean;
+  nodes: TransformNodeDef[];
+  edges: TransformEdgeDef[];
+  warnings: string[];
+  error?: string;
+};
+
+export async function parseNotebook(file: File): Promise<ParseNotebookResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API_BASE}/api/notebook/parse`, {
+    method: 'POST',
+    body: form,
+  });
+  return parseJson(res);
+}
+
+export async function transformNotebook(
+  cells: NotebookCell[],
+  pipelineName: string,
+): Promise<TransformNotebookResponse> {
+  const res = await fetch(`${API_BASE}/api/notebook/transform`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cells, pipeline_name: pipelineName }),
+  });
+  return parseJson(res);
+}
+
+export async function transformNotebookStream(
+  cells: NotebookCell[],
+  pipelineName: string,
+  onText: (chunk: string) => void,
+  onNode: (index: number, node: TransformNodeDef) => void,
+  onStatus: (message: string) => void,
+): Promise<TransformNotebookResponse> {
+  const res = await fetch(`${API_BASE}/api/notebook/transform-stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cells, pipeline_name: pipelineName }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json();
+    throw body?.detail ?? body;
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('Streaming not supported');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result: TransformNotebookResponse | null = null;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    let eventType = '';
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        eventType = line.slice(7).trim();
+      } else if (line.startsWith('data: ')) {
+        const data = JSON.parse(line.slice(6));
+        if (eventType === 'status') {
+          onStatus(data.message ?? '');
+        } else if (eventType === 'text') {
+          onText(data.chunk ?? '');
+        } else if (eventType === 'node') {
+          onNode(data.index ?? 0, data.node as TransformNodeDef);
+        } else if (eventType === 'complete') {
+          result = data as TransformNotebookResponse;
+        } else if (eventType === 'error') {
+          throw new Error(data.message ?? 'Transform failed');
+        }
+        eventType = '';
+      }
+    }
+  }
+
+  if (!result) throw new Error('Stream ended without a complete event');
+  return result;
+}
+
 export async function aiDescribeNode(req: NodeDescribeRequest): Promise<NodeDescribeResponse> {
   try {
     const res = await fetch(`${API_BASE}/api/ai/describe-node`, {

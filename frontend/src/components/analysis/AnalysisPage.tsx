@@ -16,17 +16,17 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Box, Button, Group, Select, Text } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { IconPlus } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
 import type { AnalysisNodeType, AnalysisNode as AnalysisNodeT, AnalysisEdge as AnalysisEdgeT, PipelineCheckpoint } from '../../types/model';
-import { loadPipelineResults, fetchNodePreview, aiDescribeNode, type NodeResultResponse } from '../../lib/api';
+import { loadPipelineResults, fetchNodePreview, aiDescribeNode, transformNotebookStream, type TransformNodeDef, type NotebookCell } from '../../lib/api';
 import { parseCSV } from '../../lib/csvParser';
 import { saveDataTable } from '../../lib/dataTableStorage';
 import { parseSpreadsheetId, writeSheetData } from '../../lib/googleSheetsApi';
 import { AnalysisToolbar } from './AnalysisToolbar';
 import { AnalysisIconStrip, type AnalysisFlyout } from './AnalysisIconStrip';
 import { AnalysisFlyoutPanel } from './AnalysisFlyoutPanel';
-import { VariableInspector } from './VariableInspector';
 import { DataSourceNode } from './nodes/DataSourceNode';
 import { CodeNode } from './nodes/CodeNode';
 import { SqlNode } from './nodes/SqlNode';
@@ -164,7 +164,9 @@ function pipelineNodesToFlow(
   onClearMock: (nodeId: string) => void,
   onGenerateMock: (nodeId: string) => void,
   onExportToSheets: (nodeId: string) => void,
+  onDuplicate: (nodeId: string) => void,
   onAutoDescribe: (nodeId: string) => void,
+  aiDescribingNodeId: string | null,
   pipelineId: string,
   selectedNodeId: string | null,
   zoomLevel: ZoomLevel,
@@ -204,7 +206,7 @@ function pipelineNodesToFlow(
       id: n.id,
       type: n.type,
       position: { x: n.x, y: n.y },
-      ...(n.w && n.h ? { style: { width: n.w, height: n.h } } : {}),
+      style: { width: n.w ?? 280, height: n.h ?? 200 },
       data: {
         ...n,
         result: effective?.result,
@@ -221,7 +223,9 @@ function pipelineNodesToFlow(
         onClearMock: n.mockValue ? () => onClearMock(n.id) : undefined,
         onGenerateMock: n.type === 'data_source' ? () => onGenerateMock(n.id) : undefined,
         onExportToSheets: n.type === 'sheets_export' ? () => onExportToSheets(n.id) : undefined,
+        onDuplicate: () => onDuplicate(n.id),
         onAutoDescribe: () => onAutoDescribe(n.id),
+        isAiDescribing: n.id === aiDescribingNodeId,
         pipelineId,
         isMockPreview: effective?.isMock ?? false,
       },
@@ -236,7 +240,8 @@ function pipelineEdgesToFlow(edges: AnalysisEdgeT[], visibleNodeIds: Set<string>
       id: e.id,
       source: e.source,
       target: e.target,
-      animated: true,
+      type: 'smoothstep',
+      style: { stroke: '#868e96', strokeWidth: 1.5 },
     }));
 }
 
@@ -250,6 +255,12 @@ function AnalysisCanvas() {
   const analysisResults = useEditorStore((s) => s.analysisResults);
   const analysisComponents = useEditorStore((s) => s.analysisComponents);
   const saveAnalysisComponent = useEditorStore((s) => s.saveAnalysisComponent);
+  const selectedNodeId = useEditorStore((s) => s.selectedAnalysisNodeId);
+  const setRightSidebarMode = useEditorStore((s) => s.setRightSidebarMode);
+
+  const setSelectedNodeId = useCallback((id: string | null) => {
+    useEditorStore.setState({ selectedAnalysisNodeId: id });
+  }, []);
 
   const activePipeline = pipelines.find((p) => p.id === activePipelineId) ?? null;
   const [canvasDragOver, setCanvasDragOver] = useState(false);
@@ -265,7 +276,6 @@ function AnalysisCanvas() {
       });
     }
   }, [activePipelineId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const { screenToFlowPosition, fitBounds } = useReactFlow();
   const { zoom } = useViewport();
@@ -285,7 +295,7 @@ function AnalysisCanvas() {
         type,
         x: position.x,
         y: position.y,
-        ...(type === 'data_source' && opts?.tableId ? { data_table_id: opts.tableId, name: opts.tableName ?? '' } : {}),
+        ...(type === 'data_source' ? { w: 280, h: 200, ...(opts?.tableId ? { data_table_id: opts.tableId, name: opts.tableName ?? '' } : {}) } : {}),
         ...(type === 'code' ? { code: opts?.code ?? '# df_in: input DataFrame from upstream node\n# df_out: output DataFrame to pass downstream\n\ndf_out = df_in\n', w: 420, h: 400 } : {}),
         ...(type === 'sql' ? { sql: '-- Input tables: df_in (single parent) or df_in1, df_in2, ...\n\nSELECT * FROM df_in\n', w: 420, h: 350 } : {}),
         ...(type === 'output' ? { w: 380, h: 320, ...(opts?.outputMode ? { output_mode: opts.outputMode } : {}) } : {}),
@@ -466,12 +476,17 @@ function AnalysisCanvas() {
     [activePipeline],
   );
 
+  const [aiDescribingNodeId, setAiDescribingNodeId] = useState<string | null>(null);
+
   /** Ask AI to suggest a name and description for a node. */
   const handleAutoDescribe = useCallback(
     async (nodeId: string) => {
-      if (!activePipeline) return;
+      if (!activePipeline) { console.error('[AI] no active pipeline'); return; }
       const node = activePipeline.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
+      if (!node) { console.error('[AI] node not found:', nodeId); return; }
+
+      setAiDescribingNodeId(nodeId);
+      notifications.show({ id: 'ai-describe', title: 'AI describing...', message: `Generating name & description for ${node.name || node.type}`, color: 'violet', loading: true, autoClose: false, withCloseButton: false });
 
       // Gather upstream column context
       const parentIds = activePipeline.edges.filter((e) => e.target === nodeId).map((e) => e.source);
@@ -489,26 +504,194 @@ function AnalysisCanvas() {
         tableColumns = effective ? resultColumns(effective.result) : undefined;
       }
 
-      const resp = await aiDescribeNode({
-        node_type: node.type,
-        code: node.code ?? undefined,
-        sql: node.sql ?? undefined,
-        columns: tableColumns,
-        current_name: node.name ?? undefined,
-        current_description: node.description ?? undefined,
-        input_columns: inputColumns.length > 0 ? inputColumns : undefined,
-      });
+      try {
+        const resp = await aiDescribeNode({
+          node_type: node.type,
+          code: node.code ?? undefined,
+          sql: node.sql ?? undefined,
+          columns: tableColumns,
+          current_name: node.name ?? undefined,
+          current_description: node.description ?? undefined,
+          input_columns: inputColumns.length > 0 ? inputColumns : undefined,
+        });
 
-      if (resp.ok) {
-        const patch: Record<string, unknown> = {};
-        if (resp.name) patch.name = resp.name;
-        if (resp.description) patch.description = resp.description;
-        if (Object.keys(patch).length > 0) {
-          handleUpdateNode(nodeId, patch);
+        if (resp.ok) {
+          const patch: Record<string, unknown> = {};
+          if (resp.name) patch.name = resp.name;
+          if (resp.description) patch.description = resp.description;
+          if (Object.keys(patch).length > 0) {
+            handleUpdateNode(nodeId, patch);
+            notifications.update({ id: 'ai-describe', title: 'AI suggestion applied', message: resp.name ?? '', color: 'teal', loading: false, autoClose: 3000 });
+          } else {
+            notifications.update({ id: 'ai-describe', title: 'AI returned empty', message: 'No name or description suggested', color: 'yellow', loading: false, autoClose: 3000 });
+          }
+        } else {
+          console.warn('[AI describe] Failed:', resp.error);
+          notifications.update({ id: 'ai-describe', title: 'AI describe failed', message: resp.error ?? 'Unknown error', color: 'red', loading: false, autoClose: 5000 });
         }
+      } catch (err) {
+        console.warn('[AI describe] Request failed:', err);
+        notifications.update({ id: 'ai-describe', title: 'AI describe failed', message: String(err), color: 'red', loading: false, autoClose: 5000 });
+      } finally {
+        setAiDescribingNodeId(null);
       }
     },
     [activePipeline, analysisResults, handleUpdateNode],
+  );
+
+  /** Convert a TransformNodeDef to an AnalysisNode at a grid position. */
+  const transformNodeToAnalysis = useCallback(
+    (tn: TransformNodeDef, index: number, idPrefix: string): AnalysisNodeT => {
+      const COL_GAP = 320, ROW_GAP = 280, COLS = 3;
+      const col = index % COLS;
+      const row = Math.floor(index / COLS);
+      const id = `${idPrefix}_${index}`;
+      const base: AnalysisNodeT = {
+        id,
+        type: tn.type === 'group' ? 'group' : tn.type,
+        name: tn.name,
+        description: tn.description,
+        x: 100 + col * COL_GAP,
+        y: 100 + row * ROW_GAP,
+      };
+      if (tn.type === 'data_source') {
+        base.w = 280; base.h = 200;
+        if (tn.source_hint?.source_type === 'google_sheets' && tn.source_hint.url) {
+          base.spreadsheet_url = tn.source_hint.url;
+        }
+      } else if (tn.type === 'code') {
+        base.code = tn.code ?? '';
+        base.w = 420; base.h = 400;
+      } else if (tn.type === 'sql') {
+        base.sql = tn.sql ?? '';
+        base.w = 420; base.h = 350;
+      } else if (tn.type === 'output') {
+        (base as any).output_mode = tn.output_mode ?? undefined;
+        base.w = 380; base.h = 320;
+      } else if (tn.type === 'note') {
+        base.content = tn.content ?? '';
+        base.w = 300; base.h = 200;
+      } else if (tn.type === 'group') {
+        base.w = 500; base.h = 400;
+      } else if (tn.type === 'sheets_export') {
+        base.w = 320; base.h = 280;
+        base.sheet_name = tn.export_hint?.sheet_name ?? 'Sheet1';
+        if (tn.export_hint?.url) base.spreadsheet_url = tn.export_hint.url;
+      } else if (tn.type === 'publish') {
+        base.w = 300; base.h = 240;
+        base.publish_mode = 'overwrite';
+      }
+      return base;
+    },
+    [],
+  );
+
+  /** Streaming notebook transform: shows progress in AI chat, builds nodes on canvas. */
+  const handleStartTransform = useCallback(
+    async (cells: NotebookCell[], pipelineName: string) => {
+      if (!activePipeline) return;
+
+      // Close flyout, open AI chat sidebar, set streaming state
+      setActiveFlyout(null);
+      setRightSidebarMode('chat');
+      const userMsg = `Import notebook "${pipelineName}" (${cells.length} cells)`;
+      useEditorStore.setState({
+        isApplyingAi: true,
+        aiStatusMessage: 'Transforming notebook...',
+        aiStreamingRaw: '',
+        aiChatHistory: [
+          ...useEditorStore.getState().aiChatHistory,
+          { role: 'user' as const, content: userMsg },
+        ],
+      });
+
+      const idPrefix = `nb_${Date.now()}`;
+      // Track nodes added so far (by index) for progressive canvas building
+      const addedNodes: AnalysisNodeT[] = [];
+
+      try {
+        const result = await transformNotebookStream(
+          cells,
+          pipelineName,
+          // onText: stream raw AI output to chat
+          (chunk) => {
+            useEditorStore.setState((s) => ({ aiStreamingRaw: s.aiStreamingRaw + chunk }));
+          },
+          // onNode: add node to canvas progressively
+          (index, nodeDef) => {
+            const analysisNode = transformNodeToAnalysis(nodeDef, index, idPrefix);
+            addedNodes[index] = analysisNode;
+            // Update pipeline with all nodes added so far
+            const currentPipeline = useEditorStore.getState().pipelines.find((p) => p.id === activePipeline.id);
+            if (currentPipeline) {
+              const existingNonNb = currentPipeline.nodes.filter((n) => !n.id.startsWith(idPrefix));
+              updatePipeline(activePipeline.id, {
+                nodes: [...existingNonNb, ...addedNodes.filter(Boolean)],
+              });
+            }
+            useEditorStore.setState({ aiStatusMessage: `Building node ${index + 1}: ${nodeDef.name || nodeDef.type}...` });
+          },
+          // onStatus
+          (message) => {
+            useEditorStore.setState({ aiStatusMessage: message });
+          },
+        );
+
+        // Final: wire up edges from the complete result
+        const allNodes = addedNodes.filter(Boolean);
+        const newEdges: AnalysisEdgeT[] = (result.edges ?? [])
+          .filter((te) => te.from_index >= 0 && te.from_index < allNodes.length && te.to_index >= 0 && te.to_index < allNodes.length)
+          .map((te, i) => ({
+            id: `nb_edge_${Date.now()}_${i}`,
+            source: allNodes[te.from_index].id,
+            target: allNodes[te.to_index].id,
+          }));
+
+        const currentPipeline = useEditorStore.getState().pipelines.find((p) => p.id === activePipeline.id);
+        if (currentPipeline) {
+          updatePipeline(activePipeline.id, {
+            name: pipelineName || currentPipeline.name,
+            edges: [...currentPipeline.edges, ...newEdges],
+          });
+        }
+
+        // Build assistant message
+        const warningsText = result.warnings?.length
+          ? `\n\nWarnings:\n${result.warnings.map((w) => `- ${w}`).join('\n')}`
+          : '';
+        const assistantMsg = `Imported ${allNodes.length} nodes and ${newEdges.length} edges from notebook.${warningsText}`;
+        const streamedRaw = useEditorStore.getState().aiStreamingRaw;
+
+        useEditorStore.setState((s) => ({
+          isApplyingAi: false,
+          aiStatusMessage: '',
+          aiStreamingRaw: '',
+          aiChatHistory: [
+            ...s.aiChatHistory,
+            { role: 'assistant' as const, content: assistantMsg, debugRawResponse: streamedRaw || undefined },
+          ],
+        }));
+
+        notifications.show({
+          title: 'Notebook imported',
+          message: `${allNodes.length} nodes, ${newEdges.length} edges`,
+          color: 'teal',
+        });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const streamedRaw = useEditorStore.getState().aiStreamingRaw;
+        useEditorStore.setState((s) => ({
+          isApplyingAi: false,
+          aiStatusMessage: '',
+          aiStreamingRaw: '',
+          aiChatHistory: [
+            ...s.aiChatHistory,
+            { role: 'assistant' as const, content: `Error: ${errMsg}`, debugRawResponse: streamedRaw || undefined },
+          ],
+        }));
+      }
+    },
+    [activePipeline, updatePipeline, setRightSidebarMode, transformNodeToAnalysis],
   );
 
   const handleRunScope = useCallback(
@@ -518,6 +701,23 @@ function AnalysisCanvas() {
       void runPipeline(ids);
     },
     [activePipeline, runPipeline, analysisResults],
+  );
+
+  const handleDuplicateNode = useCallback(
+    (nodeId: string) => {
+      if (!activePipeline) return;
+      const node = activePipeline.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      const newNode: AnalysisNodeT = {
+        ...JSON.parse(JSON.stringify(node)),
+        id: `node_${Date.now()}`,
+        x: node.x + 40,
+        y: node.y + 40,
+        name: node.name ? `${node.name} (copy)` : undefined,
+      };
+      updatePipeline(activePipeline.id, { nodes: [...activePipeline.nodes, newNode] });
+    },
+    [activePipeline, updatePipeline],
   );
 
   const handleToggleGroupCollapse = useCallback(
@@ -571,8 +771,8 @@ function AnalysisCanvas() {
 
   // Derive flow nodes/edges from pipeline state
   const derivedFlowNodes = useMemo(
-    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleAutoDescribe, activePipeline.id, selectedNodeId, zoomLevel) : [],
-    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleAutoDescribe, selectedNodeId, zoomLevel],
+    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, aiDescribingNodeId, activePipeline.id, selectedNodeId, zoomLevel) : [],
+    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, aiDescribingNodeId, selectedNodeId, zoomLevel],
   );
 
   const derivedFlowEdges = useMemo(
@@ -756,6 +956,7 @@ function AnalysisCanvas() {
           components={analysisComponents}
           onAddNode={handleAddNode}
           onSelectTable={handleSelectTable}
+          onStartTransform={handleStartTransform}
         />
         <div
           style={{ flex: 1, width: '100%', height: '100%', position: 'relative', outline: 'none' }}
@@ -788,9 +989,18 @@ function AnalysisCanvas() {
             onEdgesDelete={onEdgesDelete}
             onNodesDelete={onNodesDelete}
             onNodeDoubleClick={onNodeDoubleClick}
+            onNodeClick={(_event, node) => {
+              setSelectedNodeId(node.id);
+              setRightSidebarMode('analysis-inspector');
+            }}
+            onPaneClick={() => {
+              setSelectedNodeId(null);
+              setMultiSelectedIds([]);
+            }}
             onSelectionChange={({ nodes: sel }) => {
-              setSelectedNodeId(sel.length === 1 ? sel[0].id : null);
               setMultiSelectedIds(sel.map((n) => n.id));
+              // Don't touch selectedNodeId here — onNodeClick and onPaneClick handle it.
+              // onSelectionChange fires with [] during re-selection which causes flicker.
             }}
             fitView
             deleteKeyCode={['Delete', 'Backspace']}
@@ -799,16 +1009,6 @@ function AnalysisCanvas() {
             <Controls />
           </ReactFlow>
         </div>
-        {selectedNodeId && activePipeline.nodes.find((n) => n.id === selectedNodeId) && (
-          <VariableInspector
-            node={activePipeline.nodes.find((n) => n.id === selectedNodeId)!}
-            result={analysisResults[selectedNodeId] ?? (activePipeline.nodes.find((n) => n.id === selectedNodeId)?.mockValue ? { ok: true, preview: activePipeline.nodes.find((n) => n.id === selectedNodeId)!.mockValue!.preview, shape: activePipeline.nodes.find((n) => n.id === selectedNodeId)!.mockValue!.shape, value_kind: activePipeline.nodes.find((n) => n.id === selectedNodeId)!.mockValue!.kind, generic_value: activePipeline.nodes.find((n) => n.id === selectedNodeId)!.mockValue!.generic_value } as NodeResultResponse : undefined)}
-            onClose={() => setSelectedNodeId(null)}
-            onSnapshotMock={analysisResults[selectedNodeId]?.ok ? () => handleSnapshotMock(selectedNodeId) : undefined}
-            onClearMock={activePipeline.nodes.find((n) => n.id === selectedNodeId)?.mockValue ? () => handleClearMock(selectedNodeId) : undefined}
-            isMockPreview={!analysisResults[selectedNodeId] && !!activePipeline.nodes.find((n) => n.id === selectedNodeId)?.mockValue}
-          />
-        )}
       </div>
     </div>
   );

@@ -34,6 +34,7 @@ import { SensitivityPage } from '../sensitivity/SensitivityPage';
 import { OptimisationPage } from '../optimisation/OptimisationPage';
 import { DataPage } from '../data/DataPage';
 import { AnalysisPage } from '../analysis/AnalysisPage';
+import { AnalysisInspectorPanel } from '../analysis/AnalysisInspectorPanel';
 import { AIChatSidebar } from './AIChatSidebar';
 import { ImportExportControls } from '../io/ImportExportControls';
 import { IconStrip } from './IconStrip';
@@ -69,12 +70,15 @@ export function WorkbenchLayout() {
   const isCanvas = activeTab === 'canvas';
   const isAnalysis = activeTab === 'analysis';
 
-  // When leaving canvas, switch away from canvas-only sidebar modes
+  // When leaving a tab, switch away from tab-specific sidebar modes
   useEffect(() => {
     if (!isCanvas && (rightSidebarMode === 'inspector' || rightSidebarMode === 'simulation')) {
       setRightSidebarMode('chat');
     }
-  }, [isCanvas, rightSidebarMode, setRightSidebarMode]);
+    if (!isAnalysis && rightSidebarMode === 'analysis-inspector') {
+      setRightSidebarMode('chat');
+    }
+  }, [isCanvas, isAnalysis, rightSidebarMode, setRightSidebarMode]);
 
   const presetOptions: Array<{ key: ModelPresetKey; label: string }> = [
     { key: 'blank', label: 'Unsaved diagram' },
@@ -324,6 +328,15 @@ export function WorkbenchLayout() {
                       ? `Issues (${issueCount})`
                       : 'Issues',
                   },
+                ] : isAnalysis ? [
+                  { value: 'analysis-inspector', label: 'Inspector' },
+                  { value: 'chat', label: 'AI Chat' },
+                  {
+                    value: 'validation',
+                    label: issueCount > 0
+                      ? `Issues (${issueCount})`
+                      : 'Issues',
+                  },
                 ] : [
                   { value: 'chat', label: 'AI Chat' },
                   {
@@ -359,6 +372,9 @@ export function WorkbenchLayout() {
                   <InspectorPanel />
                 </div>
               </ScrollArea>
+            )}
+            {rightSidebarMode === 'analysis-inspector' && isAnalysis && (
+              <AnalysisInspectorPanel />
             )}
             {rightSidebarMode === 'chat' && <AIChatSidebar />}
             {rightSidebarMode === 'simulation' && isCanvas && <SimulationPanel />}
@@ -419,6 +435,22 @@ export function WorkbenchLayout() {
                     openRight();
                   }}
                   aria-label="Inspector"
+                >
+                  <IconInspector size={18} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {isAnalysis && (
+              <Tooltip label="Inspector" position="left" withArrow>
+                <ActionIcon
+                  size="lg"
+                  variant="subtle"
+                  className="sidebar-collapsed-btn"
+                  onClick={() => {
+                    setRightSidebarMode('analysis-inspector');
+                    openRight();
+                  }}
+                  aria-label="Analysis Inspector"
                 >
                   <IconInspector size={18} />
                 </ActionIcon>

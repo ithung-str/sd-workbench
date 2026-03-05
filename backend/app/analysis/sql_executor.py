@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import duckdb
 import pandas as pd
 
 
@@ -19,6 +18,10 @@ def execute_sql(
     inputs: dict[str, pd.DataFrame],
 ) -> SqlResult:
     """Run a SQL query against named DataFrames. Each input is registered as a table."""
+    try:
+        import duckdb
+    except ImportError:
+        return SqlResult(ok=False, error="duckdb is required for SQL nodes; install via: pip install duckdb")
     try:
         conn = duckdb.connect(":memory:")
         for name, df in inputs.items():

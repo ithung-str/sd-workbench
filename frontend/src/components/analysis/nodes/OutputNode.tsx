@@ -1,17 +1,19 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
-import { ActionIcon, Badge, Box, Button, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
-import { IconCamera, IconSparkles, IconTableFilled, IconTrash, IconX } from '@tabler/icons-react';
+import { ActionIcon, Badge, Box, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
+import { IconCamera, IconMaximize, IconSparkles, IconTableFilled, IconTrash, IconX } from '@tabler/icons-react';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
   XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid,
 } from 'recharts';
-import { fetchNodePreview, type NodeResultResponse } from '../../../lib/api';
+import type { NodeResultResponse } from '../../../lib/api';
 import type { ChartConfig } from '../../../types/model';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { RunMenu } from './RunMenu';
 import { ChartConfigPanel } from './ChartConfigPanel';
+import { useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls } from './nodeZoomHelpers';
+import { CompactResultBar, DataPreviewModal } from './DataPreviewModal';
 import './analysisNodes.css';
 
 const COLORS = ['#4263eb', '#2f9e44', '#e67700', '#c2255c', '#0b7285'];
@@ -28,7 +30,9 @@ type OutputData = {
   onRunScope?: (scope: RunScope) => void;
   onSnapshotMock?: () => void;
   onClearMock?: () => void;
+  onDuplicate?: () => void;
   onAutoDescribe?: () => void;
+  isAiDescribing?: boolean;
   isMockPreview?: boolean;
   result?: NodeResultResponse;
   selected?: boolean;
@@ -123,29 +127,9 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   const valueKind = result?.value_kind ?? 'dataframe';
   const mode = data.output_mode ?? 'table';
   const zoomLevel = data.zoomLevel ?? 'full';
+  const zoomClass = useZoomTransition(zoomLevel);
   const chartConfig = data.chart_config ?? {};
-
-  // Paginated loading for large datasets
-  const [extraRows, setExtraRows] = useState<unknown[][]>([]);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const totalRows = result?.shape?.[0] ?? 0;
-  const previewRowCount = preview?.rows?.length ?? 0;
-  const displayRows = preview?.rows ? [...preview.rows, ...extraRows] : [];
-  const hasMoreRows = totalRows > previewRowCount + extraRows.length;
-
-  const handleLoadMore = useCallback(async () => {
-    if (!data.pipelineId || !data.id || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const offset = previewRowCount + extraRows.length;
-      const page = await fetchNodePreview(data.pipelineId, data.id, offset, 200);
-      if (page.ok && page.rows) {
-        setExtraRows((prev) => [...prev, ...page.rows!]);
-      }
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [data.pipelineId, data.id, previewRowCount, extraRows.length, loadingMore]);
+  const [dataModalOpen, setDataModalOpen] = useState(false);
 
   const columns: ColumnInfo[] = preview?.columns
     ? preview.columns.map((c) =>
@@ -171,13 +155,16 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className="analysis-node analysis-node--mini">
-        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden' }}>
-          <div className="node-zoom-mini node-zoom-content">
-            <IconTableFilled size={14} color="#e67700" />
-            <Text size="xs" fw={600} c="orange.8" truncate>{data.name || 'Output'}</Text>
-          </div>
-          <Handle type="target" position={Position.Left} />
+      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <Handle type="target" position={Position.Left} />
+        <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onDelete={data.onDelete} />
+        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <IconTableFilled size={28} color="#e67700" />
+            <Text fw={700} c="orange.8" style={{ fontSize: 24 }} lineClamp={1}>{data.name || 'Output'}</Text>
+          </Box>
+          <StatusDot result={result} />
+          {result?.shape && <Text size="sm" c="dimmed" fw={500}>{result.shape[0]?.toLocaleString()} x {result.shape[1]}</Text>}
         </Box>
       </div>
     );
@@ -185,19 +172,28 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
 
   // ── Summary view ──
   if (zoomLevel === 'summary') {
+    const modeLabel = mode === 'table' ? 'Table' : mode === 'bar' ? 'Bar chart' : mode === 'line' ? 'Line chart' : mode === 'scatter' ? 'Scatter' : 'Stats';
     return (
-      <div className="analysis-node analysis-node--summary">
-        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden', minWidth: 180 }}>
-          <div className="node-zoom-summary node-zoom-content">
-            <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <IconTableFilled size={14} color="#e67700" />
-              <Text size="xs" fw={600} c="orange.8" truncate>{data.name || 'Output'}</Text>
-            </Box>
-            {data.description && (
-              <Text size="xs" c="dimmed" mt={4} lineClamp={3}>{data.description}</Text>
-            )}
-          </div>
-          <Handle type="target" position={Position.Left} />
+      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <Handle type="target" position={Position.Left} />
+        <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onAutoDescribe={data.onAutoDescribe} isAiDescribing={data.isAiDescribing} onDuplicate={data.onDuplicate} onDelete={data.onDelete} />
+        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #f0f0f0' }}>
+            <IconTableFilled size={22} color="#e67700" />
+            <Text fw={700} c="orange.8" style={{ fontSize: 22, flex: 1 }} lineClamp={1}>{data.name || 'Output'}</Text>
+            <StatusDot result={result} />
+          </Box>
+          {data.description && (
+            <Text c="dimmed" px={14} pt={8} lineClamp={2} style={{ fontSize: 16 }}>{data.description}</Text>
+          )}
+          <Box px={14} pt={8}>
+            <Badge size="lg" variant="light" color="orange">{modeLabel}</Badge>
+          </Box>
+          <Box style={{ flex: 1 }} />
+          <Box px={14} pb={10} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+            <ShapeBadge result={result} isMock={data.isMockPreview} />
+            <ColumnChips result={result} />
+          </Box>
         </Box>
       </div>
     );
@@ -205,7 +201,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
 
   // ── Full view ──
   return (
-    <div className="analysis-node" style={{ width: '100%', height: '100%' }}>
+    <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
     <NodeResizer minWidth={280} minHeight={180} isVisible={data.selected} />
     <Box
       className={`node-card ${statusClass(result)}`}
@@ -223,8 +219,8 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
     >
       <Handle type="target" position={Position.Left} />
 
-      <Box style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
-        <IconTableFilled size={14} color="#e67700" />
+      <Box style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid #f0f0f0', overflow: 'hidden' }}>
+        <IconTableFilled size={14} color="#e67700" style={{ flexShrink: 0 }} />
         <TextInput
           size="xs"
           variant="unstyled"
@@ -232,7 +228,8 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
           placeholder="Output"
           onChange={(e) => data.onUpdate({ name: e.currentTarget.value })}
           styles={{
-            input: { fontWeight: 600, fontSize: 12, color: 'var(--mantine-color-orange-8)', padding: 0, height: 20, minHeight: 20, width: Math.max(40, (data.name?.length ?? 6) * 8 + 12) },
+            input: { fontWeight: 600, fontSize: 12, color: 'var(--mantine-color-orange-8)', padding: 0, height: 20, minHeight: 20 },
+            root: { flex: 1, minWidth: 0, overflow: 'hidden' },
           }}
         />
         <div className="node-controls" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
@@ -257,7 +254,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
           )}
           {data.onAutoDescribe && (
             <MantineTooltip label="AI suggest name & description">
-              <ActionIcon size="xs" variant="subtle" color="violet" onClick={data.onAutoDescribe}>
+              <ActionIcon size="xs" variant="subtle" color="violet" onClick={data.onAutoDescribe} loading={data.isAiDescribing}>
                 <IconSparkles size={12} />
               </ActionIcon>
             </MantineTooltip>
@@ -328,35 +325,40 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
       )}
 
       {preview && valueKind === 'dataframe' && mode === 'table' && preview.columns && preview.rows && (
-        <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={4}>
-          <Table striped highlightOnHover style={{ fontSize: 11 }}>
-            <Table.Thead>
-              <Table.Tr>
-                {preview.columns.map((col) => (
-                  <Table.Th key={typeof col === 'string' ? col : col.key} style={{ padding: '2px 8px' }}>
-                    {typeof col === 'string' ? col : col.label}
-                  </Table.Th>
-                ))}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {displayRows.map((row, i) => (
-                <Table.Tr key={i}>
-                  {(row as unknown[]).map((cell, j) => (
-                    <Table.Td key={j} style={{ padding: '2px 8px' }}>{cell != null ? String(cell) : ''}</Table.Td>
+        <>
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 12px' }}>
+            <Text size="xs" c="dimmed" style={{ flex: 1 }}>{result?.shape?.[0]} rows x {result?.shape?.[1]} cols</Text>
+            <MantineTooltip label="Expand table">
+              <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => setDataModalOpen(true)}>
+                <IconMaximize size={12} />
+              </ActionIcon>
+            </MantineTooltip>
+          </Box>
+          <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={4}>
+            <Table striped highlightOnHover style={{ fontSize: 11 }}>
+              <Table.Thead>
+                <Table.Tr>
+                  {preview.columns.map((col) => (
+                    <Table.Th key={typeof col === 'string' ? col : col.key} style={{ padding: '2px 8px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {typeof col === 'string' ? col : col.label}
+                    </Table.Th>
                   ))}
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-          {hasMoreRows && (
-            <Box py={4} style={{ textAlign: 'center' }}>
-              <Button size="compact-xs" variant="subtle" loading={loadingMore} onClick={handleLoadMore}>
-                Load more ({totalRows - displayRows.length} remaining)
-              </Button>
-            </Box>
-          )}
-        </ScrollArea>
+              </Table.Thead>
+              <Table.Tbody>
+                {(preview.rows ?? []).slice(0, 50).map((row, i) => (
+                  <Table.Tr key={i}>
+                    {(row as unknown[]).map((cell, j) => (
+                      <Table.Td key={j} style={{ padding: '2px 8px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={cell != null ? String(cell) : ''}>
+                        {cell != null ? String(cell) : ''}
+                      </Table.Td>
+                    ))}
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </ScrollArea>
+        </>
       )}
 
       {preview && valueKind === 'dataframe' && mode === 'bar' && (
@@ -405,6 +407,18 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
         </Box>
       )}
     </Box>
+
+    {/* Data preview modal */}
+    {result?.ok && (
+      <DataPreviewModal
+        opened={dataModalOpen}
+        onClose={() => setDataModalOpen(false)}
+        result={result}
+        pipelineId={data.pipelineId}
+        nodeId={data.id}
+        title={data.name || 'Output Data'}
+      />
+    )}
     </div>
   );
 }

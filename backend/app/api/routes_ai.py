@@ -108,7 +108,11 @@ def ai_describe_node(request: NodeDescribeRequest) -> NodeDescribeResponse:
         payload = {
             "system_instruction": {"parts": [{"text": _DESCRIBE_SYSTEM}]},
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 256},
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 2048,
+                "responseMimeType": "application/json",
+            },
         }
         parsed = _send_gemini_request(url, {"key": key}, payload)
         return NodeDescribeResponse(

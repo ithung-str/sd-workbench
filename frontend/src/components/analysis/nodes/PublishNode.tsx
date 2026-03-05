@@ -4,6 +4,7 @@ import { IconDatabase, IconTrash } from '@tabler/icons-react';
 import type { NodeResultResponse } from '../../../lib/api';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { RunMenu } from './RunMenu';
+import { useZoomTransition, StatusDot, ShapeBadge, ZoomControls } from './nodeZoomHelpers';
 import './analysisNodes.css';
 
 type PublishData = {
@@ -12,6 +13,7 @@ type PublishData = {
   publish_mode?: 'overwrite' | 'append';
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
+  onDuplicate?: () => void;
   onRunScope?: (scope: RunScope) => void;
   result?: NodeResultResponse;
   selected?: boolean;
@@ -26,17 +28,21 @@ function statusClass(result?: NodeResultResponse): string {
 export function PublishNode({ data }: NodeProps<PublishData>) {
   const result = data.result;
   const zoomLevel = data.zoomLevel ?? 'full';
+  const zoomClass = useZoomTransition(zoomLevel);
   const mode = data.publish_mode ?? 'overwrite';
 
   if (zoomLevel === 'mini') {
     return (
-      <div className="analysis-node analysis-node--mini">
-        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden' }}>
-          <div className="node-zoom-mini node-zoom-content">
-            <IconDatabase size={14} color="#1971c2" />
-            <Text size="xs" fw={600} c="blue.8" truncate>{data.name || 'Publish'}</Text>
-          </div>
-          <Handle type="target" position={Position.Left} />
+      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <Handle type="target" position={Position.Left} />
+        <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onDelete={data.onDelete} />
+        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <IconDatabase size={28} color="#1971c2" />
+            <Text fw={700} c="blue.8" style={{ fontSize: 24 }} lineClamp={1}>{data.name || 'Publish'}</Text>
+          </Box>
+          <StatusDot result={result} />
+          {result?.shape && <Text size="sm" c="dimmed" fw={500}>{result.shape[0]?.toLocaleString()} x {result.shape[1]}</Text>}
         </Box>
       </div>
     );
@@ -44,25 +50,32 @@ export function PublishNode({ data }: NodeProps<PublishData>) {
 
   if (zoomLevel === 'summary') {
     return (
-      <div className="analysis-node analysis-node--summary">
-        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden', minWidth: 180 }}>
-          <div className="node-zoom-summary node-zoom-content">
-            <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <IconDatabase size={14} color="#1971c2" />
-              <Text size="xs" fw={600} c="blue.8" truncate>{data.name || 'Publish'}</Text>
-            </Box>
-            {result?.ok && result.logs && (
-              <Text size="xs" c="dimmed" mt={4} lineClamp={2}>{result.logs}</Text>
-            )}
-          </div>
-          <Handle type="target" position={Position.Left} />
+      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <Handle type="target" position={Position.Left} />
+        <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onDuplicate={data.onDuplicate} onDelete={data.onDelete} />
+        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #f0f0f0' }}>
+            <IconDatabase size={22} color="#1971c2" />
+            <Text fw={700} c="blue.8" style={{ fontSize: 22, flex: 1 }} lineClamp={1}>{data.name || 'Publish'}</Text>
+            <StatusDot result={result} />
+          </Box>
+          <Box px={14} pt={8}>
+            <Badge size="lg" variant="light" color="blue">{mode === 'overwrite' ? 'Overwrite' : 'Append'}</Badge>
+          </Box>
+          {result?.ok && result.logs && (
+            <Text c="dimmed" px={14} pt={6} lineClamp={2} style={{ fontSize: 16 }}>{result.logs}</Text>
+          )}
+          <Box style={{ flex: 1 }} />
+          <Box px={14} pb={10} style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+            <ShapeBadge result={result} />
+          </Box>
         </Box>
       </div>
     );
   }
 
   return (
-    <div className="analysis-node" style={{ width: '100%', height: '100%' }}>
+    <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
       <NodeResizer minWidth={260} minHeight={160} isVisible={data.selected} />
       <Box
         className={`node-card ${statusClass(result)}`}
@@ -80,8 +93,8 @@ export function PublishNode({ data }: NodeProps<PublishData>) {
       >
         <Handle type="target" position={Position.Left} />
 
-        <Box style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
-          <IconDatabase size={14} color="#1971c2" />
+        <Box style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid #f0f0f0', overflow: 'hidden' }}>
+          <IconDatabase size={14} color="#1971c2" style={{ flexShrink: 0 }} />
           <TextInput
             size="xs"
             variant="unstyled"
@@ -89,7 +102,8 @@ export function PublishNode({ data }: NodeProps<PublishData>) {
             placeholder="Data Asset Name"
             onChange={(e) => data.onUpdate({ name: e.currentTarget.value })}
             styles={{
-              input: { fontWeight: 600, fontSize: 12, color: '#1971c2', padding: 0, height: 20, minHeight: 20, width: Math.max(40, (data.name?.length ?? 14) * 8 + 12) },
+              input: { fontWeight: 600, fontSize: 12, color: '#1971c2', padding: 0, height: 20, minHeight: 20 },
+              root: { flex: 1, minWidth: 0, overflow: 'hidden' },
             }}
           />
           <div className="node-controls" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>

@@ -3,6 +3,7 @@ import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
 import { ActionIcon, Box, Text, Tooltip } from '@mantine/core';
 import { IconMarkdown, IconTrash } from '@tabler/icons-react';
 import type { ZoomLevel } from '../AnalysisPage';
+import { useZoomTransition, ZoomControls } from './nodeZoomHelpers';
 import './analysisNodes.css';
 
 type NoteData = {
@@ -10,6 +11,7 @@ type NoteData = {
   name?: string;
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
+  onDuplicate?: () => void;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
 };
@@ -55,6 +57,7 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
   const [editing, setEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const zoomLevel = data.zoomLevel ?? 'full';
+  const zoomClass = useZoomTransition(zoomLevel);
   const content = data.content ?? '';
 
   useEffect(() => {
@@ -67,12 +70,13 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className="analysis-node analysis-node--mini">
-        <Box className="node-card node-card--none" style={{ background: '#fffde7', borderRadius: 8, border: '1px solid #e0d97e', overflow: 'hidden' }}>
-          <div className="node-zoom-mini node-zoom-content">
-            <IconMarkdown size={14} color="#e67700" />
-            <Text size="xs" fw={600} c="orange.8" truncate>{data.name || 'Note'}</Text>
-          </div>
+      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <ZoomControls zoomLevel={zoomLevel} onDelete={data.onDelete} />
+        <Box className="node-card node-card--none" style={{ background: '#fffde7', borderRadius: 8, border: '1px solid #e0d97e', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <IconMarkdown size={28} color="#e67700" />
+            <Text fw={700} c="orange.8" style={{ fontSize: 24 }} lineClamp={1}>{data.name || 'Note'}</Text>
+          </Box>
         </Box>
       </div>
     );
@@ -81,17 +85,16 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
   // ── Summary view ──
   if (zoomLevel === 'summary') {
     return (
-      <div className="analysis-node analysis-node--summary">
-        <Box className="node-card node-card--none" style={{ background: '#fffde7', borderRadius: 8, border: '1px solid #e0d97e', overflow: 'hidden', minWidth: 180 }}>
-          <div className="node-zoom-summary node-zoom-content">
-            <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <IconMarkdown size={14} color="#e67700" />
-              <Text size="xs" fw={600} c="orange.8" truncate>{data.name || 'Note'}</Text>
-            </Box>
-            {content && (
-              <Text size="xs" c="dimmed" mt={4} lineClamp={3}>{content.slice(0, 120)}</Text>
-            )}
-          </div>
+      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <ZoomControls zoomLevel={zoomLevel} onDuplicate={data.onDuplicate} onDelete={data.onDelete} />
+        <Box className="node-card node-card--none" style={{ background: '#fffde7', borderRadius: 8, border: '1px solid #e0d97e', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #f0e68c' }}>
+            <IconMarkdown size={22} color="#e67700" />
+            <Text fw={700} c="orange.8" style={{ fontSize: 22, flex: 1 }} lineClamp={1}>{data.name || 'Note'}</Text>
+          </Box>
+          {content && (
+            <Text c="dimmed" px={14} py={10} style={{ flex: 1, overflow: 'hidden', fontSize: 16 }} lineClamp={8}>{content}</Text>
+          )}
         </Box>
       </div>
     );
@@ -99,7 +102,7 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
 
   // ── Full view ──
   return (
-    <div className="analysis-node" style={{ width: '100%', height: '100%' }}>
+    <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
       <NodeResizer minWidth={200} minHeight={120} isVisible={data.selected} />
       <Box
         className="node-card node-card--none"

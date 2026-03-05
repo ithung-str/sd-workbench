@@ -1,3 +1,18 @@
+/* Smooth fade when zoom level changes — inner card content fades */
+.analysis-node > div,
+.analysis-node .node-card {
+  opacity: 1;
+  transition: opacity 180ms ease-out,
+              border-color 250ms ease,
+              box-shadow 250ms ease;
+}
+
+.analysis-node.zoom-transitioning > div,
+.analysis-node.zoom-transitioning .node-card {
+  opacity: 0;
+  transition: opacity 0ms;
+}
+
 .analysis-node .node-controls {
   opacity: 0;
   transition: opacity 120ms ease;
@@ -9,20 +24,6 @@
   pointer-events: auto;
 }
 
-/* Zoom level transitions — animate the card wrapper for smooth size changes */
-.analysis-node .node-card {
-  transition: border-color 250ms ease,
-              min-width 300ms cubic-bezier(0.4, 0, 0.2, 1),
-              min-height 300ms cubic-bezier(0.4, 0, 0.2, 1),
-              padding 300ms cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 250ms ease;
-}
-
-.analysis-node .node-zoom-content {
-  transition: opacity 250ms ease,
-              max-height 300ms cubic-bezier(0.4, 0, 0.2, 1),
-              padding 300ms cubic-bezier(0.4, 0, 0.2, 1);
-}
 
 /* Status stripe - left border on the card */
 .analysis-node .node-card--ok {
@@ -37,31 +38,14 @@
   border-left: 4px solid #dee2e6;
 }
 
-/* Mini zoom level */
-.analysis-node .node-zoom-mini {
-  height: 40px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  overflow: hidden;
-  white-space: nowrap;
+/* Status dot utility */
+.analysis-node .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-/* Summary zoom level */
-.analysis-node .node-zoom-summary {
-  padding: 8px 12px;
-  overflow: hidden;
-}
-
-/* Scale down handles at mini zoom to keep them proportional */
-.analysis-node--mini .react-flow__handle {
-  width: 6px !important;
-  height: 6px !important;
-}
-
-/* Keep handles small but visible at summary zoom */
-.analysis-node--summary .react-flow__handle {
-  width: 8px !important;
-  height: 8px !important;
-}
+.analysis-node .status-dot--ok { background: #2f9e44; }
+.analysis-node .status-dot--error { background: #e03131; }
+.analysis-node .status-dot--none { background: #dee2e6; }

@@ -36,6 +36,7 @@ from app.api.routes_analysis import router as analysis_router
 from app.api.routes_data import router as data_router
 from app.api.routes_imports import router as imports_router
 from app.api.routes_models import router as models_router
+from app.api.routes_notebook import router as notebook_router
 from app.db import init_db
 
 init_db()
@@ -55,3 +56,4 @@ app.include_router(ai_router)
 app.include_router(imports_router)
 app.include_router(analysis_router)
 app.include_router(data_router)
+app.include_router(notebook_router)

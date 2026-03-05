@@ -1,8 +1,8 @@
 import { ActionIcon, Stack, Tooltip } from '@mantine/core';
-import { IconPlus, IconTable } from '@tabler/icons-react';
+import { IconPlus, IconTable, IconNotebook } from '@tabler/icons-react';
 import '../../styles/icon-strip.css';
 
-export type AnalysisFlyout = 'nodes' | 'data' | null;
+export type AnalysisFlyout = 'nodes' | 'data' | 'notebook' | null;
 
 type Props = {
   activeFlyout: AnalysisFlyout;
@@ -12,6 +12,7 @@ type Props = {
 const ICONS: Array<{ panel: NonNullable<AnalysisFlyout>; icon: typeof IconPlus; label: string }> = [
   { panel: 'nodes', icon: IconPlus, label: 'Nodes' },
   { panel: 'data', icon: IconTable, label: 'Data' },
+  { panel: 'notebook', icon: IconNotebook, label: 'Import Notebook' },
 ];
 
 export function AnalysisIconStrip({ activeFlyout, onToggle }: Props) {

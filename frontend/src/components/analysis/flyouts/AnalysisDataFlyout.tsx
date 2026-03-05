@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActionIcon, Badge, Group, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Badge, Box, Group, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { IconBrandGoogle, IconRefresh, IconTrash, IconUpload } from '@tabler/icons-react';
 import type { DataTableMeta } from '../../../types/dataTable';
 import { listDataTables, deleteDataTable, saveDataTable, loadDataTable } from '../../../lib/dataTableStorage';
@@ -69,6 +69,7 @@ function RefreshButton({ tableId, onRefreshed }: { tableId: string; onRefreshed:
 export function AnalysisDataFlyout({ onSelectTable }: Props) {
   const [tables, setTables] = useState<DataTableMeta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = async () => {
@@ -97,6 +98,15 @@ export function AnalysisDataFlyout({ onSelectTable }: Props) {
     e.target.value = '';
   };
 
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.csv')) {
+      await importCSV(file);
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`Delete "${name}"?`)) return;
     await deleteDataTable(id);
@@ -104,7 +114,12 @@ export function AnalysisDataFlyout({ onSelectTable }: Props) {
   };
 
   return (
-    <Stack gap="xs">
+    <Stack
+      gap="xs"
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+    >
       <Group gap="xs">
         <Tooltip label="Upload CSV">
           <ActionIcon variant="light" size="sm" onClick={() => fileRef.current?.click()}>
@@ -115,6 +130,12 @@ export function AnalysisDataFlyout({ onSelectTable }: Props) {
         <Text size="xs" c="dimmed">{tables.length} table{tables.length !== 1 ? 's' : ''}</Text>
       </Group>
       <input ref={fileRef} type="file" accept=".csv" onChange={handleUpload} hidden />
+
+      {dragOver && (
+        <Box style={{ border: '2px dashed var(--mantine-color-teal-4)', borderRadius: 8, padding: 16, textAlign: 'center' }}>
+          <Text size="xs" c="teal">Drop CSV here</Text>
+        </Box>
+      )}
 
       {loading && <Text size="xs" c="dimmed">Loading...</Text>}
 

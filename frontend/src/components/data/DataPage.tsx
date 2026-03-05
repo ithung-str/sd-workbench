@@ -270,8 +270,8 @@ export function DataPage() {
         source: sourceFilter || undefined,
       });
       setTables(list);
-    } catch {
-      // Backend may be unavailable — show empty
+    } catch (err) {
+      console.warn('[DataPage] Failed to load data tables:', err);
       setTables([]);
     }
     setLoading(false);

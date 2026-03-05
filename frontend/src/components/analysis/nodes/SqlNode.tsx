@@ -1,12 +1,14 @@
 import { useCallback, useState } from 'react';
 import { Handle, Position, type NodeProps, NodeResizer } from 'reactflow';
-import { ActionIcon, Box, Select, Text, Table, ScrollArea, Tooltip } from '@mantine/core';
+import { ActionIcon, Box, Select, Text, Tooltip } from '@mantine/core';
 import { IconSparkles, IconSql, IconTrash } from '@tabler/icons-react';
 import Editor from '@monaco-editor/react';
 import type { NodeResultResponse } from '../../../lib/api';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { RunMenu } from './RunMenu';
+import { useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls } from './nodeZoomHelpers';
+import { CompactResultBar, DataPreviewModal } from './DataPreviewModal';
 import './analysisNodes.css';
 
 type ViewMode = 'all' | 'sql' | 'result' | 'stats';
@@ -14,13 +16,17 @@ type ViewMode = 'all' | 'sql' | 'result' | 'stats';
 type InputVar = { varName: string; label: string; columns?: string[] };
 
 type SqlData = {
+  id?: string;
+  pipelineId?: string;
   sql?: string;
   name?: string;
   description?: string;
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
+  onDuplicate?: () => void;
   onAutoDescribe?: () => void;
+  isAiDescribing?: boolean;
   result?: NodeResultResponse;
   selected?: boolean;
   inputVars?: InputVar[];
@@ -34,7 +40,9 @@ function statusClass(result?: NodeResultResponse): string {
 
 export function SqlNode({ data }: NodeProps<SqlData>) {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
+  const [dataModalOpen, setDataModalOpen] = useState(false);
   const zoomLevel = data.zoomLevel ?? 'full';
+  const zoomClass = useZoomTransition(zoomLevel);
 
   const handleSqlChange = useCallback(
     (value: string | undefined) => {
@@ -57,14 +65,17 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className="analysis-node analysis-node--mini">
-        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden' }}>
-          <div className="node-zoom-mini node-zoom-content">
-            <IconSql size={14} color="#1971c2" />
-            <Text size="xs" fw={600} c="blue.8" truncate>{data.name || 'SQL'}</Text>
-          </div>
-          <Handle type="target" position={Position.Left} />
-          <Handle type="source" position={Position.Right} />
+      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <Handle type="target" position={Position.Left} />
+        <Handle type="source" position={Position.Right} />
+        <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onDelete={data.onDelete} />
+        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <IconSql size={28} color="#1971c2" />
+            <Text fw={700} c="blue.8" style={{ fontSize: 24 }} lineClamp={1}>{data.name || 'SQL'}</Text>
+          </Box>
+          <StatusDot result={result} />
+          {result?.shape && <Text size="sm" c="dimmed" fw={500}>{result.shape[0]?.toLocaleString()} x {result.shape[1]}</Text>}
         </Box>
       </div>
     );
@@ -72,20 +83,30 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
 
   // ── Summary view ──
   if (zoomLevel === 'summary') {
+    const sqlPreview = (data.sql ?? '').split('\n').filter(l => l.trim() && !l.trim().startsWith('--')).slice(0, 5).join('\n');
     return (
-      <div className="analysis-node analysis-node--summary">
-        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden', minWidth: 180 }}>
-          <div className="node-zoom-summary node-zoom-content">
-            <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <IconSql size={14} color="#1971c2" />
-              <Text size="xs" fw={600} c="blue.8" truncate>{data.name || 'SQL'}</Text>
+      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <Handle type="target" position={Position.Left} />
+        <Handle type="source" position={Position.Right} />
+        <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onAutoDescribe={data.onAutoDescribe} isAiDescribing={data.isAiDescribing} onDuplicate={data.onDuplicate} onDelete={data.onDelete} />
+        <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #f0f0f0' }}>
+            <IconSql size={22} color="#1971c2" />
+            <Text fw={700} c="blue.8" style={{ fontSize: 22, flex: 1 }} lineClamp={1}>{data.name || 'SQL'}</Text>
+            <StatusDot result={result} />
+          </Box>
+          {data.description && (
+            <Text c="dimmed" px={14} pt={8} lineClamp={2} style={{ fontSize: 16 }}>{data.description}</Text>
+          )}
+          {sqlPreview && (
+            <Box px={14} py={8} style={{ flex: 1, overflow: 'hidden' }}>
+              <Text c="gray.6" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', fontSize: 14 }} lineClamp={5}>{sqlPreview}</Text>
             </Box>
-            {data.sql && (
-              <Text size="xs" c="dimmed" mt={4} lineClamp={3} style={{ fontFamily: 'monospace' }}>{data.sql.slice(0, 120)}</Text>
-            )}
-          </div>
-          <Handle type="target" position={Position.Left} />
-          <Handle type="source" position={Position.Right} />
+          )}
+          <Box px={14} pb={10} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+            <ShapeBadge result={result} />
+            <ColumnChips result={result} />
+          </Box>
         </Box>
       </div>
     );
@@ -93,7 +114,7 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
 
   // ── Full view ──
   return (
-    <div className="analysis-node" style={{ width: '100%', height: '100%' }}>
+    <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
       <NodeResizer minWidth={320} minHeight={250} isVisible={data.selected} />
       <Box
         className={`node-card ${statusClass(result)}`}
@@ -144,7 +165,7 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
             )}
             {data.onAutoDescribe && (
               <Tooltip label="AI suggest name & description">
-                <ActionIcon size="xs" variant="subtle" color="violet" onClick={data.onAutoDescribe}>
+                <ActionIcon size="xs" variant="subtle" color="violet" onClick={data.onAutoDescribe} loading={data.isAiDescribing}>
                   <IconSparkles size={12} />
                 </ActionIcon>
               </Tooltip>
@@ -210,38 +231,26 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
           </Box>
         )}
 
-        {/* Result table */}
-        {showResult && preview && (
-          <Box style={{ borderTop: '1px solid #f0f0f0', flex: viewMode === 'result' ? 1 : undefined, maxHeight: viewMode === 'result' ? undefined : 180, display: 'flex', flexDirection: 'column' }}>
-            <Text size="xs" c="dimmed" px={12} py={2}>{result?.shape?.[0]} rows x {result?.shape?.[1]} cols</Text>
-            <ScrollArea style={{ flex: 1 }}>
-              <Table striped highlightOnHover style={{ fontSize: 11 }}>
-                <Table.Thead>
-                  <Table.Tr>
-                    {(preview.columns ?? []).map((col) => (
-                      <Table.Th key={typeof col === 'string' ? col : col.key} style={{ padding: '2px 8px' }}>
-                        {typeof col === 'string' ? col : col.label}
-                      </Table.Th>
-                    ))}
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {(preview.rows ?? []).slice(0, 20).map((row, i) => (
-                    <Table.Tr key={i}>
-                      {(row as unknown[]).map((cell, j) => (
-                        <Table.Td key={j} style={{ padding: '2px 8px' }}>{cell != null ? String(cell) : ''}</Table.Td>
-                      ))}
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea>
-          </Box>
+        {/* Result preview bar */}
+        {showResult && result?.ok && (
+          <CompactResultBar result={result} onExpand={() => setDataModalOpen(true)} />
         )}
         {showResult && !result && (
           <Box style={{ padding: '12px', borderTop: viewMode === 'result' ? '1px solid #f0f0f0' : undefined, flex: viewMode === 'result' ? 1 : undefined, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Text size="xs" c="dimmed">Run pipeline to see results</Text>
           </Box>
+        )}
+
+        {/* Data preview modal */}
+        {result?.ok && (
+          <DataPreviewModal
+            opened={dataModalOpen}
+            onClose={() => setDataModalOpen(false)}
+            result={result}
+            pipelineId={data.pipelineId}
+            nodeId={data.id}
+            title={data.name || 'SQL Result'}
+          />
         )}
       </Box>
     </div>
