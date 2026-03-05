@@ -34,6 +34,23 @@ OPTIONAL_PACKAGES: list[tuple[str, str | None]] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# sdw_checks — make available as `from sdw_checks import ...` in user code
+# ---------------------------------------------------------------------------
+def _register_checks_module() -> None:
+    """Register the checks module so user code can ``from sdw_checks import ...``."""
+    import pathlib
+    checks_path = pathlib.Path(__file__).with_name("checks.py")
+    if not checks_path.exists():
+        return
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("sdw_checks", str(checks_path))
+    if spec and spec.loader:
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["sdw_checks"] = mod
+        spec.loader.exec_module(mod)
+
+
 def _try_import(import_path: str, alias: str | None) -> tuple[str, object] | None:
     """Attempt to import a module. Returns (namespace_name, module) or None."""
     try:
@@ -75,6 +92,8 @@ def main() -> None:
     try:
         import numpy as np
         import pandas as pd
+
+        _register_checks_module()
 
         manifest = json.loads(sys.stdin.read())
         code = manifest["code"]
@@ -151,8 +170,14 @@ def main() -> None:
             "error": "Code must assign result to `df_out` (DataFrame), `result` (any value), or `df` (DataFrame)",
         }, sys.stdout)
 
-    except Exception:
-        json.dump({"ok": False, "error": traceback.format_exc()}, sys.stdout)
+    except Exception as exc:
+        # Surface CheckError with a clean message (no traceback noise)
+        sdw_mod = sys.modules.get("sdw_checks")
+        check_err = getattr(sdw_mod, "CheckError", None) if sdw_mod else None
+        if check_err and isinstance(exc, check_err):
+            json.dump({"ok": False, "error": f"Validation failed: {exc}"}, sys.stdout)
+        else:
+            json.dump({"ok": False, "error": traceback.format_exc()}, sys.stdout)
 
 
 if __name__ == "__main__":
