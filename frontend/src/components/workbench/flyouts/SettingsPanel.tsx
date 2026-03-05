@@ -20,9 +20,11 @@ export function SettingsPanel() {
   const showFunctionInternals = useUIStore((s) => s.showFunctionInternals);
   const showMinimap = useUIStore((s) => s.showMinimap);
   const showXmlModel = useUIStore((s) => s.showXmlModel);
+  const curvedEdges = useUIStore((s) => s.curvedEdges);
   const toggleFunctionInternals = useUIStore((s) => s.toggleFunctionInternals);
   const toggleMinimap = useUIStore((s) => s.toggleMinimap);
   const toggleXmlModel = useUIStore((s) => s.toggleXmlModel);
+  const toggleCurvedEdges = useUIStore((s) => s.toggleCurvedEdges);
 
   const [styleTab, setStyleTab] = useState<string>('stock');
   const currentStyleType = styleTab as (typeof STYLE_NODE_TYPES)[number];
@@ -104,6 +106,15 @@ export function SettingsPanel() {
           <Switch
             checked={showXmlModel}
             onChange={toggleXmlModel}
+            size="xs"
+            color="deepPurple"
+          />
+        </Group>
+        <Group justify="space-between" wrap="nowrap">
+          <Text size="xs">Curved influence arrows</Text>
+          <Switch
+            checked={curvedEdges}
+            onChange={toggleCurvedEdges}
             size="xs"
             color="deepPurple"
           />
