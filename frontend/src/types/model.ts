@@ -356,6 +356,13 @@ export type AnalysisNode = {
   publish_table_id?: string;
   /** For publish nodes: overwrite vs append */
   publish_mode?: 'overwrite' | 'append';
+  /** Mock data for design-time previews (snapshot from last execution) */
+  mockValue?: {
+    kind: 'dataframe' | 'scalar' | 'dict' | 'list' | 'text';
+    preview: Record<string, unknown>;
+    shape?: number[];
+    generic_value?: unknown;
+  };
 };
 
 export type AnalysisEdge = {

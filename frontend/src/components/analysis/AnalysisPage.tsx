@@ -19,7 +19,7 @@ import { Box, Button, Group, Select, Text } from '@mantine/core';
 import { IconPlus } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
 import type { AnalysisNodeType, AnalysisNode as AnalysisNodeT, AnalysisEdge as AnalysisEdgeT, PipelineCheckpoint } from '../../types/model';
-import { loadPipelineResults } from '../../lib/api';
+import { loadPipelineResults, type NodeResultResponse } from '../../lib/api';
 import { parseCSV } from '../../lib/csvParser';
 import { saveDataTable } from '../../lib/dataTableStorage';
 import { AnalysisToolbar } from './AnalysisToolbar';
@@ -123,6 +123,8 @@ function pipelineNodesToFlow(
   onRunScope: (nodeId: string, scope: RunScope) => void,
   onSaveComponent: (name: string, code: string) => void,
   onToggleGroupCollapse: (groupId: string) => void,
+  onSnapshotMock: (nodeId: string) => void,
+  onClearMock: (nodeId: string) => void,
   selectedNodeId: string | null,
   zoomLevel: ZoomLevel,
 ): Node[] {
@@ -156,7 +158,7 @@ function pipelineNodesToFlow(
       ...(n.w && n.h ? { style: { width: n.w, height: n.h } } : {}),
       data: {
         ...n,
-        result: results[n.id],
+        result: results[n.id] ?? (n.mockValue ? { ok: true, preview: n.mockValue.preview, shape: n.mockValue.shape, value_kind: n.mockValue.kind, generic_value: n.mockValue.generic_value } : undefined),
         selected: n.id === selectedNodeId,
         zoomLevel,
         inputVars,
@@ -166,6 +168,9 @@ function pipelineNodesToFlow(
         onRunScope: (scope: RunScope) => onRunScope(n.id, scope),
         onSaveComponent: n.type === 'code' ? onSaveComponent : undefined,
         onToggleCollapse: n.type === 'group' ? () => onToggleGroupCollapse(n.id) : undefined,
+        onSnapshotMock: () => onSnapshotMock(n.id),
+        onClearMock: n.mockValue ? () => onClearMock(n.id) : undefined,
+        isMockPreview: !results[n.id] && !!n.mockValue,
       },
     };
   });
@@ -299,6 +304,31 @@ function AnalysisCanvas() {
     [activePipeline, updatePipeline],
   );
 
+  /** Snapshot a node's last result as mock data for design-time previews. */
+  const handleSnapshotMock = useCallback(
+    (nodeId: string) => {
+      if (!activePipeline) return;
+      const result = analysisResults[nodeId];
+      if (!result?.ok || !result.preview) return;
+      const mockValue = {
+        kind: (result.value_kind ?? 'dataframe') as 'dataframe' | 'scalar' | 'dict' | 'list' | 'text',
+        preview: result.preview,
+        shape: result.shape,
+        generic_value: result.generic_value,
+      };
+      handleUpdateNode(nodeId, { mockValue });
+    },
+    [activePipeline, analysisResults, handleUpdateNode],
+  );
+
+  /** Clear mock data from a node. */
+  const handleClearMock = useCallback(
+    (nodeId: string) => {
+      handleUpdateNode(nodeId, { mockValue: undefined });
+    },
+    [handleUpdateNode],
+  );
+
   const handleRunScope = useCallback(
     (nodeId: string, scope: RunScope) => {
       if (!activePipeline) return;
@@ -359,8 +389,8 @@ function AnalysisCanvas() {
 
   // Derive flow nodes/edges from pipeline state
   const derivedFlowNodes = useMemo(
-    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, selectedNodeId, zoomLevel) : [],
-    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, selectedNodeId, zoomLevel],
+    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, selectedNodeId, zoomLevel) : [],
+    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, selectedNodeId, zoomLevel],
   );
 
   const derivedFlowEdges = useMemo(
@@ -590,8 +620,11 @@ function AnalysisCanvas() {
         {selectedNodeId && activePipeline.nodes.find((n) => n.id === selectedNodeId) && (
           <VariableInspector
             node={activePipeline.nodes.find((n) => n.id === selectedNodeId)!}
-            result={analysisResults[selectedNodeId]}
+            result={analysisResults[selectedNodeId] ?? (activePipeline.nodes.find((n) => n.id === selectedNodeId)?.mockValue ? { ok: true, preview: activePipeline.nodes.find((n) => n.id === selectedNodeId)!.mockValue!.preview, shape: activePipeline.nodes.find((n) => n.id === selectedNodeId)!.mockValue!.shape, value_kind: activePipeline.nodes.find((n) => n.id === selectedNodeId)!.mockValue!.kind, generic_value: activePipeline.nodes.find((n) => n.id === selectedNodeId)!.mockValue!.generic_value } as NodeResultResponse : undefined)}
             onClose={() => setSelectedNodeId(null)}
+            onSnapshotMock={analysisResults[selectedNodeId]?.ok ? () => handleSnapshotMock(selectedNodeId) : undefined}
+            onClearMock={activePipeline.nodes.find((n) => n.id === selectedNodeId)?.mockValue ? () => handleClearMock(selectedNodeId) : undefined}
+            isMockPreview={!analysisResults[selectedNodeId] && !!activePipeline.nodes.find((n) => n.id === selectedNodeId)?.mockValue}
           />
         )}
       </div>

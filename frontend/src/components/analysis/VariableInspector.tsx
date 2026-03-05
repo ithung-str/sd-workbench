@@ -1,5 +1,5 @@
-import { ActionIcon, Badge, Box, ScrollArea, Table, Text } from '@mantine/core';
-import { IconX } from '@tabler/icons-react';
+import { ActionIcon, Badge, Box, Button, ScrollArea, Table, Text } from '@mantine/core';
+import { IconCamera, IconX } from '@tabler/icons-react';
 import type { NodeResultResponse } from '../../lib/api';
 import type { AnalysisNode } from '../../types/model';
 
@@ -7,6 +7,9 @@ type Props = {
   node: AnalysisNode;
   result?: NodeResultResponse;
   onClose: () => void;
+  onSnapshotMock?: () => void;
+  onClearMock?: () => void;
+  isMockPreview?: boolean;
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -16,10 +19,11 @@ const TYPE_COLORS: Record<string, string> = {
   datetime: 'grape',
 };
 
-export function VariableInspector({ node, result, onClose }: Props) {
+export function VariableInspector({ node, result, onClose, onSnapshotMock, onClearMock, isMockPreview }: Props) {
   const preview = result?.ok ? result.preview : null;
   const columns = preview?.columns ?? [];
   const shape = result?.shape;
+  const valueKind = result?.value_kind ?? 'dataframe';
 
   return (
     <Box
@@ -68,8 +72,48 @@ export function VariableInspector({ node, result, onClose }: Props) {
           </Box>
         )}
 
-        {!result && (
+        {!result && !isMockPreview && (
           <Text size="xs" c="dimmed" mb={8}>Not executed yet</Text>
+        )}
+
+        {/* Value Kind */}
+        {result?.ok && valueKind !== 'dataframe' && (
+          <Box mb={8}>
+            <Text size="xs" c="dimmed" fw={600} mb={2}>Value Kind</Text>
+            <Badge size="xs" variant="light" color="grape">{valueKind}</Badge>
+          </Box>
+        )}
+
+        {/* Mock data controls */}
+        {isMockPreview && (
+          <Box mb={8}>
+            <Badge size="xs" variant="light" color="grape" mb={4}>Mock Preview</Badge>
+            <Text size="xs" c="dimmed">Showing snapshot data (no live execution)</Text>
+          </Box>
+        )}
+        {result?.ok && (onSnapshotMock || onClearMock) && (
+          <Box mb={8} style={{ display: 'flex', gap: 6 }}>
+            {onSnapshotMock && (
+              <Button size="compact-xs" variant="light" color="grape" leftSection={<IconCamera size={12} />} onClick={onSnapshotMock}>
+                Snapshot as mock
+              </Button>
+            )}
+            {onClearMock && (
+              <Button size="compact-xs" variant="light" color="gray" onClick={onClearMock}>
+                Clear mock
+              </Button>
+            )}
+          </Box>
+        )}
+
+        {/* Generic value preview for non-DataFrame kinds */}
+        {result?.ok && valueKind !== 'dataframe' && preview && (
+          <Box mb={8}>
+            <Text size="xs" c="dimmed" fw={600} mb={4}>Value</Text>
+            <Box style={{ background: '#fff', borderRadius: 6, padding: 8, border: '1px solid #eee', fontFamily: 'monospace', fontSize: 11, whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'auto' }}>
+              {preview.display ?? JSON.stringify(result.generic_value ?? preview.sample, null, 2)}
+            </Box>
+          </Box>
         )}
 
         {/* Schema */}
@@ -125,9 +169,9 @@ export function VariableInspector({ node, result, onClose }: Props) {
         )}
 
         {/* Preview (first 5 rows) */}
-        {preview && preview.rows.length > 0 && (
+        {preview && preview.rows && preview.rows.length > 0 && (
           <Box mb={8}>
-            <Text size="xs" c="dimmed" fw={600} mb={4}>Preview (first {Math.min(5, preview.rows.length)} rows)</Text>
+            <Text size="xs" c="dimmed" fw={600} mb={4}>Preview (first {Math.min(5, preview.rows!.length)} rows)</Text>
             <ScrollArea>
               <Table style={{ fontSize: 10 }}>
                 <Table.Thead>
@@ -140,7 +184,7 @@ export function VariableInspector({ node, result, onClose }: Props) {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {preview.rows.slice(0, 5).map((row, i) => (
+                  {preview.rows!.slice(0, 5).map((row, i) => (
                     <Table.Tr key={i}>
                       {(row as unknown[]).map((cell, j) => (
                         <Table.Td key={j} style={{ padding: '1px 4px', whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>

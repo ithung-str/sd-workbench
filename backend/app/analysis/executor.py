@@ -3,8 +3,9 @@ import io
 import json
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -16,6 +17,8 @@ DEFAULT_TIMEOUT = 30
 class NodeResult:
     ok: bool
     output_df: pd.DataFrame | None = None
+    value_kind: str = "dataframe"  # dataframe | scalar | dict | list | text
+    generic_output: Any = None  # non-DataFrame output (JSON-serializable)
     logs: str = ""
     error: str | None = None
 
@@ -64,5 +67,16 @@ def execute_node(
     if not output.get("ok"):
         return NodeResult(ok=False, error=output.get("error", "Unknown error"), logs=stderr)
 
-    output_df = _deserialize_df(output["output"])
-    return NodeResult(ok=True, output_df=output_df, logs=stderr)
+    kind = output.get("kind", "dataframe")
+
+    if kind == "dataframe":
+        output_df = _deserialize_df(output["output"])
+        return NodeResult(ok=True, output_df=output_df, value_kind="dataframe", logs=stderr)
+
+    # Generic (non-DataFrame) output
+    return NodeResult(
+        ok=True,
+        value_kind=kind,
+        generic_output=output.get("generic_output"),
+        logs=stderr,
+    )

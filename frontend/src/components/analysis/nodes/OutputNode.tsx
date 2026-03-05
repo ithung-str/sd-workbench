@@ -1,6 +1,6 @@
 import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
-import { ActionIcon, Box, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
-import { IconTableFilled, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Badge, Box, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
+import { IconCamera, IconTableFilled, IconTrash, IconX } from '@tabler/icons-react';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
   XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid,
@@ -23,6 +23,9 @@ type OutputData = {
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
+  onSnapshotMock?: () => void;
+  onClearMock?: () => void;
+  isMockPreview?: boolean;
   result?: NodeResultResponse;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
@@ -64,14 +67,61 @@ function aggregate(
   return result;
 }
 
+function GenericValueDisplay({ preview, kind, genericValue }: { preview: NonNullable<NodeResultResponse['preview']>; kind: string; genericValue?: unknown }) {
+  if (kind === 'scalar') {
+    return (
+      <Box p={12} style={{ textAlign: 'center' }}>
+        <Text size="xl" fw={700} style={{ fontFamily: 'monospace' }}>{preview.display ?? String(genericValue)}</Text>
+        <Text size="xs" c="dimmed" mt={4}>Scalar value</Text>
+      </Box>
+    );
+  }
+  if (kind === 'text') {
+    return (
+      <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={12} py={8}>
+        <Text size="xs" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+          {preview.display ?? String(genericValue)}
+        </Text>
+        {preview.length != null && (
+          <Text size="xs" c="dimmed" mt={4}>{preview.length} characters</Text>
+        )}
+      </ScrollArea>
+    );
+  }
+  if (kind === 'dict') {
+    const sample = preview.sample as Record<string, unknown> | undefined;
+    return (
+      <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={12} py={8}>
+        <Text size="xs" c="dimmed" mb={4}>Dict ({preview.total_keys ?? '?'} keys)</Text>
+        <pre style={{ fontSize: 11, fontFamily: 'monospace', margin: 0, whiteSpace: 'pre-wrap' }}>
+          {JSON.stringify(sample ?? genericValue, null, 2)}
+        </pre>
+      </ScrollArea>
+    );
+  }
+  if (kind === 'list') {
+    const sample = preview.sample as unknown[] | undefined;
+    return (
+      <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={12} py={8}>
+        <Text size="xs" c="dimmed" mb={4}>List ({preview.length ?? '?'} items)</Text>
+        <pre style={{ fontSize: 11, fontFamily: 'monospace', margin: 0, whiteSpace: 'pre-wrap' }}>
+          {JSON.stringify(sample ?? genericValue, null, 2)}
+        </pre>
+      </ScrollArea>
+    );
+  }
+  return <Text size="xs" c="dimmed" p={12}>Unknown value kind: {kind}</Text>;
+}
+
 export function OutputNode({ data }: NodeProps<OutputData>) {
   const result = data.result;
   const preview = result?.ok ? result.preview : null;
+  const valueKind = result?.value_kind ?? 'dataframe';
   const mode = data.output_mode ?? 'table';
   const zoomLevel = data.zoomLevel ?? 'full';
   const chartConfig = data.chart_config ?? {};
 
-  const columns: ColumnInfo[] = preview
+  const columns: ColumnInfo[] = preview?.columns
     ? preview.columns.map((c) =>
         typeof c === 'string'
           ? { key: c, label: c, type: 'string' }
@@ -79,7 +129,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
       )
     : [];
 
-  const rawChartData = preview
+  const rawChartData = preview?.rows
     ? preview.rows.map((row) => {
         const entry: Record<string, unknown> = {};
         columns.forEach((col, i) => { entry[col.key] = row[i]; });
@@ -160,7 +210,22 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
           }}
         />
         <div className="node-controls" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+          {data.isMockPreview && <Badge size="xs" variant="light" color="grape">Preview</Badge>}
           {data.onRunScope && <RunMenu onRunScope={data.onRunScope} />}
+          {result?.ok && data.onSnapshotMock && (
+            <MantineTooltip label="Snapshot as mock data">
+              <ActionIcon size="xs" variant="subtle" color="grape" onClick={data.onSnapshotMock}>
+                <IconCamera size={12} />
+              </ActionIcon>
+            </MantineTooltip>
+          )}
+          {data.onClearMock && (
+            <MantineTooltip label="Clear mock data">
+              <ActionIcon size="xs" variant="subtle" color="gray" onClick={data.onClearMock}>
+                <IconX size={12} />
+              </ActionIcon>
+            </MantineTooltip>
+          )}
           {result && (
             <Box style={{ width: 8, height: 8, borderRadius: '50%', background: result.ok ? '#2f9e44' : '#e03131' }} />
           )}
@@ -220,11 +285,16 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
         </Box>
       )}
 
-      {preview && mode === 'stats' && preview.stats && (
+      {/* Generic value rendering for non-DataFrame kinds */}
+      {preview && valueKind !== 'dataframe' && (
+        <GenericValueDisplay preview={preview} kind={valueKind} genericValue={result?.generic_value} />
+      )}
+
+      {preview && valueKind === 'dataframe' && mode === 'stats' && preview.stats && (
         <StatsPanel stats={preview.stats} shape={result?.shape} />
       )}
 
-      {preview && mode === 'table' && (
+      {preview && valueKind === 'dataframe' && mode === 'table' && preview.columns && preview.rows && (
         <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={4}>
           <Table striped highlightOnHover style={{ fontSize: 11 }}>
             <Table.Thead>
@@ -249,7 +319,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
         </ScrollArea>
       )}
 
-      {preview && mode === 'bar' && (
+      {preview && valueKind === 'dataframe' && mode === 'bar' && (
         <Box style={{ height: 200, padding: 8 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
@@ -265,7 +335,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
         </Box>
       )}
 
-      {preview && mode === 'line' && (
+      {preview && valueKind === 'dataframe' && mode === 'line' && (
         <Box style={{ height: 200, padding: 8 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
@@ -281,7 +351,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
         </Box>
       )}
 
-      {preview && mode === 'scatter' && (
+      {preview && valueKind === 'dataframe' && mode === 'scatter' && (
         <Box style={{ height: 200, padding: 8 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart>

@@ -370,7 +370,7 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
               <Table striped highlightOnHover style={{ fontSize: 11 }}>
                 <Table.Thead>
                   <Table.Tr>
-                    {preview.columns.map((col) => (
+                    {(preview.columns ?? []).map((col) => (
                       <Table.Th key={typeof col === 'string' ? col : col.key} style={{ padding: '2px 8px' }}>
                         {typeof col === 'string' ? col : col.label}
                       </Table.Th>
@@ -378,7 +378,7 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {preview.rows.slice(0, 20).map((row, i) => (
+                  {(preview.rows ?? []).slice(0, 20).map((row, i) => (
                     <Table.Tr key={i}>
                       {(row as unknown[]).map((cell, j) => (
                         <Table.Td key={j} style={{ padding: '2px 8px' }}>{cell != null ? String(cell) : ''}</Table.Td>

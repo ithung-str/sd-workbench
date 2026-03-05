@@ -248,15 +248,25 @@ export type ColumnStats = {
   unique?: number;
 };
 
+export type ValueKind = 'dataframe' | 'scalar' | 'dict' | 'list' | 'text';
+
 export type NodeResultResponse = {
   ok: boolean;
   preview?: {
-    columns: Array<{ key: string; label: string; type: string }>;
-    rows: unknown[][];
+    columns?: Array<{ key: string; label: string; type: string }>;
+    rows?: unknown[][];
     dtypes?: Record<string, string>;
     stats?: Record<string, ColumnStats>;
+    // Generic value previews
+    display?: string;
+    length?: number;
+    keys?: string[];
+    total_keys?: number;
+    sample?: unknown;
   };
   shape?: number[];
+  value_kind?: ValueKind;
+  generic_value?: unknown;
   logs?: string;
   error?: string;
 };
@@ -294,11 +304,13 @@ export async function savePipelineResults(pipelineId: string, results: Record<st
 
 export type PaginatedPreview = {
   ok: boolean;
+  value_kind?: ValueKind;
   columns?: Array<{ key: string; label: string; type: string }>;
   rows?: unknown[][];
   total_rows?: number;
   offset?: number;
   limit?: number;
+  preview?: Record<string, unknown>;
   error?: string;
 };
 

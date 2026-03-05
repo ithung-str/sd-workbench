@@ -6,7 +6,7 @@ import pandas as pd
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.analysis.cache import pipeline_cache
+from app.analysis.cache import NodeValue, pipeline_cache
 from app.analysis.executor import execute_node
 from app.analysis.sql_executor import execute_sql
 from app.db import connect
@@ -71,6 +71,29 @@ def _df_preview(df: pd.DataFrame, max_rows: int = 100) -> dict:
     return {"columns": columns, "rows": rows, "dtypes": dtypes, "stats": stats}
 
 
+def _generic_preview(value: object, kind: str) -> dict:
+    """Build a preview dict for non-DataFrame values."""
+    if kind == "scalar":
+        return {"display": str(value)[:500]}
+    if kind == "text":
+        text = str(value)
+        return {"display": text[:2000], "length": len(text)}
+    if kind == "dict":
+        # Truncate large dicts for preview
+        d = value if isinstance(value, dict) else {}
+        keys = list(d.keys())[:50]
+        return {"keys": keys, "total_keys": len(d), "sample": {k: _truncate(d[k]) for k in keys[:10]}}
+    if kind == "list":
+        lst = value if isinstance(value, list) else []
+        return {"length": len(lst), "sample": [_truncate(v) for v in lst[:10]]}
+    return {"display": str(value)[:500]}
+
+
+def _truncate(val: object, max_len: int = 200) -> object:
+    s = str(val)
+    return s[:max_len] if len(s) > max_len else val
+
+
 @router.post("/execute", response_model=ExecutePipelineResponse)
 def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
     nodes_by_id = {n.id: n for n in req.nodes}
@@ -113,13 +136,24 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
             results[node_id] = NodeResultResponse(ok=True, preview=_df_preview(df), shape=list(df.shape))
             continue
 
-        # Output node (pass-through)
+        # Output node (pass-through — supports both DataFrame and generic values)
         if node.type == "output":
             if parents:
-                parent_df = pipeline_cache.get(req.pipeline_id, parents[0])
-                if parent_df is not None:
-                    pipeline_cache.set(req.pipeline_id, node_id, parent_df)
-                    results[node_id] = NodeResultResponse(ok=True, preview=_df_preview(parent_df), shape=list(parent_df.shape))
+                parent_nv = pipeline_cache.get_value(req.pipeline_id, parents[0])
+                if parent_nv is not None:
+                    pipeline_cache.set_value(req.pipeline_id, node_id, parent_nv)
+                    if parent_nv.kind == "dataframe" and parent_nv.value is not None:
+                        results[node_id] = NodeResultResponse(
+                            ok=True, preview=_df_preview(parent_nv.value),
+                            shape=list(parent_nv.value.shape), value_kind="dataframe",
+                        )
+                    else:
+                        results[node_id] = NodeResultResponse(
+                            ok=True,
+                            preview=_generic_preview(parent_nv.value, parent_nv.kind),
+                            value_kind=parent_nv.kind,
+                            generic_value=parent_nv.value,
+                        )
                     continue
             results[node_id] = NodeResultResponse(ok=False, error="No input data")
             failed.add(node_id)
@@ -145,12 +179,28 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
                 continue
 
             exec_result = execute_node(code=code, inputs=inputs, timeout=30)
-            if exec_result.ok and exec_result.output_df is not None:
-                pipeline_cache.set(req.pipeline_id, node_id, exec_result.output_df)
-                results[node_id] = NodeResultResponse(
-                    ok=True, preview=_df_preview(exec_result.output_df),
-                    shape=list(exec_result.output_df.shape), logs=exec_result.logs or None,
-                )
+            if exec_result.ok:
+                if exec_result.value_kind == "dataframe" and exec_result.output_df is not None:
+                    pipeline_cache.set(req.pipeline_id, node_id, exec_result.output_df)
+                    results[node_id] = NodeResultResponse(
+                        ok=True, preview=_df_preview(exec_result.output_df),
+                        shape=list(exec_result.output_df.shape),
+                        value_kind="dataframe",
+                        logs=exec_result.logs or None,
+                    )
+                elif exec_result.generic_output is not None:
+                    nv = NodeValue.from_any(exec_result.generic_output)
+                    pipeline_cache.set_value(req.pipeline_id, node_id, nv)
+                    results[node_id] = NodeResultResponse(
+                        ok=True,
+                        preview=_generic_preview(exec_result.generic_output, exec_result.value_kind),
+                        value_kind=exec_result.value_kind,
+                        generic_value=exec_result.generic_output,
+                        logs=exec_result.logs or None,
+                    )
+                else:
+                    results[node_id] = NodeResultResponse(ok=False, error="No output produced", logs=exec_result.logs or None)
+                    failed.add(node_id)
             else:
                 results[node_id] = NodeResultResponse(ok=False, error=exec_result.error, logs=exec_result.logs or None)
                 failed.add(node_id)
@@ -324,23 +374,35 @@ def clear_pipeline_results(pipeline_id: str) -> dict:
 
 @router.get("/pipelines/{pipeline_id}/nodes/{node_id}/preview")
 def get_node_preview(pipeline_id: str, node_id: str, offset: int = 0, limit: int = 100) -> dict:
-    """Fetch paginated rows from a cached node DataFrame."""
-    df = pipeline_cache.get(pipeline_id, node_id)
-    if df is None:
+    """Fetch paginated rows from a cached node value."""
+    nv = pipeline_cache.get_value(pipeline_id, node_id)
+    if nv is None:
         return {"ok": False, "error": "No cached data for this node"}
-    limit = min(limit, 1000)  # Cap at 1000 rows per page
-    total_rows = len(df)
-    slice_df = df.iloc[offset : offset + limit]
-    columns = [
-        {"key": col, "label": col, "type": "number" if pd.api.types.is_numeric_dtype(df[col]) else "string"}
-        for col in df.columns
-    ]
-    rows = slice_df.values.tolist()
+
+    # For DataFrames, return paginated rows
+    df = nv.as_dataframe
+    if df is not None:
+        limit = min(limit, 1000)
+        total_rows = len(df)
+        slice_df = df.iloc[offset : offset + limit]
+        columns = [
+            {"key": col, "label": col, "type": "number" if pd.api.types.is_numeric_dtype(df[col]) else "string"}
+            for col in df.columns
+        ]
+        rows = slice_df.values.tolist()
+        return {
+            "ok": True,
+            "value_kind": "dataframe",
+            "columns": columns,
+            "rows": rows,
+            "total_rows": total_rows,
+            "offset": offset,
+            "limit": limit,
+        }
+
+    # For generic values, return the preview
     return {
         "ok": True,
-        "columns": columns,
-        "rows": rows,
-        "total_rows": total_rows,
-        "offset": offset,
-        "limit": limit,
+        "value_kind": nv.kind,
+        "preview": _generic_preview(nv.value, nv.kind),
     }

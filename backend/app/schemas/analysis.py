@@ -14,7 +14,7 @@ class AnalysisNodeSchema(BaseModel):
     code: Optional[str] = None
     sql: Optional[str] = None
     content: Optional[str] = None
-    output_mode: Optional[Literal["table", "bar", "line", "scatter"]] = None
+    output_mode: Optional[Literal["table", "bar", "line", "scatter", "stats"]] = None
     chart_config: Optional[dict] = None
     parent_group: Optional[str] = None
     collapsed: Optional[bool] = None
@@ -87,6 +87,8 @@ class NodeResultResponse(BaseModel):
     ok: bool
     preview: Optional[dict] = None
     shape: Optional[list[int]] = None
+    value_kind: Optional[Literal["dataframe", "scalar", "dict", "list", "text"]] = None
+    generic_value: Optional[object] = None  # JSON-serializable non-DataFrame output
     logs: Optional[str] = None
     error: Optional[str] = None
 
