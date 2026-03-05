@@ -39,7 +39,10 @@ def main() -> None:
     try:
         import numpy as np
         import pandas as pd
-        from scipy import stats  # noqa: F401
+        try:
+            from scipy import stats  # noqa: F401
+        except ImportError:
+            stats = None  # scipy is optional
 
         manifest = json.loads(sys.stdin.read())
         code = manifest["code"]
@@ -49,6 +52,10 @@ def main() -> None:
         for name, b64 in input_data.items():
             buf = io.BytesIO(base64.b64decode(b64))
             namespace[name] = pd.read_parquet(buf)
+
+        # Convenience alias: if single input is df_in, also expose as df
+        if list(input_data.keys()) == ["df_in"]:
+            namespace["df"] = namespace["df_in"]
 
         exec(code, namespace)  # noqa: S102
 
@@ -88,10 +95,20 @@ def main() -> None:
             }, sys.stdout)
             return
 
-        # 3) Neither df_out nor result set
+        # 3) Fallback: check if any input DataFrame was modified in-place (e.g. df['y'] = ...)
+        #    or if a variable named 'df' is a DataFrame
+        df_var = namespace.get("df")
+        if df_var is not None and isinstance(df_var, pd.DataFrame):
+            buf = io.BytesIO()
+            df_var.to_parquet(buf, index=False)
+            b64_out = base64.b64encode(buf.getvalue()).decode()
+            json.dump({"ok": True, "kind": "dataframe", "output": b64_out}, sys.stdout)
+            return
+
+        # 4) Neither df_out, result, nor df set
         json.dump({
             "ok": False,
-            "error": "Code must assign result to `df_out` (DataFrame) or `result` (any value)",
+            "error": "Code must assign result to `df_out` (DataFrame), `result` (any value), or `df` (DataFrame)",
         }, sys.stdout)
 
     except Exception:

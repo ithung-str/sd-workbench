@@ -514,7 +514,7 @@ def test_simulate_imported_model() -> None:
 def test_imports_frontend_model_files_export_and_warning_feedback() -> None:
     client = TestClient(app)
     models_dir = Path(__file__).resolve().parents[3] / "frontend" / "models"
-    files = sorted(models_dir.glob("*.InsightMaker"))
+    files = sorted(models_dir.rglob("*.InsightMaker"))
     assert files, "Expected at least one .InsightMaker file in frontend/models"
 
     for model_path in files:
@@ -565,7 +565,7 @@ def test_frontend_models_import_and_session_is_usable() -> None:
     """Every InsightMaker file from frontend/models should import and have usable sessions."""
     client = TestClient(app)
     models_dir = Path(__file__).resolve().parents[3] / "frontend" / "models"
-    files = sorted(models_dir.glob("*.InsightMaker"))
+    files = sorted(models_dir.rglob("*.InsightMaker"))
     assert files, "Expected at least one .InsightMaker file in frontend/models"
 
     for model_path in files:
