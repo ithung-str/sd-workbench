@@ -18,7 +18,7 @@ export function useGoogleAuth() {
   const rejectRef = useRef<((err: Error) => void) | null>(null);
 
   const login = useGoogleLogin({
-    scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
     onSuccess(response) {
       cachedToken = {
         accessToken: response.access_token,
@@ -52,4 +52,12 @@ export function useGoogleAuth() {
   }, [getToken]);
 
   return { isAuthenticated, login: loginAndGetToken, getToken };
+}
+
+/**
+ * Get the cached Google OAuth token without requiring a React hook.
+ * Returns null if no valid token is cached.
+ */
+export function getCachedGoogleToken(): string | null {
+  return isTokenValid() ? cachedToken!.accessToken : null;
 }

@@ -319,7 +319,14 @@ export type SensitivityConfig = {
   seed?: number;
 };
 
-export type AnalysisNodeType = 'data_source' | 'code' | 'output';
+export type AnalysisNodeType = 'data_source' | 'code' | 'sql' | 'output' | 'note' | 'group' | 'sheets_export' | 'publish';
+
+export type ChartConfig = {
+  xColumn?: string;
+  yColumns?: string[];
+  colorColumn?: string;
+  aggregation?: 'none' | 'sum' | 'mean' | 'count' | 'min' | 'max';
+};
 
 export type AnalysisNode = {
   id: string;
@@ -330,8 +337,32 @@ export type AnalysisNode = {
   w?: number;
   h?: number;
   code?: string;
+  sql?: string;
   description?: string;
+  content?: string;
   data_table_id?: string;
+  chart_config?: ChartConfig;
+  /** ID of group node this node belongs to */
+  parentGroup?: string;
+  /** For group nodes: whether the group is collapsed */
+  collapsed?: boolean;
+  /** For group nodes: visual color */
+  groupColor?: string;
+  /** For sheets_export nodes: target spreadsheet URL */
+  spreadsheet_url?: string;
+  /** For sheets_export nodes: target sheet name */
+  sheet_name?: string;
+  /** For publish nodes: published data table ID */
+  publish_table_id?: string;
+  /** For publish nodes: overwrite vs append */
+  publish_mode?: 'overwrite' | 'append';
+  /** Mock data for design-time previews (snapshot from last execution) */
+  mockValue?: {
+    kind: 'dataframe' | 'scalar' | 'dict' | 'list' | 'text';
+    preview: Record<string, unknown>;
+    shape?: number[];
+    generic_value?: unknown;
+  };
 };
 
 export type AnalysisEdge = {
@@ -340,11 +371,20 @@ export type AnalysisEdge = {
   target: string;
 };
 
+export type PipelineCheckpoint = {
+  id: string;
+  name: string;
+  timestamp: number;
+  nodes: AnalysisNode[];
+  edges: AnalysisEdge[];
+};
+
 export type AnalysisPipeline = {
   id: string;
   name: string;
   nodes: AnalysisNode[];
   edges: AnalysisEdge[];
+  checkpoints?: PipelineCheckpoint[];
 };
 
 export type AnalysisComponent = {

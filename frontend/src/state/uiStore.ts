@@ -9,6 +9,7 @@ type UIState = {
   showFunctionInternals: boolean;
   showMinimap: boolean;
   showXmlModel: boolean;
+  curvedEdges: boolean;
   bottomTrayExpanded: boolean;
   bottomTrayHeight: number;
   selectedMfaTimestamp: number | null;
@@ -22,6 +23,7 @@ type UIState = {
   toggleFunctionInternals: () => void;
   toggleMinimap: () => void;
   toggleXmlModel: () => void;
+  toggleCurvedEdges: () => void;
   toggleBottomTray: () => void;
   expandBottomTray: () => void;
   setBottomTrayHeight: (height: number) => void;
@@ -39,6 +41,7 @@ export const useUIStore = create<UIState>((set) => ({
   showFunctionInternals: false,
   showMinimap: false,
   showXmlModel: false,
+  curvedEdges: false,
   bottomTrayExpanded: true,
   bottomTrayHeight: 230,
   selectedMfaTimestamp: null,
@@ -52,6 +55,7 @@ export const useUIStore = create<UIState>((set) => ({
   toggleFunctionInternals: () => set((s) => ({ showFunctionInternals: !s.showFunctionInternals })),
   toggleMinimap: () => set((s) => ({ showMinimap: !s.showMinimap })),
   toggleXmlModel: () => set((s) => ({ showXmlModel: !s.showXmlModel })),
+  toggleCurvedEdges: () => set((s) => ({ curvedEdges: !s.curvedEdges })),
   toggleBottomTray: () => set((s) => ({ bottomTrayExpanded: !s.bottomTrayExpanded })),
   expandBottomTray: () => set({ bottomTrayExpanded: true }),
   setBottomTrayHeight: (height) =>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
-import { ActionIcon, Box, SegmentedControl, Select, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
-import { IconDatabase, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Box, Button, SegmentedControl, Select, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
+import { IconDatabase, IconSparkles, IconTrash } from '@tabler/icons-react';
 import { listDataTables } from '../../../lib/dataTableStorage';
 import type { DataTableMeta } from '../../../types/dataTable';
 import type { NodeResultResponse } from '../../../lib/api';
@@ -19,7 +19,10 @@ type DataSourceData = {
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
+  onGenerateMock?: () => void;
+  onAutoDescribe?: () => void;
   result?: NodeResultResponse;
+  isMockPreview?: boolean;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
 };
@@ -50,12 +53,13 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--mini">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden' }}>
           <div className="node-zoom-mini node-zoom-content">
             <IconDatabase size={14} color="#0b7285" />
             <Text size="xs" fw={600} c="cyan.8" truncate>{data.name || 'Data Source'}</Text>
           </div>
+          <Handle type="source" position={Position.Right} />
         </Box>
       </div>
     );
@@ -64,7 +68,7 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
   // ── Summary view ──
   if (zoomLevel === 'summary') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--summary">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden', minWidth: 180 }}>
           <div className="node-zoom-summary node-zoom-content">
             <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -131,6 +135,13 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
           {result && (
             <Box style={{ width: 8, height: 8, borderRadius: '50%', background: result.ok ? '#2f9e44' : '#e03131' }} />
           )}
+          {data.onAutoDescribe && (
+            <Tooltip label="AI suggest name & description">
+              <ActionIcon size="xs" variant="subtle" color="violet" onClick={data.onAutoDescribe}>
+                <IconSparkles size={12} />
+              </ActionIcon>
+            </Tooltip>
+          )}
           {data.onDelete && (
             <Tooltip label="Delete node">
               <ActionIcon size="xs" variant="subtle" color="red" onClick={data.onDelete}>
@@ -173,6 +184,26 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
             styles={{ input: { fontSize: 11, border: 'none', padding: 0, background: 'transparent' } }}
           />
         </Box>
+
+        {data.data_table_id && !result && data.onGenerateMock && (
+          <Box px={12} pb={8}>
+            <Button
+              size="compact-xs"
+              variant="light"
+              color="violet"
+              leftSection={<IconSparkles size={12} />}
+              onClick={data.onGenerateMock}
+            >
+              Generate mock data
+            </Button>
+          </Box>
+        )}
+
+        {data.isMockPreview && (
+          <Box px={12} pb={4}>
+            <Text size="xs" c="violet" fs="italic">Mock preview</Text>
+          </Box>
+        )}
       </div>
 
       <Handle type="source" position={Position.Right} />

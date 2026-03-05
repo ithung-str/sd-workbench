@@ -1,59 +1,183 @@
+import { useCallback, useState } from 'react';
 import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
-import { ActionIcon, Box, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
-import { IconTableFilled, IconTrash } from '@tabler/icons-react';
-import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid } from 'recharts';
-import type { NodeResultResponse } from '../../../lib/api';
+import { ActionIcon, Badge, Box, Button, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
+import { IconCamera, IconSparkles, IconTableFilled, IconTrash, IconX } from '@tabler/icons-react';
+import {
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, ScatterChart, Scatter,
+  XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid,
+} from 'recharts';
+import { fetchNodePreview, type NodeResultResponse } from '../../../lib/api';
+import type { ChartConfig } from '../../../types/model';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { RunMenu } from './RunMenu';
+import { ChartConfigPanel } from './ChartConfigPanel';
 import './analysisNodes.css';
 
+const COLORS = ['#4263eb', '#2f9e44', '#e67700', '#c2255c', '#0b7285'];
+
 type OutputData = {
-  output_mode?: 'table' | 'bar' | 'line' | 'stats';
+  id?: string;
+  output_mode?: 'table' | 'bar' | 'line' | 'scatter' | 'stats';
   name?: string;
   description?: string;
+  chart_config?: ChartConfig;
+  pipelineId?: string;
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
   onRunScope?: (scope: RunScope) => void;
+  onSnapshotMock?: () => void;
+  onClearMock?: () => void;
+  onAutoDescribe?: () => void;
+  isMockPreview?: boolean;
   result?: NodeResultResponse;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
 };
+
+type ColumnInfo = { key: string; label: string; type: string };
 
 function statusClass(result?: NodeResultResponse): string {
   if (!result) return 'node-card--none';
   return result.ok ? 'node-card--ok' : 'node-card--error';
 }
 
+function aggregate(
+  rows: Record<string, unknown>[],
+  xCol: string,
+  yCols: string[],
+  agg: ChartConfig['aggregation'],
+): Record<string, unknown>[] {
+  if (!agg || agg === 'none') return rows;
+  const groups = new Map<string, Record<string, unknown>[]>();
+  for (const row of rows) {
+    const key = String(row[xCol] ?? '');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(row);
+  }
+  const result: Record<string, unknown>[] = [];
+  for (const [key, group] of groups) {
+    const entry: Record<string, unknown> = { [xCol]: key };
+    for (const yc of yCols) {
+      const vals = group.map((r) => Number(r[yc])).filter((v) => !isNaN(v));
+      if (agg === 'sum') entry[yc] = vals.reduce((a, b) => a + b, 0);
+      else if (agg === 'mean') entry[yc] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+      else if (agg === 'count') entry[yc] = vals.length;
+      else if (agg === 'min') entry[yc] = vals.length ? Math.min(...vals) : 0;
+      else if (agg === 'max') entry[yc] = vals.length ? Math.max(...vals) : 0;
+    }
+    result.push(entry);
+  }
+  return result;
+}
+
+function GenericValueDisplay({ preview, kind, genericValue }: { preview: NonNullable<NodeResultResponse['preview']>; kind: string; genericValue?: unknown }) {
+  if (kind === 'scalar') {
+    return (
+      <Box p={12} style={{ textAlign: 'center' }}>
+        <Text size="xl" fw={700} style={{ fontFamily: 'monospace' }}>{preview.display ?? String(genericValue)}</Text>
+        <Text size="xs" c="dimmed" mt={4}>Scalar value</Text>
+      </Box>
+    );
+  }
+  if (kind === 'text') {
+    return (
+      <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={12} py={8}>
+        <Text size="xs" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+          {preview.display ?? String(genericValue)}
+        </Text>
+        {preview.length != null && (
+          <Text size="xs" c="dimmed" mt={4}>{preview.length} characters</Text>
+        )}
+      </ScrollArea>
+    );
+  }
+  if (kind === 'dict') {
+    const sample = preview.sample as Record<string, unknown> | undefined;
+    return (
+      <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={12} py={8}>
+        <Text size="xs" c="dimmed" mb={4}>Dict ({preview.total_keys ?? '?'} keys)</Text>
+        <pre style={{ fontSize: 11, fontFamily: 'monospace', margin: 0, whiteSpace: 'pre-wrap' }}>
+          {JSON.stringify(sample ?? genericValue, null, 2)}
+        </pre>
+      </ScrollArea>
+    );
+  }
+  if (kind === 'list') {
+    const sample = preview.sample as unknown[] | undefined;
+    return (
+      <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={12} py={8}>
+        <Text size="xs" c="dimmed" mb={4}>List ({preview.length ?? '?'} items)</Text>
+        <pre style={{ fontSize: 11, fontFamily: 'monospace', margin: 0, whiteSpace: 'pre-wrap' }}>
+          {JSON.stringify(sample ?? genericValue, null, 2)}
+        </pre>
+      </ScrollArea>
+    );
+  }
+  return <Text size="xs" c="dimmed" p={12}>Unknown value kind: {kind}</Text>;
+}
+
 export function OutputNode({ data }: NodeProps<OutputData>) {
   const result = data.result;
   const preview = result?.ok ? result.preview : null;
+  const valueKind = result?.value_kind ?? 'dataframe';
   const mode = data.output_mode ?? 'table';
   const zoomLevel = data.zoomLevel ?? 'full';
+  const chartConfig = data.chart_config ?? {};
 
-  const chartData = preview
+  // Paginated loading for large datasets
+  const [extraRows, setExtraRows] = useState<unknown[][]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const totalRows = result?.shape?.[0] ?? 0;
+  const previewRowCount = preview?.rows?.length ?? 0;
+  const displayRows = preview?.rows ? [...preview.rows, ...extraRows] : [];
+  const hasMoreRows = totalRows > previewRowCount + extraRows.length;
+
+  const handleLoadMore = useCallback(async () => {
+    if (!data.pipelineId || !data.id || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const offset = previewRowCount + extraRows.length;
+      const page = await fetchNodePreview(data.pipelineId, data.id, offset, 200);
+      if (page.ok && page.rows) {
+        setExtraRows((prev) => [...prev, ...page.rows!]);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [data.pipelineId, data.id, previewRowCount, extraRows.length, loadingMore]);
+
+  const columns: ColumnInfo[] = preview?.columns
+    ? preview.columns.map((c) =>
+        typeof c === 'string'
+          ? { key: c, label: c, type: 'string' }
+          : { key: c.key, label: c.label, type: c.type ?? 'string' },
+      )
+    : [];
+
+  const rawChartData = preview?.rows
     ? preview.rows.map((row) => {
         const entry: Record<string, unknown> = {};
-        preview.columns.forEach((col, i) => {
-          const key = typeof col === 'string' ? col : col.key;
-          entry[key] = row[i];
-        });
+        columns.forEach((col, i) => { entry[col.key] = row[i]; });
         return entry;
       })
     : [];
 
-  const numericCols = preview?.columns.filter((c) => typeof c !== 'string' && c.type === 'number').map((c) => (typeof c === 'string' ? c : c.key)) ?? [];
-  const xCol = preview?.columns[0] ? (typeof preview.columns[0] === 'string' ? preview.columns[0] : preview.columns[0].key) : '';
+  const xCol = chartConfig.xColumn ?? (columns[0]?.key ?? '');
+  const numericCols = columns.filter((c) => c.type === 'number').map((c) => c.key);
+  const yCols = chartConfig.yColumns?.length ? chartConfig.yColumns : numericCols.slice(0, 5);
+  const chartData = aggregate(rawChartData, xCol, yCols, chartConfig.aggregation);
 
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--mini">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden' }}>
           <div className="node-zoom-mini node-zoom-content">
             <IconTableFilled size={14} color="#e67700" />
             <Text size="xs" fw={600} c="orange.8" truncate>{data.name || 'Output'}</Text>
           </div>
+          <Handle type="target" position={Position.Left} />
         </Box>
       </div>
     );
@@ -62,7 +186,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   // ── Summary view ──
   if (zoomLevel === 'summary') {
     return (
-      <div className="analysis-node">
+      <div className="analysis-node analysis-node--summary">
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', overflow: 'hidden', minWidth: 180 }}>
           <div className="node-zoom-summary node-zoom-content">
             <Box style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -112,9 +236,31 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
           }}
         />
         <div className="node-controls" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+          {data.isMockPreview && <Badge size="xs" variant="light" color="grape">Preview</Badge>}
           {data.onRunScope && <RunMenu onRunScope={data.onRunScope} />}
+          {result?.ok && data.onSnapshotMock && (
+            <MantineTooltip label="Snapshot as mock data">
+              <ActionIcon size="xs" variant="subtle" color="grape" onClick={data.onSnapshotMock}>
+                <IconCamera size={12} />
+              </ActionIcon>
+            </MantineTooltip>
+          )}
+          {data.onClearMock && (
+            <MantineTooltip label="Clear mock data">
+              <ActionIcon size="xs" variant="subtle" color="gray" onClick={data.onClearMock}>
+                <IconX size={12} />
+              </ActionIcon>
+            </MantineTooltip>
+          )}
           {result && (
             <Box style={{ width: 8, height: 8, borderRadius: '50%', background: result.ok ? '#2f9e44' : '#e03131' }} />
+          )}
+          {data.onAutoDescribe && (
+            <MantineTooltip label="AI suggest name & description">
+              <ActionIcon size="xs" variant="subtle" color="violet" onClick={data.onAutoDescribe}>
+                <IconSparkles size={12} />
+              </ActionIcon>
+            </MantineTooltip>
           )}
           {data.onDelete && (
             <MantineTooltip label="Delete node">
@@ -136,10 +282,19 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               { value: 'table', label: 'Table' },
               { value: 'bar', label: 'Bar' },
               { value: 'line', label: 'Line' },
+              { value: 'scatter', label: 'Scatter' },
               { value: 'stats', label: 'Stats' },
             ]}
           />
         </Box>
+
+        {(mode === 'bar' || mode === 'line' || mode === 'scatter') && preview && (
+          <ChartConfigPanel
+            config={chartConfig}
+            columns={columns}
+            onChange={(cfg) => data.onUpdate({ chart_config: cfg })}
+          />
+        )}
 
         <Box px={12} pb={4}>
           <Textarea
@@ -163,11 +318,16 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
         </Box>
       )}
 
-      {preview && mode === 'stats' && preview.stats && (
+      {/* Generic value rendering for non-DataFrame kinds */}
+      {preview && valueKind !== 'dataframe' && (
+        <GenericValueDisplay preview={preview} kind={valueKind} genericValue={result?.generic_value} />
+      )}
+
+      {preview && valueKind === 'dataframe' && mode === 'stats' && preview.stats && (
         <StatsPanel stats={preview.stats} shape={result?.shape} />
       )}
 
-      {preview && mode === 'table' && (
+      {preview && valueKind === 'dataframe' && mode === 'table' && preview.columns && preview.rows && (
         <ScrollArea style={{ flex: 1, maxHeight: 300 }} px={4}>
           <Table striped highlightOnHover style={{ fontSize: 11 }}>
             <Table.Thead>
@@ -180,7 +340,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {preview.rows.map((row, i) => (
+              {displayRows.map((row, i) => (
                 <Table.Tr key={i}>
                   {(row as unknown[]).map((cell, j) => (
                     <Table.Td key={j} style={{ padding: '2px 8px' }}>{cell != null ? String(cell) : ''}</Table.Td>
@@ -189,10 +349,17 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               ))}
             </Table.Tbody>
           </Table>
+          {hasMoreRows && (
+            <Box py={4} style={{ textAlign: 'center' }}>
+              <Button size="compact-xs" variant="subtle" loading={loadingMore} onClick={handleLoadMore}>
+                Load more ({totalRows - displayRows.length} remaining)
+              </Button>
+            </Box>
+          )}
         </ScrollArea>
       )}
 
-      {preview && mode === 'bar' && (
+      {preview && valueKind === 'dataframe' && mode === 'bar' && (
         <Box style={{ height: 200, padding: 8 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
@@ -200,15 +367,15 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               <XAxis dataKey={xCol} tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <RechartsTooltip />
-              {numericCols.slice(0, 5).map((col, i) => (
-                <Bar key={col} dataKey={col} fill={['#4263eb', '#2f9e44', '#e67700', '#c2255c', '#0b7285'][i % 5]} />
+              {yCols.map((col, i) => (
+                <Bar key={col} dataKey={col} fill={COLORS[i % COLORS.length]} />
               ))}
             </BarChart>
           </ResponsiveContainer>
         </Box>
       )}
 
-      {preview && mode === 'line' && (
+      {preview && valueKind === 'dataframe' && mode === 'line' && (
         <Box style={{ height: 200, padding: 8 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
@@ -216,10 +383,24 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
               <XAxis dataKey={xCol} tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <RechartsTooltip />
-              {numericCols.slice(0, 5).map((col, i) => (
-                <Line key={col} type="monotone" dataKey={col} stroke={['#4263eb', '#2f9e44', '#e67700', '#c2255c', '#0b7285'][i % 5]} dot={false} />
+              {yCols.map((col, i) => (
+                <Line key={col} type="monotone" dataKey={col} stroke={COLORS[i % COLORS.length]} dot={false} />
               ))}
             </LineChart>
+          </ResponsiveContainer>
+        </Box>
+      )}
+
+      {preview && valueKind === 'dataframe' && mode === 'scatter' && (
+        <Box style={{ height: 200, padding: 8 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart>
+              <CartesianGrid stroke="#f0f0f0" />
+              <XAxis dataKey={xCol} name={xCol} tick={{ fontSize: 10 }} />
+              <YAxis dataKey={yCols[0] ?? ''} name={yCols[0] ?? ''} tick={{ fontSize: 10 }} />
+              <RechartsTooltip />
+              <Scatter data={chartData} fill={COLORS[0]} />
+            </ScatterChart>
           </ResponsiveContainer>
         </Box>
       )}

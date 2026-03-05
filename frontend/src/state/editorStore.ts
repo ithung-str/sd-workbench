@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import {
   executeAiCommandStream,
   executePipeline,
+  loadPipelineResults,
+  savePipelineResults,
   runMonteCarlo,
   runOATSensitivity,
   simulateModel,
@@ -1810,6 +1812,12 @@ export const useEditorStore = create<EditorState>((set, get) => {
         analysisResults: {},
         model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, id, state.analysisComponents),
       }));
+      // Load cached results from backend
+      void loadPipelineResults(id).then((cached) => {
+        if (Object.keys(cached).length > 0) {
+          set({ analysisResults: cached });
+        }
+      });
     },
     runPipeline: async (nodeIds) => {
       const { pipelines, activePipelineId } = get();
@@ -1828,6 +1836,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
       try {
         const execNodes = [];
         for (const node of filteredNodes) {
+          // Skip note and group nodes — they're documentation/organization only
+          if (node.type === 'note' || node.type === 'group') continue;
           if (node.type === 'data_source' && node.data_table_id) {
             const { loadDataTable } = await import('../lib/dataTableStorage');
             const table = await loadDataTable(node.data_table_id);
@@ -1835,6 +1845,25 @@ export const useEditorStore = create<EditorState>((set, get) => {
               id: node.id,
               type: node.type as 'data_source',
               data_table: table ? { columns: table.columns, rows: table.rows } : undefined,
+            });
+          } else if (node.type === 'sql') {
+            execNodes.push({
+              id: node.id,
+              type: 'sql' as const,
+              sql: node.sql,
+            });
+          } else if (node.type === 'publish') {
+            execNodes.push({
+              id: node.id,
+              type: 'publish' as const,
+              publish_table_name: node.name || undefined,
+              publish_table_id: node.publish_table_id || undefined,
+              publish_mode: node.publish_mode || 'overwrite',
+            });
+          } else if (node.type === 'sheets_export') {
+            execNodes.push({
+              id: node.id,
+              type: 'sheets_export' as const,
             });
           } else {
             execNodes.push({
@@ -1853,14 +1882,37 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
 
         // Merge results (partial run keeps previous results for nodes not in scope)
+        let finalResults: Record<string, any>;
         if (nodeIdSet) {
-          set((state) => ({
-            analysisResults: { ...state.analysisResults, ...response.results },
-            isRunningPipeline: false,
-          }));
+          const merged = { ...get().analysisResults, ...response.results };
+          set({ analysisResults: merged, isRunningPipeline: false });
+          finalResults = merged;
         } else {
           set({ analysisResults: response.results, isRunningPipeline: false });
+          finalResults = response.results;
         }
+        // Update publish nodes with their assigned table IDs
+        const updatedNodes = [...pipeline.nodes];
+        let nodesChanged = false;
+        for (const node of updatedNodes) {
+          if (node.type === 'publish') {
+            const res = finalResults[node.id];
+            if (res?.ok && res.logs) {
+              const match = res.logs.match(/\(id: ([^)]+)\)/);
+              if (match && match[1] !== node.publish_table_id) {
+                const idx = updatedNodes.indexOf(node);
+                updatedNodes[idx] = { ...node, publish_table_id: match[1] };
+                nodesChanged = true;
+              }
+            }
+          }
+        }
+        if (nodesChanged) {
+          get().updatePipeline(pipeline.id, { nodes: updatedNodes });
+        }
+
+        // Persist results to backend cache
+        void savePipelineResults(pipeline.id, finalResults);
       } catch {
         set({ isRunningPipeline: false });
       }

@@ -1,10 +1,16 @@
 from collections import defaultdict
+import json
+from datetime import datetime, timezone
 
 import pandas as pd
 from fastapi import APIRouter
+from pydantic import BaseModel
 
-from app.analysis.cache import pipeline_cache
+from app.analysis.cache import NodeValue, pipeline_cache
 from app.analysis.executor import execute_node
+from app.analysis.sql_executor import execute_sql
+from app.db import connect
+from app.services import data_service
 from app.schemas.analysis import (
     ExecutePipelineRequest,
     ExecutePipelineResponse,
@@ -65,6 +71,29 @@ def _df_preview(df: pd.DataFrame, max_rows: int = 100) -> dict:
     return {"columns": columns, "rows": rows, "dtypes": dtypes, "stats": stats}
 
 
+def _generic_preview(value: object, kind: str) -> dict:
+    """Build a preview dict for non-DataFrame values."""
+    if kind == "scalar":
+        return {"display": str(value)[:500]}
+    if kind == "text":
+        text = str(value)
+        return {"display": text[:2000], "length": len(text)}
+    if kind == "dict":
+        # Truncate large dicts for preview
+        d = value if isinstance(value, dict) else {}
+        keys = list(d.keys())[:50]
+        return {"keys": keys, "total_keys": len(d), "sample": {k: _truncate(d[k]) for k in keys[:10]}}
+    if kind == "list":
+        lst = value if isinstance(value, list) else []
+        return {"length": len(lst), "sample": [_truncate(v) for v in lst[:10]]}
+    return {"display": str(value)[:500]}
+
+
+def _truncate(val: object, max_len: int = 200) -> object:
+    s = str(val)
+    return s[:max_len] if len(s) > max_len else val
+
+
 @router.post("/execute", response_model=ExecutePipelineResponse)
 def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
     nodes_by_id = {n.id: n for n in req.nodes}
@@ -87,6 +116,11 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
             failed.add(node_id)
             continue
 
+        # Note and group nodes (documentation/organization only, skip execution)
+        if node.type in ("note", "group"):
+            results[node_id] = NodeResultResponse(ok=True)
+            continue
+
         # Data Source node
         if node.type == "data_source":
             if not node.data_table:
@@ -102,13 +136,24 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
             results[node_id] = NodeResultResponse(ok=True, preview=_df_preview(df), shape=list(df.shape))
             continue
 
-        # Output node (pass-through)
+        # Output node (pass-through — supports both DataFrame and generic values)
         if node.type == "output":
             if parents:
-                parent_df = pipeline_cache.get(req.pipeline_id, parents[0])
-                if parent_df is not None:
-                    pipeline_cache.set(req.pipeline_id, node_id, parent_df)
-                    results[node_id] = NodeResultResponse(ok=True, preview=_df_preview(parent_df), shape=list(parent_df.shape))
+                parent_nv = pipeline_cache.get_value(req.pipeline_id, parents[0])
+                if parent_nv is not None:
+                    pipeline_cache.set_value(req.pipeline_id, node_id, parent_nv)
+                    if parent_nv.kind == "dataframe" and parent_nv.value is not None:
+                        results[node_id] = NodeResultResponse(
+                            ok=True, preview=_df_preview(parent_nv.value),
+                            shape=list(parent_nv.value.shape), value_kind="dataframe",
+                        )
+                    else:
+                        results[node_id] = NodeResultResponse(
+                            ok=True,
+                            preview=_generic_preview(parent_nv.value, parent_nv.kind),
+                            value_kind=parent_nv.kind,
+                            generic_value=parent_nv.value,
+                        )
                     continue
             results[node_id] = NodeResultResponse(ok=False, error="No input data")
             failed.add(node_id)
@@ -134,15 +179,230 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
                 continue
 
             exec_result = execute_node(code=code, inputs=inputs, timeout=30)
-            if exec_result.ok and exec_result.output_df is not None:
-                pipeline_cache.set(req.pipeline_id, node_id, exec_result.output_df)
-                results[node_id] = NodeResultResponse(
-                    ok=True, preview=_df_preview(exec_result.output_df),
-                    shape=list(exec_result.output_df.shape), logs=exec_result.logs or None,
-                )
+            if exec_result.ok:
+                if exec_result.value_kind == "dataframe" and exec_result.output_df is not None:
+                    pipeline_cache.set(req.pipeline_id, node_id, exec_result.output_df)
+                    results[node_id] = NodeResultResponse(
+                        ok=True, preview=_df_preview(exec_result.output_df),
+                        shape=list(exec_result.output_df.shape),
+                        value_kind="dataframe",
+                        logs=exec_result.logs or None,
+                    )
+                elif exec_result.generic_output is not None:
+                    nv = NodeValue.from_any(exec_result.generic_output)
+                    pipeline_cache.set_value(req.pipeline_id, node_id, nv)
+                    results[node_id] = NodeResultResponse(
+                        ok=True,
+                        preview=_generic_preview(exec_result.generic_output, exec_result.value_kind),
+                        value_kind=exec_result.value_kind,
+                        generic_value=exec_result.generic_output,
+                        logs=exec_result.logs or None,
+                    )
+                else:
+                    results[node_id] = NodeResultResponse(ok=False, error="No output produced", logs=exec_result.logs or None)
+                    failed.add(node_id)
             else:
                 results[node_id] = NodeResultResponse(ok=False, error=exec_result.error, logs=exec_result.logs or None)
                 failed.add(node_id)
             continue
 
+        # SQL node
+        if node.type == "sql":
+            sql_query = node.sql or ""
+            sql_inputs: dict[str, pd.DataFrame] = {}
+            if len(parents) == 1:
+                parent_df = pipeline_cache.get(req.pipeline_id, parents[0])
+                if parent_df is not None:
+                    # Get parent node name for table alias
+                    parent_node = nodes_by_id.get(parents[0])
+                    table_name = (parent_node.code if parent_node and hasattr(parent_node, 'code') else None) or "df_in"
+                    sql_inputs["df_in"] = parent_df
+            else:
+                for i, pid in enumerate(parents):
+                    parent_df = pipeline_cache.get(req.pipeline_id, pid)
+                    if parent_df is not None:
+                        sql_inputs[f"df_in{i + 1}"] = parent_df
+
+            if not sql_inputs:
+                results[node_id] = NodeResultResponse(ok=False, error="No input data")
+                failed.add(node_id)
+                continue
+
+            sql_result = execute_sql(sql=sql_query, inputs=sql_inputs)
+            if sql_result.ok and sql_result.output_df is not None:
+                pipeline_cache.set(req.pipeline_id, node_id, sql_result.output_df)
+                results[node_id] = NodeResultResponse(
+                    ok=True, preview=_df_preview(sql_result.output_df),
+                    shape=list(sql_result.output_df.shape),
+                )
+            else:
+                results[node_id] = NodeResultResponse(ok=False, error=sql_result.error)
+                failed.add(node_id)
+            continue
+
+        # Publish node (save DataFrame as a data asset)
+        if node.type == "publish":
+            if parents:
+                parent_df = pipeline_cache.get(req.pipeline_id, parents[0])
+                if parent_df is not None:
+                    pipeline_cache.set(req.pipeline_id, node_id, parent_df)
+                    preview = _df_preview(parent_df)
+                    shape = list(parent_df.shape)
+
+                    # Persist to data catalog
+                    table_name = node.publish_table_name or f"Published {node_id}"
+                    table_id = node.publish_table_id
+                    columns_meta = [
+                        {"key": col, "label": col, "type": "number" if pd.api.types.is_numeric_dtype(parent_df[col]) else "string"}
+                        for col in parent_df.columns
+                    ]
+                    rows_data = parent_df.values.tolist()
+                    now = datetime.now(timezone.utc).isoformat()
+
+                    if table_id and node.publish_mode == "append":
+                        # Append: load existing + concat
+                        existing = data_service.get_table(table_id)
+                        if existing:
+                            existing_rows = json.loads(existing["rows_json"]) if existing.get("rows_json") else []
+                            rows_data = existing_rows + rows_data
+                            data_service.update_table(table_id, {"rows_json": json.dumps(rows_data), "updated_at": now})
+                            results[node_id] = NodeResultResponse(
+                                ok=True, preview=preview, shape=shape,
+                                logs=f"Appended {len(parent_df)} rows to '{table_name}' (total: {len(rows_data)})",
+                            )
+                            continue
+
+                    # Overwrite or create new
+                    table_data = {
+                        "name": table_name,
+                        "source": "pipeline",
+                        "description": f"Published from pipeline '{req.pipeline_id}'",
+                        "tags_json": json.dumps(["pipeline", "published"]),
+                        "columns_json": json.dumps(columns_meta),
+                        "rows_json": json.dumps(rows_data),
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+
+                    if table_id:
+                        data_service.update_table(table_id, {
+                            "name": table_name,
+                            "columns_json": json.dumps(columns_meta),
+                            "rows_json": json.dumps(rows_data),
+                            "updated_at": now,
+                        })
+                    else:
+                        table_id = f"dt_{node_id}_{int(datetime.now(timezone.utc).timestamp())}"
+                        table_data["id"] = table_id
+                        data_service.create_table(table_data)
+
+                    results[node_id] = NodeResultResponse(
+                        ok=True, preview=preview, shape=shape,
+                        logs=f"Published as '{table_name}' (id: {table_id})",
+                    )
+                    continue
+            results[node_id] = NodeResultResponse(ok=False, error="No input data")
+            failed.add(node_id)
+            continue
+
+        # Sheets export node (pass-through; actual export is client-side via OAuth)
+        if node.type == "sheets_export":
+            if parents:
+                parent_df = pipeline_cache.get(req.pipeline_id, parents[0])
+                if parent_df is not None:
+                    pipeline_cache.set(req.pipeline_id, node_id, parent_df)
+                    results[node_id] = NodeResultResponse(
+                        ok=True, preview=_df_preview(parent_df), shape=list(parent_df.shape),
+                    )
+                    continue
+            results[node_id] = NodeResultResponse(ok=False, error="No input data")
+            failed.add(node_id)
+            continue
+
     return ExecutePipelineResponse(results=results)
+
+
+# ── Pipeline result caching ──
+
+
+class SaveResultsRequest(BaseModel):
+    results: dict[str, dict]
+
+
+@router.get("/pipelines/{pipeline_id}/results")
+def get_pipeline_results(pipeline_id: str) -> dict:
+    """Load cached results for a pipeline."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT node_id, result_json FROM pipeline_results WHERE pipeline_id = ?",
+            (pipeline_id,),
+        ).fetchall()
+    results = {}
+    for row in rows:
+        results[row["node_id"]] = json.loads(row["result_json"])
+    return {"results": results}
+
+
+@router.put("/pipelines/{pipeline_id}/results")
+def save_pipeline_results(pipeline_id: str, body: SaveResultsRequest) -> dict:
+    """Save/update cached results for a pipeline (merge with existing)."""
+    now = datetime.now(timezone.utc).isoformat()
+    with connect() as conn:
+        for node_id, result in body.results.items():
+            conn.execute(
+                """INSERT OR REPLACE INTO pipeline_results
+                   (pipeline_id, node_id, result_json, updated_at)
+                   VALUES (?, ?, ?, ?)""",
+                (pipeline_id, node_id, json.dumps(result), now),
+            )
+    return {"ok": True}
+
+
+@router.delete("/pipelines/{pipeline_id}/results")
+def clear_pipeline_results(pipeline_id: str) -> dict:
+    """Clear all cached results for a pipeline."""
+    with connect() as conn:
+        conn.execute(
+            "DELETE FROM pipeline_results WHERE pipeline_id = ?",
+            (pipeline_id,),
+        )
+    return {"ok": True}
+
+
+# ── Paginated data preview ──
+
+
+@router.get("/pipelines/{pipeline_id}/nodes/{node_id}/preview")
+def get_node_preview(pipeline_id: str, node_id: str, offset: int = 0, limit: int = 100) -> dict:
+    """Fetch paginated rows from a cached node value."""
+    nv = pipeline_cache.get_value(pipeline_id, node_id)
+    if nv is None:
+        return {"ok": False, "error": "No cached data for this node"}
+
+    # For DataFrames, return paginated rows
+    df = nv.as_dataframe
+    if df is not None:
+        limit = min(limit, 1000)
+        total_rows = len(df)
+        slice_df = df.iloc[offset : offset + limit]
+        columns = [
+            {"key": col, "label": col, "type": "number" if pd.api.types.is_numeric_dtype(df[col]) else "string"}
+            for col in df.columns
+        ]
+        rows = slice_df.values.tolist()
+        return {
+            "ok": True,
+            "value_kind": "dataframe",
+            "columns": columns,
+            "rows": rows,
+            "total_rows": total_rows,
+            "offset": offset,
+            "limit": limit,
+        }
+
+    # For generic values, return the preview
+    return {
+        "ok": True,
+        "value_kind": nv.kind,
+        "preview": _generic_preview(nv.value, nv.kind),
+    }

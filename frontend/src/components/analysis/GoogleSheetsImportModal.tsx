@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Loader, Modal, Select, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, Loader, Modal, Stack, Text, TextInput } from '@mantine/core';
 import { IconBrandGoogle } from '@tabler/icons-react';
 import type { DataTable } from '../../types/dataTable';
 import { useGoogleAuth } from '../../lib/googleAuth';
@@ -24,8 +24,9 @@ export function GoogleSheetsImportModal({ opened, onClose, onImport }: Props) {
   const [url, setUrl] = useState('');
   const [meta, setMeta] = useState<SpreadsheetMeta | null>(null);
   const [sheets, setSheets] = useState<SheetInfo[]>([]);
-  const [selectedSheet, setSelectedSheet] = useState<string | null>(null);
+  const [checkedSheets, setCheckedSheets] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'auth' | 'select' | 'importing'>(!isAuthenticated ? 'auth' : 'select');
 
@@ -33,8 +34,9 @@ export function GoogleSheetsImportModal({ opened, onClose, onImport }: Props) {
     setUrl('');
     setMeta(null);
     setSheets([]);
-    setSelectedSheet(null);
+    setCheckedSheets(new Set());
     setLoading(false);
+    setImportProgress(null);
     setError(null);
     setStep(!isAuthenticated ? 'auth' : 'select');
   };
@@ -67,9 +69,7 @@ export function GoogleSheetsImportModal({ opened, onClose, onImport }: Props) {
       const fetched = await fetchSpreadsheetMeta(spreadsheetId, token);
       setMeta(fetched);
       setSheets(fetched.sheets);
-      if (fetched.sheets.length > 0) {
-        setSelectedSheet(fetched.sheets[0].title);
-      }
+      setCheckedSheets(new Set(fetched.sheets.map((s) => s.title)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch spreadsheet');
     } finally {
@@ -77,31 +77,57 @@ export function GoogleSheetsImportModal({ opened, onClose, onImport }: Props) {
     }
   };
 
+  const toggleSheet = (title: string) => {
+    setCheckedSheets((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) {
+        next.delete(title);
+      } else {
+        next.add(title);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (checkedSheets.size === sheets.length) {
+      setCheckedSheets(new Set());
+    } else {
+      setCheckedSheets(new Set(sheets.map((s) => s.title)));
+    }
+  };
+
   const handleImport = async () => {
     const spreadsheetId = parseSpreadsheetId(url);
-    if (!spreadsheetId || !selectedSheet || !meta) return;
+    if (!spreadsheetId || checkedSheets.size === 0 || !meta) return;
 
-    const sheet = sheets.find((s) => s.title === selectedSheet);
-    if (!sheet) return;
+    const sheetsToImport = sheets.filter((s) => checkedSheets.has(s.title));
 
     setStep('importing');
     setError(null);
+    setImportProgress({ current: 0, total: sheetsToImport.length });
+
     try {
       const token = await getToken();
-      const rawRows = await fetchSheetData(spreadsheetId, selectedSheet, token);
-      const table = sheetDataToDataTable(
-        rawRows,
-        spreadsheetId,
-        url,
-        sheet.title,
-        sheet.sheetId,
-        meta.title,
-      );
-      onImport(table);
+      for (let i = 0; i < sheetsToImport.length; i++) {
+        const sheet = sheetsToImport[i];
+        setImportProgress({ current: i + 1, total: sheetsToImport.length });
+        const rawRows = await fetchSheetData(spreadsheetId, sheet.title, token);
+        const table = sheetDataToDataTable(
+          rawRows,
+          spreadsheetId,
+          url,
+          sheet.title,
+          sheet.sheetId,
+          meta.title,
+        );
+        onImport(table);
+      }
       handleClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
       setStep('select');
+      setImportProgress(null);
     }
   };
 
@@ -133,7 +159,7 @@ export function GoogleSheetsImportModal({ opened, onClose, onImport }: Props) {
                 setUrl(e.currentTarget.value);
                 setMeta(null);
                 setSheets([]);
-                setSelectedSheet(null);
+                setCheckedSheets(new Set());
               }}
             />
 
@@ -148,14 +174,28 @@ export function GoogleSheetsImportModal({ opened, onClose, onImport }: Props) {
                 <Text size="sm" fw={500}>
                   {meta.title}
                 </Text>
-                <Select
-                  label="Worksheet"
-                  data={sheets.map((s) => s.title)}
-                  value={selectedSheet}
-                  onChange={setSelectedSheet}
-                />
-                <Button onClick={handleImport} disabled={!selectedSheet}>
-                  Import worksheet
+                <Stack gap={6} style={{ border: '1px solid var(--mantine-color-gray-3)', borderRadius: 6, padding: '8px 10px', maxHeight: 260, overflowY: 'auto' }}>
+                  <Group gap="xs">
+                    <Checkbox
+                      size="xs"
+                      checked={checkedSheets.size === sheets.length}
+                      indeterminate={checkedSheets.size > 0 && checkedSheets.size < sheets.length}
+                      onChange={toggleAll}
+                      label={<Text size="xs" fw={600} c="dimmed">Select all</Text>}
+                    />
+                  </Group>
+                  {sheets.map((s) => (
+                    <Checkbox
+                      key={s.sheetId}
+                      size="xs"
+                      checked={checkedSheets.has(s.title)}
+                      onChange={() => toggleSheet(s.title)}
+                      label={s.title}
+                    />
+                  ))}
+                </Stack>
+                <Button onClick={handleImport} disabled={checkedSheets.size === 0}>
+                  Import {checkedSheets.size} worksheet{checkedSheets.size !== 1 ? 's' : ''}
                 </Button>
               </>
             )}
@@ -165,7 +205,9 @@ export function GoogleSheetsImportModal({ opened, onClose, onImport }: Props) {
         {step === 'importing' && (
           <Stack align="center" gap="sm" py="lg">
             <Loader size="sm" />
-            <Text size="sm">Importing data...</Text>
+            <Text size="sm">
+              Importing{importProgress ? ` ${importProgress.current} of ${importProgress.total}` : ''}...
+            </Text>
           </Stack>
         )}
       </Stack>

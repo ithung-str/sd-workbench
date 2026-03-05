@@ -1,5 +1,5 @@
 import { Divider, SimpleGrid, Stack, Text, UnstyledButton } from '@mantine/core';
-import { IconCode, IconDatabase, IconTableFilled, IconChartBar, IconChartLine, IconReportAnalytics, IconPuzzle } from '@tabler/icons-react';
+import { IconBrandGoogleDrive, IconCode, IconDatabase, IconDatabaseExport, IconBoxMultiple, IconMarkdown, IconSql, IconTableFilled, IconChartBar, IconChartLine, IconReportAnalytics, IconPuzzle } from '@tabler/icons-react';
 import type { AnalysisComponent, AnalysisNodeType } from '../../../types/model';
 
 type PaletteItem = {
@@ -18,6 +18,9 @@ type Props = {
 const SOURCE_AND_CODE: PaletteItem[] = [
   { type: 'data_source', label: 'Data Source', color: '#0b7285', icon: IconDatabase },
   { type: 'code', label: 'Code', color: '#862e9c', icon: IconCode },
+  { type: 'sql', label: 'SQL', color: '#1971c2', icon: IconSql },
+  { type: 'note', label: 'Note', color: '#e67700', icon: IconMarkdown },
+  { type: 'group', label: 'Group', color: '#4263eb', icon: IconBoxMultiple },
 ];
 
 const OUTPUT_TYPES: PaletteItem[] = [
@@ -25,6 +28,11 @@ const OUTPUT_TYPES: PaletteItem[] = [
   { type: 'output', label: 'Bar Chart', color: '#e67700', icon: IconChartBar, outputMode: 'bar' },
   { type: 'output', label: 'Line Chart', color: '#e67700', icon: IconChartLine, outputMode: 'line' },
   { type: 'output', label: 'Stats', color: '#e67700', icon: IconReportAnalytics, outputMode: 'stats' },
+];
+
+const EXPORT_TYPES: PaletteItem[] = [
+  { type: 'publish', label: 'Data Asset', color: '#1971c2', icon: IconDatabaseExport },
+  { type: 'sheets_export', label: 'Google Sheets', color: '#0f9d58', icon: IconBrandGoogleDrive },
 ];
 
 const tileStyle: React.CSSProperties = {
@@ -71,6 +79,14 @@ export function AnalysisNodesPalette({ components, onAddNode }: Props) {
 
       <SimpleGrid cols={2} spacing={8}>
         {OUTPUT_TYPES.map((item) => (
+          <DraggableTile key={item.label} item={item} onAddNode={onAddNode} />
+        ))}
+      </SimpleGrid>
+
+      <Divider label="Exports" labelPosition="center" />
+
+      <SimpleGrid cols={2} spacing={8}>
+        {EXPORT_TYPES.map((item) => (
           <DraggableTile key={item.label} item={item} onAddNode={onAddNode} />
         ))}
       </SimpleGrid>

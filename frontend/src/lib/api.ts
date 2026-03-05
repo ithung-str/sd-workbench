@@ -223,9 +223,13 @@ export type ExecutePipelineRequest = {
   run_from?: string | null;
   nodes: Array<{
     id: string;
-    type: 'data_source' | 'code' | 'output';
+    type: 'data_source' | 'code' | 'sql' | 'output' | 'sheets_export' | 'publish';
     code?: string;
+    sql?: string;
     data_table?: { columns: Array<{ key: string; label: string; type: string }>; rows: unknown[][] };
+    publish_table_name?: string;
+    publish_table_id?: string;
+    publish_mode?: 'overwrite' | 'append';
   }>;
   edges: Array<{ source: string; target: string }>;
 };
@@ -244,15 +248,25 @@ export type ColumnStats = {
   unique?: number;
 };
 
+export type ValueKind = 'dataframe' | 'scalar' | 'dict' | 'list' | 'text';
+
 export type NodeResultResponse = {
   ok: boolean;
   preview?: {
-    columns: Array<{ key: string; label: string; type: string }>;
-    rows: unknown[][];
+    columns?: Array<{ key: string; label: string; type: string }>;
+    rows?: unknown[][];
     dtypes?: Record<string, string>;
     stats?: Record<string, ColumnStats>;
+    // Generic value previews
+    display?: string;
+    length?: number;
+    keys?: string[];
+    total_keys?: number;
+    sample?: unknown;
   };
   shape?: number[];
+  value_kind?: ValueKind;
+  generic_value?: unknown;
   logs?: string;
   error?: string;
 };
@@ -270,6 +284,52 @@ export async function executePipeline(req: ExecutePipelineRequest): Promise<Exec
   return parseJson(res);
 }
 
+export async function loadPipelineResults(pipelineId: string): Promise<Record<string, NodeResultResponse>> {
+  try {
+    const res = await fetch(`${API_BASE}/api/analysis/pipelines/${pipelineId}/results`);
+    const body = await parseJson<{ results: Record<string, NodeResultResponse> }>(res);
+    return body.results;
+  } catch {
+    return {};
+  }
+}
+
+export async function savePipelineResults(pipelineId: string, results: Record<string, NodeResultResponse>): Promise<void> {
+  await fetch(`${API_BASE}/api/analysis/pipelines/${pipelineId}/results`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ results }),
+  }).catch(() => {});
+}
+
+export type PaginatedPreview = {
+  ok: boolean;
+  value_kind?: ValueKind;
+  columns?: Array<{ key: string; label: string; type: string }>;
+  rows?: unknown[][];
+  total_rows?: number;
+  offset?: number;
+  limit?: number;
+  preview?: Record<string, unknown>;
+  error?: string;
+};
+
+export async function fetchNodePreview(
+  pipelineId: string,
+  nodeId: string,
+  offset = 0,
+  limit = 100,
+): Promise<PaginatedPreview> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/analysis/pipelines/${pipelineId}/nodes/${nodeId}/preview?offset=${offset}&limit=${limit}`,
+    );
+    return parseJson(res);
+  } catch {
+    return { ok: false, error: 'Failed to fetch preview' };
+  }
+}
+
 export async function exportXmile(model: ModelDocument, simConfig?: { start: number; stop: number; dt: number; method: 'euler' }): Promise<{ ok: boolean; xml: string }> {
   const normalized = modelForBackend(model);
   const res = await fetch(`${API_BASE}/api/imports/export/xmile`, {
@@ -278,4 +338,121 @@ export async function exportXmile(model: ModelDocument, simConfig?: { start: num
     body: JSON.stringify({ model: normalized, sim_config: simConfig ?? null }),
   });
   return parseJson(res);
+}
+
+// ── Data Tables API ──
+
+import type { DataTable, DataTableMeta } from '../types/dataTable';
+
+export async function apiListDataTables(params?: {
+  search?: string;
+  source?: string;
+  tag?: string;
+}): Promise<DataTableMeta[]> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
+  if (params?.source) query.set('source', params.source);
+  if (params?.tag) query.set('tag', params.tag);
+  const qs = query.toString();
+  const res = await fetch(`${API_BASE}/api/data/tables${qs ? '?' + qs : ''}`);
+  return parseJson(res);
+}
+
+export async function apiGetDataTable(id: string): Promise<DataTable> {
+  const res = await fetch(`${API_BASE}/api/data/tables/${id}`);
+  return parseJson(res);
+}
+
+export async function apiCreateDataTable(table: {
+  id?: string;
+  name: string;
+  source: string;
+  description?: string;
+  tags?: string[];
+  columns: { key: string; label: string; type: string }[];
+  rows: (string | number | null)[][];
+  googleSheets?: { spreadsheetId: string; spreadsheetUrl: string; sheetName: string; sheetId: number };
+  original_filename?: string;
+}): Promise<DataTableMeta> {
+  const res = await fetch(`${API_BASE}/api/data/tables`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(table),
+  });
+  return parseJson(res);
+}
+
+export async function apiUpsertDataTable(id: string, table: {
+  name: string;
+  source: string;
+  description?: string;
+  tags?: string[];
+  columns: { key: string; label: string; type: string }[];
+  rows: (string | number | null)[][];
+  googleSheets?: { spreadsheetId: string; spreadsheetUrl: string; sheetName: string; sheetId: number };
+  original_filename?: string;
+}): Promise<DataTableMeta> {
+  const res = await fetch(`${API_BASE}/api/data/tables/${id}/upsert`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...table, id }),
+  });
+  return parseJson(res);
+}
+
+export async function apiUpdateDataTable(id: string, updates: {
+  name?: string;
+  description?: string;
+  tags?: string[];
+}): Promise<DataTableMeta> {
+  const res = await fetch(`${API_BASE}/api/data/tables/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return parseJson(res);
+}
+
+export async function apiDeleteDataTable(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/data/tables/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw body?.detail ?? 'Delete failed';
+  }
+}
+
+export function apiDataTableCsvUrl(id: string): string {
+  return `${API_BASE}/api/data/tables/${id}/export/csv`;
+}
+
+// ── AI Node Describe ──
+
+export type NodeDescribeRequest = {
+  node_type: string;
+  code?: string;
+  sql?: string;
+  columns?: string[];
+  current_name?: string;
+  current_description?: string;
+  input_columns?: string[];
+};
+
+export type NodeDescribeResponse = {
+  ok: boolean;
+  name?: string;
+  description?: string;
+  error?: string;
+};
+
+export async function aiDescribeNode(req: NodeDescribeRequest): Promise<NodeDescribeResponse> {
+  try {
+    const res = await fetch(`${API_BASE}/api/ai/describe-node`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    return parseJson(res);
+  } catch {
+    return { ok: false, error: 'Failed to reach AI service' };
+  }
 }

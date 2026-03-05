@@ -33,8 +33,12 @@ logging.basicConfig(
 
 from app.api.routes_ai import router as ai_router
 from app.api.routes_analysis import router as analysis_router
+from app.api.routes_data import router as data_router
 from app.api.routes_imports import router as imports_router
 from app.api.routes_models import router as models_router
+from app.db import init_db
+
+init_db()
 
 app = FastAPI(title="SD Model Builder Backend", version="0.1.0")
 
@@ -50,3 +54,4 @@ app.include_router(models_router)
 app.include_router(ai_router)
 app.include_router(imports_router)
 app.include_router(analysis_router)
+app.include_router(data_router)

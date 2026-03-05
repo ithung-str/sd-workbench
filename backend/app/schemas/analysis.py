@@ -5,14 +5,24 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class AnalysisNodeSchema(BaseModel):
     id: str
-    type: Literal["data_source", "code", "output"]
+    type: Literal["data_source", "code", "sql", "output", "note", "group", "sheets_export", "publish"]
     x: float = 0
     y: float = 0
     w: Optional[float] = None
     h: Optional[float] = None
     data_table_id: Optional[str] = None
     code: Optional[str] = None
-    output_mode: Optional[Literal["table", "bar", "line"]] = None
+    sql: Optional[str] = None
+    content: Optional[str] = None
+    output_mode: Optional[Literal["table", "bar", "line", "scatter", "stats"]] = None
+    chart_config: Optional[dict] = None
+    parent_group: Optional[str] = None
+    collapsed: Optional[bool] = None
+    group_color: Optional[str] = None
+    spreadsheet_url: Optional[str] = None
+    sheet_name: Optional[str] = None
+    publish_table_id: Optional[str] = None
+    publish_mode: Optional[Literal["overwrite", "append"]] = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -52,9 +62,13 @@ class DataTablePayload(BaseModel):
 
 class ExecuteNode(BaseModel):
     id: str
-    type: Literal["data_source", "code", "output"]
+    type: Literal["data_source", "code", "sql", "output", "note", "group", "sheets_export", "publish"]
     code: Optional[str] = None
+    sql: Optional[str] = None
     data_table: Optional[DataTablePayload] = None
+    publish_table_name: Optional[str] = None
+    publish_table_id: Optional[str] = None
+    publish_mode: Optional[Literal["overwrite", "append"]] = None
 
 
 class ExecuteEdge(BaseModel):
@@ -73,6 +87,8 @@ class NodeResultResponse(BaseModel):
     ok: bool
     preview: Optional[dict] = None
     shape: Optional[list[int]] = None
+    value_kind: Optional[Literal["dataframe", "scalar", "dict", "list", "text"]] = None
+    generic_value: Optional[object] = None  # JSON-serializable non-DataFrame output
     logs: Optional[str] = None
     error: Optional[str] = None
 
