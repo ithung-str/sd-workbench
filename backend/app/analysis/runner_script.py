@@ -6,13 +6,49 @@ Executes code, writes JSON result to stdout.
 Output detection priority:
   1. ``df_out`` (DataFrame) — backward compatible
   2. ``result`` — any JSON-serializable value (scalar, dict, list, str)
-  3. Error if neither is set
+  3. ``df`` — modified input DataFrame fallback
+  4. Error if none is set
 """
 import base64
+import importlib
 import io
 import json
 import sys
 import traceback
+
+
+# ---------------------------------------------------------------------------
+# Optional package registry
+# Each entry: (import_path, namespace_alias)
+#   e.g. ("scipy.stats", "stats") → `from scipy import stats` exposed as `stats`
+#   e.g. ("sklearn", None)        → `import sklearn` exposed as `sklearn`
+# ---------------------------------------------------------------------------
+OPTIONAL_PACKAGES: list[tuple[str, str | None]] = [
+    ("scipy.stats", "stats"),
+    ("sklearn", None),
+    ("sklearn.preprocessing", None),
+    ("sklearn.linear_model", None),
+    ("sklearn.cluster", None),
+    ("statsmodels.api", "sm"),
+    ("statsmodels.formula.api", "smf"),
+]
+
+
+def _try_import(import_path: str, alias: str | None) -> tuple[str, object] | None:
+    """Attempt to import a module. Returns (namespace_name, module) or None."""
+    try:
+        parts = import_path.rsplit(".", 1)
+        if len(parts) == 2:
+            parent = importlib.import_module(parts[0])
+            mod = getattr(parent, parts[1], None)
+            if mod is None:
+                mod = importlib.import_module(import_path)
+        else:
+            mod = importlib.import_module(import_path)
+        name = alias if alias else parts[-1]
+        return (name, mod)
+    except (ImportError, AttributeError):
+        return None
 
 
 def _make_serializable(val: object) -> object:
@@ -39,16 +75,21 @@ def main() -> None:
     try:
         import numpy as np
         import pandas as pd
-        try:
-            from scipy import stats  # noqa: F401
-        except ImportError:
-            stats = None  # scipy is optional
 
         manifest = json.loads(sys.stdin.read())
         code = manifest["code"]
         input_data = manifest.get("inputs", {})
 
-        namespace: dict = {"pd": pd, "np": np, "stats": stats}
+        # Build namespace with core packages
+        namespace: dict = {"pd": pd, "np": np}
+
+        # Load optional packages into namespace
+        for import_path, alias in OPTIONAL_PACKAGES:
+            result = _try_import(import_path, alias)
+            if result:
+                namespace[result[0]] = result[1]
+
+        # Deserialize input DataFrames
         for name, b64 in input_data.items():
             buf = io.BytesIO(base64.b64decode(b64))
             namespace[name] = pd.read_parquet(buf)
@@ -95,8 +136,7 @@ def main() -> None:
             }, sys.stdout)
             return
 
-        # 3) Fallback: check if any input DataFrame was modified in-place (e.g. df['y'] = ...)
-        #    or if a variable named 'df' is a DataFrame
+        # 3) Fallback: check if a variable named 'df' is a DataFrame
         df_var = namespace.get("df")
         if df_var is not None and isinstance(df_var, pd.DataFrame):
             buf = io.BytesIO()
@@ -105,7 +145,7 @@ def main() -> None:
             json.dump({"ok": True, "kind": "dataframe", "output": b64_out}, sys.stdout)
             return
 
-        # 4) Neither df_out, result, nor df set
+        # 4) None of the output conventions matched
         json.dump({
             "ok": False,
             "error": "Code must assign result to `df_out` (DataFrame), `result` (any value), or `df` (DataFrame)",
