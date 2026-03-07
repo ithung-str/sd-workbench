@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -13,17 +13,27 @@ import ReactFlow, {
   type NodeChange,
   type EdgeChange,
   type NodeTypes,
+  type OnConnectStart,
+  type OnConnectEnd,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Box, Button, Group, Select, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconPlus } from '@tabler/icons-react';
+import { IconCode, IconDatabase, IconPlus, IconSql, IconTableFilled } from '@tabler/icons-react';
 import { useEditorStore } from '../../state/editorStore';
 import type { AnalysisNodeType, AnalysisNode as AnalysisNodeT, AnalysisEdge as AnalysisEdgeT, PipelineCheckpoint } from '../../types/model';
 import { loadPipelineResults, fetchNodePreview, aiDescribeNode, transformNotebookStream, type TransformNodeDef, type NotebookCell } from '../../lib/api';
-import { parseCSV } from '../../lib/csvParser';
 import { saveDataTable } from '../../lib/dataTableStorage';
+import { buildImportedNotebookGroups } from '../../lib/notebookImportGroups';
 import { parseSpreadsheetId, writeSheetData } from '../../lib/googleSheetsApi';
+import { layoutImportedNotebookNodes } from '../../lib/notebookImportLayout';
+import {
+  attachNotebookImportNodeToPlaceholderStage,
+  buildNotebookImportPlaceholderStages,
+  getNotebookImportPlaceholderGroupId,
+  updateNotebookImportPlaceholderStageState,
+} from '../../lib/notebookImportPlaceholders';
+import { importSpreadsheetTables, isSupportedSpreadsheetFile } from '../../lib/spreadsheetImport';
 import { AnalysisToolbar } from './AnalysisToolbar';
 import { AnalysisIconStrip, type AnalysisFlyout } from './AnalysisIconStrip';
 import { AnalysisFlyoutPanel } from './AnalysisFlyoutPanel';
@@ -170,6 +180,7 @@ function pipelineNodesToFlow(
   pipelineId: string,
   selectedNodeId: string | null,
   zoomLevel: ZoomLevel,
+  multiSelectedIds: string[],
 ): Node[] {
   // Determine which nodes are hidden (inside collapsed groups)
   const collapsedGroupIds = new Set(nodes.filter((n) => n.type === 'group' && n.collapsed).map((n) => n.id));
@@ -202,29 +213,38 @@ function pipelineNodesToFlow(
     // Resolve effective result (real > mock > propagated)
     const effective = resolveEffectiveResult(n.id, nodes, edges, results);
 
+    const isPort = (n as any)._isPort === true;
+    const portLabel = (n as any)._portLabel as string | undefined;
+
     return {
       id: n.id,
       type: n.type,
       position: { x: n.x, y: n.y },
-      style: { width: n.w ?? 280, height: n.h ?? 200 },
+      style: {
+        width: n.w ?? 280,
+        height: n.h ?? 200,
+        ...(isPort ? { opacity: 0.55, pointerEvents: 'none' as const } : {}),
+      },
+      className: isPort ? 'analysis-port-node' : undefined,
       data: {
         ...n,
         result: effective?.result,
-        selected: n.id === selectedNodeId,
+        selected: n.id === selectedNodeId || multiSelectedIds.includes(n.id),
         zoomLevel,
         inputVars,
         childCount,
-        onUpdate: (patch: Record<string, unknown>) => onUpdate(n.id, patch),
-        onDelete: () => onDelete(n.id),
-        onRunScope: (scope: RunScope) => onRunScope(n.id, scope),
+        portLabel,
+        onUpdate: isPort ? () => {} : (patch: Record<string, unknown>) => onUpdate(n.id, patch),
+        onDelete: isPort ? undefined : () => onDelete(n.id),
+        onRunScope: isPort ? undefined : (scope: RunScope) => onRunScope(n.id, scope),
         onSaveComponent: n.type === 'code' ? onSaveComponent : undefined,
         onToggleCollapse: n.type === 'group' ? () => onToggleGroupCollapse(n.id) : undefined,
-        onSnapshotMock: () => onSnapshotMock(n.id),
+        onSnapshotMock: isPort ? undefined : () => onSnapshotMock(n.id),
         onClearMock: n.mockValue ? () => onClearMock(n.id) : undefined,
-        onGenerateMock: n.type === 'data_source' ? () => onGenerateMock(n.id) : undefined,
-        onExportToSheets: n.type === 'sheets_export' ? () => onExportToSheets(n.id) : undefined,
-        onDuplicate: () => onDuplicate(n.id),
-        onAutoDescribe: () => onAutoDescribe(n.id),
+        onGenerateMock: n.type === 'data_source' && !isPort ? () => onGenerateMock(n.id) : undefined,
+        onExportToSheets: n.type === 'sheets_export' && !isPort ? () => onExportToSheets(n.id) : undefined,
+        onDuplicate: isPort ? undefined : () => onDuplicate(n.id),
+        onAutoDescribe: isPort ? undefined : () => onAutoDescribe(n.id),
         isAiDescribing: n.id === aiDescribingNodeId,
         pipelineId,
         isMockPreview: effective?.isMock ?? false,
@@ -233,16 +253,52 @@ function pipelineNodesToFlow(
   });
 }
 
-function pipelineEdgesToFlow(edges: AnalysisEdgeT[], visibleNodeIds: Set<string>): Edge[] {
+function pipelineEdgesToFlow(edges: AnalysisEdgeT[], visibleNodeIds: Set<string>, nodes: AnalysisNodeT[]): Edge[] {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const stageById = new Map(
+    nodes
+      .filter((node) => node.type === 'group' && node.importedStage)
+      .map((node) => [node.id, node]),
+  );
+
+  const importedStageRole = (nodeId: string): 'main' | 'branch' | null => {
+    const node = nodeById.get(nodeId);
+    if (!node) return null;
+    if (node.importedStage) return node.stageRole ?? 'main';
+    if (node.parentGroup) return stageById.get(node.parentGroup)?.stageRole ?? null;
+    return null;
+  };
+
   return edges
     .filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
-    .map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      type: 'smoothstep',
-      style: { stroke: '#868e96', strokeWidth: 1.5 },
-    }));
+    .map((e) => {
+      const isGroupEdge = e.id.includes('_ge_');
+      const imported = e.id.startsWith('nb_edge_') || isGroupEdge;
+      const sourceRole = imported ? importedStageRole(e.source) : null;
+      const targetRole = imported ? importedStageRole(e.target) : null;
+      const onMainPath = sourceRole === 'main' && targetRole === 'main';
+      return {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle ?? 'bottom',
+        targetHandle: e.targetHandle ?? 'top',
+        type: 'smoothstep',
+        style: isGroupEdge
+          ? {
+            stroke: onMainPath ? '#495057' : '#adb5bd',
+            strokeWidth: onMainPath ? 2.5 : 1.5,
+            opacity: onMainPath ? 0.85 : 0.5,
+          }
+          : imported
+            ? {
+              stroke: onMainPath ? '#495057' : '#adb5bd',
+              strokeWidth: onMainPath ? 1.5 : 1.05,
+              opacity: onMainPath ? 0.9 : 0.55,
+            }
+            : { stroke: '#868e96', strokeWidth: 1.5 },
+      };
+    });
 }
 
 /** Inner component that has access to useReactFlow. */
@@ -250,6 +306,7 @@ function AnalysisCanvas() {
   const pipelines = useEditorStore((s) => s.pipelines);
   const activePipelineId = useEditorStore((s) => s.activePipelineId);
   const updatePipeline = useEditorStore((s) => s.updatePipeline);
+  const deletePipeline = useEditorStore((s) => s.deletePipeline);
   const runPipeline = useEditorStore((s) => s.runPipeline);
   const isRunningPipeline = useEditorStore((s) => s.isRunningPipeline);
   const analysisResults = useEditorStore((s) => s.analysisResults);
@@ -277,9 +334,11 @@ function AnalysisCanvas() {
     }
   }, [activePipelineId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { screenToFlowPosition, fitBounds } = useReactFlow();
+  const { screenToFlowPosition, fitBounds, fitView: rfFitView } = useReactFlow();
   const { zoom } = useViewport();
-  const zoomLevel: ZoomLevel = zoom < 0.45 ? 'mini' : zoom < 0.85 ? 'summary' : 'full';
+  const autoZoomLevel: ZoomLevel = zoom < 0.45 ? 'mini' : zoom < 0.85 ? 'summary' : 'full';
+  const [zoomOverride, setZoomOverride] = useState<ZoomLevel | 'auto'>('auto');
+  const zoomLevel: ZoomLevel = zoomOverride === 'auto' ? autoZoomLevel : zoomOverride;
 
   const handleToggleFlyout = useCallback((panel: NonNullable<AnalysisFlyout>) => {
     setActiveFlyout((prev) => (prev === panel ? null : panel));
@@ -296,8 +355,8 @@ function AnalysisCanvas() {
         x: position.x,
         y: position.y,
         ...(type === 'data_source' ? { w: 280, h: 200, ...(opts?.tableId ? { data_table_id: opts.tableId, name: opts.tableName ?? '' } : {}) } : {}),
-        ...(type === 'code' ? { code: opts?.code ?? '# df_in: input DataFrame from upstream node\n# df_out: output DataFrame to pass downstream\n\ndf_out = df_in\n', w: 420, h: 400 } : {}),
-        ...(type === 'sql' ? { sql: '-- Input tables: df_in (single parent) or df_in1, df_in2, ...\n\nSELECT * FROM df_in\n', w: 420, h: 350 } : {}),
+        ...(type === 'code' ? { code: opts?.code ?? '# df_in: input DataFrame from upstream node\n# df_out: output DataFrame to pass downstream\n\ndf_out = df_in\n', w: 600, h: 400 } : {}),
+        ...(type === 'sql' ? { sql: '-- Input tables: df_in (single parent) or df_in1, df_in2, ...\n\nSELECT * FROM df_in\n', w: 600, h: 350 } : {}),
         ...(type === 'output' ? { w: 380, h: 320, ...(opts?.outputMode ? { output_mode: opts.outputMode } : {}) } : {}),
         ...(type === 'note' ? { content: '', w: 300, h: 200 } : {}),
         ...(type === 'group' ? { w: 500, h: 400, groupColor: 'blue' } : {}),
@@ -319,17 +378,21 @@ function AnalysisCanvas() {
     [activePipeline, handleAddNodeAtPosition],
   );
 
-  /** Import a CSV file, save it, and create a Data Source node. */
-  const handleCsvDrop = useCallback(
+  /** Import a spreadsheet file, save its tables, and create a Data Source node. */
+  const handleSpreadsheetDrop = useCallback(
     async (file: File) => {
       if (!activePipeline) return;
       try {
-        const table = await parseCSV(file);
-        await saveDataTable(table);
+        const tables = await importSpreadsheetTables(file);
+        for (const table of tables) {
+          await saveDataTable(table);
+        }
+        const firstTable = tables[0];
+        if (!firstTable) return;
         const pos = { x: 100 + activePipeline.nodes.length * 50, y: 100 + activePipeline.nodes.length * 50 };
-        handleAddNodeAtPosition('data_source', pos, { tableId: table.id, tableName: table.name });
+        handleAddNodeAtPosition('data_source', pos, { tableId: firstTable.id, tableName: firstTable.name });
       } catch (err) {
-        window.alert(`CSV import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        window.alert(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     },
     [activePipeline, handleAddNodeAtPosition],
@@ -553,6 +616,9 @@ function AnalysisCanvas() {
         description: tn.description,
         x: 100 + col * COL_GAP,
         y: 100 + row * ROW_GAP,
+        original_cells: tn.original_cells,
+        import_group_id: tn.group_id ?? undefined,
+        import_group_name: tn.group_name ?? undefined,
       };
       if (tn.type === 'data_source') {
         base.w = 280; base.h = 200;
@@ -599,6 +665,14 @@ function AnalysisCanvas() {
         isApplyingAi: true,
         aiStatusMessage: 'Transforming notebook...',
         aiStreamingRaw: '',
+        notebookImportProgress: {
+          phase: 'reading',
+          message: 'Reading notebook...',
+          stages: [],
+          warnings: [],
+          mainPathStageIds: [],
+          isReviewPass: false,
+        },
         aiChatHistory: [
           ...useEditorStore.getState().aiChatHistory,
           { role: 'user' as const, content: userMsg },
@@ -608,6 +682,28 @@ function AnalysisCanvas() {
       const idPrefix = `nb_${Date.now()}`;
       // Track nodes added so far (by index) for progressive canvas building
       const addedNodes: AnalysisNodeT[] = [];
+      let placeholderGroups: AnalysisNodeT[] = [];
+      const placeholderGroupIdsByStageId = new Map<string, string>();
+
+      const syncPlaceholderStageNodeCounts = () => {
+        placeholderGroups = placeholderGroups.map((group) => ({
+          ...group,
+          stageNodeCount: addedNodes.filter(Boolean).filter((node) => node.parentGroup === group.id).length,
+        }));
+      };
+
+      const syncProgressiveImportNodes = () => {
+        const currentPipeline = useEditorStore.getState().pipelines.find((p) => p.id === activePipeline.id);
+        if (!currentPipeline) return;
+        const existingNonImportNodes = currentPipeline.nodes.filter((n) => !n.id.startsWith(idPrefix));
+        updatePipeline(activePipeline.id, {
+          nodes: [
+            ...existingNonImportNodes,
+            ...placeholderGroups,
+            ...addedNodes.filter(Boolean),
+          ],
+        });
+      };
 
       try {
         const result = await transformNotebookStream(
@@ -619,26 +715,139 @@ function AnalysisCanvas() {
           },
           // onNode: add node to canvas progressively
           (index, nodeDef) => {
-            const analysisNode = transformNodeToAnalysis(nodeDef, index, idPrefix);
+            const analysisNode = attachNotebookImportNodeToPlaceholderStage(
+              transformNodeToAnalysis(nodeDef, index, idPrefix),
+              idPrefix,
+              placeholderGroupIdsByStageId,
+            );
             addedNodes[index] = analysisNode;
-            // Update pipeline with all nodes added so far
-            const currentPipeline = useEditorStore.getState().pipelines.find((p) => p.id === activePipeline.id);
-            if (currentPipeline) {
-              const existingNonNb = currentPipeline.nodes.filter((n) => !n.id.startsWith(idPrefix));
-              updatePipeline(activePipeline.id, {
-                nodes: [...existingNonNb, ...addedNodes.filter(Boolean)],
-              });
-            }
+            syncPlaceholderStageNodeCounts();
+            syncProgressiveImportNodes();
             useEditorStore.setState({ aiStatusMessage: `Building node ${index + 1}: ${nodeDef.name || nodeDef.type}...` });
           },
           // onStatus
           (message) => {
-            useEditorStore.setState({ aiStatusMessage: message });
+            useEditorStore.setState((state) => ({
+              aiStatusMessage: message,
+              notebookImportProgress: state.notebookImportProgress
+                ? {
+                  ...state.notebookImportProgress,
+                  message,
+                  phase: message.toLowerCase().includes('reading')
+                    ? 'reading'
+                    : message.toLowerCase().includes('finding')
+                      ? 'stage_plan'
+                      : message.toLowerCase().includes('connecting')
+                        ? 'workflow'
+                        : message.toLowerCase().includes('reviewing')
+                          ? 'review'
+                          : message.toLowerCase().includes('preparing')
+                            ? 'layout'
+                            : 'build',
+                }
+                : state.notebookImportProgress,
+            }));
+          },
+          {
+            onAnalysis: (analysis) => {
+              useEditorStore.setState((state) => ({
+                notebookImportProgress: {
+                  phase: 'analysis',
+                  message: `Detected ${analysis.total_cells ?? cells.length} cells and a ${analysis.complexity_tier} workflow`,
+                  complexityTier: analysis.complexity_tier,
+                  stageCount: analysis.stage_count,
+                  currentStageId: state.notebookImportProgress?.currentStageId ?? null,
+                  stages: state.notebookImportProgress?.stages ?? [],
+                  warnings: state.notebookImportProgress?.warnings ?? [],
+                  mainPathStageIds: state.notebookImportProgress?.mainPathStageIds ?? [],
+                  isReviewPass: false,
+                },
+              }));
+            },
+            onStagePlan: (plan) => {
+              placeholderGroups = buildNotebookImportPlaceholderStages(idPrefix, plan.stages, { originX: 100, originY: 100 });
+              placeholderGroupIdsByStageId.clear();
+              for (const stage of plan.stages) {
+                placeholderGroupIdsByStageId.set(stage.id, getNotebookImportPlaceholderGroupId(idPrefix, stage.id));
+              }
+              syncProgressiveImportNodes();
+              useEditorStore.setState((state) => ({
+                notebookImportProgress: {
+                  phase: 'stage_plan',
+                  message: `Proposed ${plan.stages.length} stages for this notebook`,
+                  complexityTier: state.notebookImportProgress?.complexityTier,
+                  stageCount: plan.stages.length,
+                  currentStageId: null,
+                  stages: plan.stages.map((stage) => ({
+                    id: stage.id,
+                    name: stage.name,
+                    purpose: stage.purpose,
+                    state: 'queued' as const,
+                  })),
+                  warnings: state.notebookImportProgress?.warnings ?? [],
+                  mainPathStageIds: state.notebookImportProgress?.mainPathStageIds ?? [],
+                  isReviewPass: false,
+                },
+              }));
+            },
+            onStageProgress: (progress) => {
+              placeholderGroups = updateNotebookImportPlaceholderStageState(
+                placeholderGroups,
+                progress.stage_id,
+                progress.state,
+                progress.stage_name,
+              );
+              syncPlaceholderStageNodeCounts();
+              syncProgressiveImportNodes();
+              useEditorStore.setState((state) => ({
+                notebookImportProgress: state.notebookImportProgress
+                  ? {
+                    ...state.notebookImportProgress,
+                    currentStageId: progress.state === 'building' ? progress.stage_id : state.notebookImportProgress.currentStageId,
+                    stages: state.notebookImportProgress.stages.map((stage) => (
+                      stage.id === progress.stage_id
+                        ? { ...stage, name: progress.stage_name || stage.name, state: progress.state }
+                        : stage
+                    )),
+                    isReviewPass: progress.state === 'needs_review',
+                  }
+                  : state.notebookImportProgress,
+              }));
+            },
+            onWorkflow: (workflow) => {
+              const mainPathStageIds = new Set(workflow.main_path_stage_ids);
+              placeholderGroups = placeholderGroups.map((group) => ({
+                ...group,
+                stageRole: mainPathStageIds.has(group.import_group_id ?? '') ? 'main' : 'branch',
+              }));
+              syncProgressiveImportNodes();
+              useEditorStore.setState((state) => ({
+                notebookImportProgress: state.notebookImportProgress
+                  ? {
+                    ...state.notebookImportProgress,
+                    phase: 'workflow',
+                    message: 'Connecting stages into a workflow',
+                    mainPathStageIds: workflow.main_path_stage_ids,
+                  }
+                  : state.notebookImportProgress,
+              }));
+            },
+            onWarning: (warning) => {
+              useEditorStore.setState((state) => ({
+                notebookImportProgress: state.notebookImportProgress
+                  ? {
+                    ...state.notebookImportProgress,
+                    warnings: [...state.notebookImportProgress.warnings, warning.message],
+                  }
+                  : state.notebookImportProgress,
+              }));
+            },
           },
         );
 
-        // Final: wire up edges from the complete result
-        const allNodes = addedNodes.filter(Boolean);
+        // Final: rebuild nodes from the complete payload so final graph order
+        // matches the stitched backend result even if stage batches completed out of order.
+        const allNodes = result.nodes.map((nodeDef, index) => transformNodeToAnalysis(nodeDef, index, idPrefix));
         const newEdges: AnalysisEdgeT[] = (result.edges ?? [])
           .filter((te) => te.from_index >= 0 && te.from_index < allNodes.length && te.to_index >= 0 && te.to_index < allNodes.length)
           .map((te, i) => ({
@@ -649,9 +858,20 @@ function AnalysisCanvas() {
 
         const currentPipeline = useEditorStore.getState().pipelines.find((p) => p.id === activePipeline.id);
         if (currentPipeline) {
+          const laidOutPositions = layoutImportedNotebookNodes(allNodes, newEdges, { originX: 100, originY: 100 });
+          const laidOutNodes = allNodes.map((node) => {
+            const pos = laidOutPositions[node.id];
+            return pos ? { ...node, x: pos.x, y: pos.y } : node;
+          });
+          const groupedImport = buildImportedNotebookGroups(cells, laidOutNodes, newEdges, idPrefix, { originX: 100, originY: 100 });
           updatePipeline(activePipeline.id, {
             name: pipelineName || currentPipeline.name,
-            edges: [...currentPipeline.edges, ...newEdges],
+            nodes: [
+              ...currentPipeline.nodes.filter((n) => !n.id.startsWith(idPrefix)),
+              ...groupedImport.groups,
+              ...groupedImport.nodes,
+            ],
+            edges: [...currentPipeline.edges, ...newEdges, ...groupedImport.groupEdges],
           });
         }
 
@@ -666,6 +886,7 @@ function AnalysisCanvas() {
           isApplyingAi: false,
           aiStatusMessage: '',
           aiStreamingRaw: '',
+          notebookImportProgress: null,
           aiChatHistory: [
             ...s.aiChatHistory,
             { role: 'assistant' as const, content: assistantMsg, debugRawResponse: streamedRaw || undefined },
@@ -684,6 +905,7 @@ function AnalysisCanvas() {
           isApplyingAi: false,
           aiStatusMessage: '',
           aiStreamingRaw: '',
+          notebookImportProgress: null,
           aiChatHistory: [
             ...s.aiChatHistory,
             { role: 'assistant' as const, content: `Error: ${errMsg}`, debugRawResponse: streamedRaw || undefined },
@@ -731,6 +953,9 @@ function AnalysisCanvas() {
     [activePipeline, updatePipeline],
   );
 
+  const focusedStageId = useEditorStore((s) => s.focusedAnalysisStageId);
+  const setFocusedStageId = useEditorStore((s) => s.setFocusedAnalysisStageId);
+
   /** Group the currently selected nodes into a new group node. */
   const handleGroupSelectedNodes = useCallback(
     (selectedIds: string[]) => {
@@ -769,32 +994,142 @@ function AnalysisCanvas() {
     [activePipeline, updatePipeline],
   );
 
-  // Derive flow nodes/edges from pipeline state
+  // When a stage is focused, filter pipeline to only that stage's nodes + port nodes for external connections
+  const focusedPipeline = useMemo(() => {
+    if (!activePipeline || !focusedStageId) return activePipeline;
+    const stageNodeIds = new Set(
+      activePipeline.nodes.filter((n) => n.parentGroup === focusedStageId).map((n) => n.id),
+    );
+    // Find external nodes that connect to/from this stage (for port display)
+    const portNodes: AnalysisNodeT[] = [];
+    const portEdges: AnalysisEdgeT[] = [];
+    for (const edge of activePipeline.edges) {
+      if (stageNodeIds.has(edge.source) && !stageNodeIds.has(edge.target)) {
+        // Outgoing: target is external
+        const target = activePipeline.nodes.find((n) => n.id === edge.target);
+        if (target && !portNodes.some((p) => p.id === target.id)) {
+          const parentStage = activePipeline.nodes.find((n) => n.id === target.parentGroup);
+          portNodes.push({ ...target, x: target.x, y: target.y, _isPort: true, _portLabel: parentStage?.name ? `To: ${parentStage.name}` : 'External' } as any);
+        }
+        portEdges.push(edge);
+      } else if (!stageNodeIds.has(edge.source) && stageNodeIds.has(edge.target)) {
+        // Incoming: source is external
+        const source = activePipeline.nodes.find((n) => n.id === edge.source);
+        if (source && !portNodes.some((p) => p.id === source.id)) {
+          const parentStage = activePipeline.nodes.find((n) => n.id === source.parentGroup);
+          portNodes.push({ ...source, x: source.x, y: source.y, _isPort: true, _portLabel: parentStage?.name ? `From: ${parentStage.name}` : 'External' } as any);
+        }
+        portEdges.push(edge);
+      }
+    }
+    const stageNodes = activePipeline.nodes.filter((n) => stageNodeIds.has(n.id));
+    const stageInternalEdges = activePipeline.edges.filter((e) => stageNodeIds.has(e.source) && stageNodeIds.has(e.target));
+    return {
+      ...activePipeline,
+      nodes: [...stageNodes, ...portNodes],
+      edges: [...stageInternalEdges, ...portEdges],
+    };
+  }, [activePipeline, focusedStageId]);
+
+  const [multiSelectedIds, setMultiSelectedIds] = useState<string[]>([]);
+
+  // Derive flow nodes/edges from pipeline state (uses focused pipeline when a stage is selected)
   const derivedFlowNodes = useMemo(
-    () => activePipeline ? pipelineNodesToFlow(activePipeline.nodes, activePipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, aiDescribingNodeId, activePipeline.id, selectedNodeId, zoomLevel) : [],
-    [activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, aiDescribingNodeId, selectedNodeId, zoomLevel],
+    () => {
+      const pipeline = focusedStageId ? focusedPipeline : activePipeline;
+      return pipeline ? pipelineNodesToFlow(pipeline.nodes, pipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, aiDescribingNodeId, pipeline.id, selectedNodeId, zoomLevel, multiSelectedIds) : [];
+    },
+    [focusedStageId, focusedPipeline, activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, aiDescribingNodeId, selectedNodeId, zoomLevel, multiSelectedIds],
   );
 
   const derivedFlowEdges = useMemo(
     () => {
-      if (!activePipeline) return [];
+      const pipeline = focusedStageId ? focusedPipeline : activePipeline;
+      if (!pipeline) return [];
       const visibleIds = new Set(derivedFlowNodes.map((n) => n.id));
-      return pipelineEdgesToFlow(activePipeline.edges, visibleIds);
+      return pipelineEdgesToFlow(pipeline.edges, visibleIds, pipeline.nodes);
     },
-    [activePipeline, derivedFlowNodes],
+    [focusedStageId, focusedPipeline, activePipeline, derivedFlowNodes],
   );
 
   // Local state for ReactFlow
   const [flowNodes, setFlowNodes] = useState<Node[]>(derivedFlowNodes);
   const [flowEdges, setFlowEdges] = useState<Edge[]>(derivedFlowEdges);
+  const resizingRef = useRef(false);
 
-  useEffect(() => { setFlowNodes(derivedFlowNodes); }, [derivedFlowNodes]);
+  useEffect(() => { if (!resizingRef.current) setFlowNodes(derivedFlowNodes); }, [derivedFlowNodes]);
   useEffect(() => { setFlowEdges(derivedFlowEdges); }, [derivedFlowEdges]);
+  // Re-fit view when focus changes
+  useEffect(() => {
+    const timer = setTimeout(() => rfFitView({ padding: 0.15, duration: 250 }), 50);
+    return () => clearTimeout(timer);
+  }, [focusedStageId, rfFitView]);
+
+  const pendingResizeRef = useRef<{ nodeId: string } | null>(null);
 
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => { setFlowNodes((nds) => applyNodeChanges(changes, nds)); },
+    (changes: NodeChange[]) => {
+      // Track resize state: only react to resize-end when we saw a resize-start
+      for (const change of changes) {
+        if (change.type === 'dimensions' && change.resizing === true) {
+          resizingRef.current = true;
+        }
+        if (change.type === 'dimensions' && change.resizing === false && resizingRef.current) {
+          pendingResizeRef.current = { nodeId: change.id };
+          resizingRef.current = false;
+        }
+      }
+
+      // Filter out redundant dimension changes when user isn't resizing —
+      // ReactFlow's ResizeObserver can fire repeatedly (e.g. on hover CSS
+      // transitions), causing re-render loops that make the cursor flicker.
+      setFlowNodes((nds) => {
+        const filtered = resizingRef.current
+          ? changes
+          : changes.filter((c) => {
+              if (c.type !== 'dimensions' || !c.dimensions) return true;
+              const existing = nds.find((n) => n.id === c.id);
+              if (!existing) return true;
+              // Only apply if dimensions actually changed
+              return (
+                existing.width !== c.dimensions.width ||
+                existing.height !== c.dimensions.height
+              );
+            });
+        return filtered.length > 0 ? applyNodeChanges(filtered, nds) : nds;
+      });
+    },
     [],
   );
+
+  // Persist resize in an effect so we don't trigger side effects inside state updaters
+  useEffect(() => {
+    const pending = pendingResizeRef.current;
+    if (!pending || !activePipeline) return;
+    pendingResizeRef.current = null;
+
+    const flowNode = flowNodes.find((n) => n.id === pending.nodeId);
+    if (!flowNode) return;
+
+    const w = Math.round(flowNode.width ?? (flowNode.style as any)?.width ?? 280);
+    const h = Math.round(flowNode.height ?? (flowNode.style as any)?.height ?? 200);
+
+    // Apply to all selected nodes if multi-selected
+    const selectedSet = new Set(multiSelectedIds);
+    selectedSet.add(pending.nodeId);
+
+    const pipelineNodes = activePipeline.nodes.map((n) =>
+      selectedSet.has(n.id)
+        ? {
+            ...n,
+            w,
+            h,
+            ...(n.id === pending.nodeId ? { x: flowNode.position.x, y: flowNode.position.y } : {}),
+          }
+        : n,
+    );
+    updatePipeline(activePipeline.id, { nodes: pipelineNodes });
+  }); // intentionally no deps — runs after every render to catch pending resizes
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => { setFlowEdges((eds) => applyEdgeChanges(changes, eds)); },
@@ -816,10 +1151,72 @@ function AnalysisCanvas() {
     (connection: Connection) => {
       if (!activePipeline || !connection.source || !connection.target) return;
       const id = `edge_${Date.now()}`;
-      const newEdge: AnalysisEdgeT = { id, source: connection.source, target: connection.target };
+      const newEdge: AnalysisEdgeT = {
+        id,
+        source: connection.source,
+        target: connection.target,
+        sourceHandle: connection.sourceHandle ?? undefined,
+        targetHandle: connection.targetHandle ?? undefined,
+      };
       updatePipeline(activePipeline.id, { edges: [...activePipeline.edges, newEdge] });
     },
     [activePipeline, updatePipeline],
+  );
+
+  // --- Drag-to-canvas: show node type menu when connection drops on empty canvas ---
+  const connectStartNodeId = useRef<string | null>(null);
+  const connectDropMenuJustOpened = useRef(false);
+  const [connectDropMenu, setConnectDropMenu] = useState<{ x: number; y: number; sourceNodeId: string } | null>(null);
+
+  const onConnectStart: OnConnectStart = useCallback((_event, params) => {
+    connectStartNodeId.current = params.nodeId ?? null;
+  }, []);
+
+  const onConnectEnd: OnConnectEnd = useCallback(
+    (event) => {
+      const sourceId = connectStartNodeId.current;
+      connectStartNodeId.current = null;
+      if (!sourceId) return;
+      const target = (event as MouseEvent).target as HTMLElement;
+      if (target?.closest('.react-flow__handle')) return;
+      if (target?.closest('.react-flow__node')) return;
+      // Dropped on canvas — show menu
+      connectDropMenuJustOpened.current = true;
+      setConnectDropMenu({
+        x: (event as MouseEvent).clientX,
+        y: (event as MouseEvent).clientY,
+        sourceNodeId: sourceId,
+      });
+    },
+    [],
+  );
+
+  const handleConnectDropSelect = useCallback(
+    (type: AnalysisNodeType) => {
+      if (!connectDropMenu || !activePipeline) { setConnectDropMenu(null); return; }
+      const position = screenToFlowPosition({ x: connectDropMenu.x, y: connectDropMenu.y });
+      const id = `node_${Date.now()}`;
+      const newNode: AnalysisNodeT = {
+        id,
+        type,
+        x: position.x,
+        y: position.y,
+        ...(type === 'data_source' ? { w: 280, h: 200 } : {}),
+        ...(type === 'code' ? { code: '# df_in: input DataFrame from upstream node\n# df_out: output DataFrame to pass downstream\n\ndf_out = df_in\n', w: 600, h: 400 } : {}),
+        ...(type === 'sql' ? { sql: '-- Input tables: df_in (single parent) or df_in1, df_in2, ...\n\nSELECT * FROM df_in\n', w: 600, h: 350 } : {}),
+        ...(type === 'output' ? { w: 380, h: 320 } : {}),
+        ...(type === 'note' ? { content: '', w: 300, h: 200 } : {}),
+        ...(type === 'sheets_export' ? { w: 320, h: 280, sheet_name: 'Sheet1' } : {}),
+        ...(type === 'publish' ? { w: 300, h: 240, publish_mode: 'overwrite' as const } : {}),
+      };
+      const newEdge: AnalysisEdgeT = { id: `edge_${Date.now()}`, source: connectDropMenu.sourceNodeId, target: id };
+      updatePipeline(activePipeline.id, {
+        nodes: [...activePipeline.nodes, newNode],
+        edges: [...activePipeline.edges, newEdge],
+      });
+      setConnectDropMenu(null);
+    },
+    [connectDropMenu, activePipeline, updatePipeline, screenToFlowPosition],
   );
 
   const onEdgesDelete = useCallback(
@@ -874,13 +1271,13 @@ function AnalysisCanvas() {
         return;
       }
 
-      // Case 2: CSV file drop
+      // Case 2: spreadsheet file drop
       const file = e.dataTransfer.files[0];
-      if (file && file.name.endsWith('.csv')) {
-        void handleCsvDrop(file);
+      if (file && isSupportedSpreadsheetFile(file)) {
+        void handleSpreadsheetDrop(file);
       }
     },
-    [screenToFlowPosition, handleAddNodeAtPosition, handleCsvDrop],
+    [screenToFlowPosition, handleAddNodeAtPosition, handleSpreadsheetDrop],
   );
 
   const onNodeDoubleClick = useCallback(
@@ -895,8 +1292,6 @@ function AnalysisCanvas() {
     },
     [fitBounds],
   );
-
-  const [multiSelectedIds, setMultiSelectedIds] = useState<string[]>([]);
 
   // Keyboard shortcut: Cmd+Enter runs smart scope on selected node, Ctrl+G groups
   const onCanvasKeyDown = useCallback(
@@ -947,6 +1342,7 @@ function AnalysisCanvas() {
         onRun={() => void runPipeline()}
         onCreateCheckpoint={handleCreateCheckpoint}
         onRestoreCheckpoint={handleRestoreCheckpoint}
+        onDelete={() => deletePipeline(activePipeline.id)}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <AnalysisIconStrip activeFlyout={activeFlyout} onToggle={handleToggleFlyout} />
@@ -986,6 +1382,8 @@ function AnalysisCanvas() {
             onEdgesChange={onEdgesChange}
             onNodeDragStop={onNodeDragStop}
             onConnect={onConnect}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd}
             onEdgesDelete={onEdgesDelete}
             onNodesDelete={onNodesDelete}
             onNodeDoubleClick={onNodeDoubleClick}
@@ -996,18 +1394,121 @@ function AnalysisCanvas() {
             onPaneClick={() => {
               setSelectedNodeId(null);
               setMultiSelectedIds([]);
+              if (connectDropMenuJustOpened.current) {
+                connectDropMenuJustOpened.current = false;
+              } else {
+                setConnectDropMenu(null);
+              }
             }}
             onSelectionChange={({ nodes: sel }) => {
-              setMultiSelectedIds(sel.map((n) => n.id));
-              // Don't touch selectedNodeId here — onNodeClick and onPaneClick handle it.
-              // onSelectionChange fires with [] during re-selection which causes flicker.
+              // Only update if the selection actually changed — onSelectionChange
+              // fires repeatedly (e.g. with []) during re-renders, and creating a
+              // new array reference each time causes derivedFlowNodes to recalculate,
+              // re-rendering all nodes and causing hover/control flicker.
+              const ids = sel.map((n) => n.id);
+              setMultiSelectedIds((prev) => {
+                if (prev.length === ids.length && prev.every((id, i) => id === ids[i])) return prev;
+                return ids;
+              });
             }}
             fitView
+            minZoom={0.05}
             deleteKeyCode={['Delete', 'Backspace']}
           >
             <Background />
             <Controls />
+            <div style={{
+              position: 'absolute',
+              bottom: 10,
+              left: 60,
+              zIndex: 5,
+              display: 'flex',
+              gap: 2,
+              background: 'rgba(255,255,255,0.95)',
+              borderRadius: 6,
+              padding: '3px 4px',
+              fontSize: 11,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+            }}>
+              {(['auto', 'full', 'summary', 'mini'] as const).map((mode) => {
+                const isActive = zoomOverride === mode;
+                const label = mode === 'auto'
+                  ? `Auto (${autoZoomLevel.charAt(0).toUpperCase() + autoZoomLevel.slice(1)})`
+                  : mode.charAt(0).toUpperCase() + mode.slice(1);
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => setZoomOverride(mode)}
+                    style={{
+                      border: 'none',
+                      background: isActive ? '#e9ecef' : 'transparent',
+                      color: isActive ? '#343a40' : '#868e96',
+                      fontWeight: isActive ? 600 : 400,
+                      fontSize: 11,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              <span style={{ color: '#adb5bd', padding: '2px 4px', fontSize: 10 }}>{Math.round(zoom * 100)}%</span>
+            </div>
           </ReactFlow>
+          {/* Floating menu when connection is dropped on canvas */}
+          {connectDropMenu && (
+            <>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 999 }}
+              onClick={() => setConnectDropMenu(null)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setConnectDropMenu(null); }}
+            />
+            <div
+              style={{
+                position: 'fixed',
+                left: connectDropMenu.x,
+                top: connectDropMenu.y,
+                zIndex: 1000,
+                background: '#fff',
+                borderRadius: 8,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+                padding: '4px 0',
+                minWidth: 160,
+              }}
+            >
+              {[
+                { type: 'code' as const, label: 'Code', icon: IconCode, color: '#7048e8' },
+                { type: 'sql' as const, label: 'SQL', icon: IconSql, color: '#1c7ed6' },
+                { type: 'output' as const, label: 'Output', icon: IconTableFilled, color: '#e8590c' },
+                { type: 'data_source' as const, label: 'Data Source', icon: IconDatabase, color: '#0ca678' },
+              ].map(({ type, label, icon: Icon, color }) => (
+                <button
+                  key={type}
+                  onClick={() => handleConnectDropSelect(type)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    color: '#1a1b1e',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f3f5'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <Icon size={16} color={color} />
+                  {label}
+                </button>
+              ))}
+            </div>
+            </>
+          )}
         </div>
       </div>
     </div>

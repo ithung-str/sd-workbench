@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Handle, Position, type NodeProps, NodeResizer } from 'reactflow';
+import { type NodeProps, NodeResizer } from 'reactflow';
 import { ActionIcon, Box, Select, Text, Tooltip } from '@mantine/core';
 import { IconSparkles, IconSql, IconTrash } from '@tabler/icons-react';
 import Editor from '@monaco-editor/react';
@@ -7,7 +7,7 @@ import type { NodeResultResponse } from '../../../lib/api';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { RunMenu } from './RunMenu';
-import { useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
 import { CompactResultBar, DataPreviewModal } from './DataPreviewModal';
 import './analysisNodes.css';
 
@@ -31,6 +31,7 @@ type SqlData = {
   selected?: boolean;
   inputVars?: InputVar[];
   zoomLevel?: ZoomLevel;
+  portLabel?: string;
 };
 
 function statusClass(result?: NodeResultResponse): string {
@@ -43,6 +44,7 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
   const [dataModalOpen, setDataModalOpen] = useState(false);
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
+  const hover = useNodeHover();
 
   const handleSqlChange = useCallback(
     (value: string | undefined) => {
@@ -65,9 +67,10 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
-        <Handle type="target" position={Position.Left} />
-        <Handle type="source" position={Position.Right} />
+      <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <PortBadge label={data.portLabel} />
+        <NodeResizer minWidth={120} minHeight={60} isVisible={data.selected} />
+        <NodeHandles />
         <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onDelete={data.onDelete} />
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -85,9 +88,10 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
   if (zoomLevel === 'summary') {
     const sqlPreview = (data.sql ?? '').split('\n').filter(l => l.trim() && !l.trim().startsWith('--')).slice(0, 5).join('\n');
     return (
-      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
-        <Handle type="target" position={Position.Left} />
-        <Handle type="source" position={Position.Right} />
+      <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <PortBadge label={data.portLabel} />
+        <NodeResizer minWidth={200} minHeight={120} isVisible={data.selected} />
+        <NodeHandles />
         <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onAutoDescribe={data.onAutoDescribe} isAiDescribing={data.isAiDescribing} onDuplicate={data.onDuplicate} onDelete={data.onDelete} />
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Box style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #f0f0f0' }}>
@@ -114,7 +118,8 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
 
   // ── Full view ──
   return (
-    <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+      <PortBadge label={data.portLabel} />
       <NodeResizer minWidth={320} minHeight={250} isVisible={data.selected} />
       <Box
         className={`node-card ${statusClass(result)}`}
@@ -189,8 +194,7 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
           </Box>
         )}
 
-        <Handle type="target" position={Position.Left} />
-        <Handle type="source" position={Position.Right} />
+        <NodeHandles />
 
         {/* Stats view */}
         {showStats && preview?.stats && (

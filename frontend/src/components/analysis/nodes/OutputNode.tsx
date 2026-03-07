@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
+import { type NodeProps, NodeResizer } from 'reactflow';
 import { ActionIcon, Badge, Box, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
 import { IconCamera, IconMaximize, IconSparkles, IconTableFilled, IconTrash, IconX } from '@tabler/icons-react';
 import {
@@ -12,7 +12,7 @@ import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { RunMenu } from './RunMenu';
 import { ChartConfigPanel } from './ChartConfigPanel';
-import { useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
 import { CompactResultBar, DataPreviewModal } from './DataPreviewModal';
 import './analysisNodes.css';
 
@@ -37,6 +37,7 @@ type OutputData = {
   result?: NodeResultResponse;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
+  portLabel?: string;
 };
 
 type ColumnInfo = { key: string; label: string; type: string };
@@ -128,6 +129,7 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   const mode = data.output_mode ?? 'table';
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
+  const hover = useNodeHover();
   const chartConfig = data.chart_config ?? {};
   const [dataModalOpen, setDataModalOpen] = useState(false);
 
@@ -155,9 +157,11 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
-        <Handle type="target" position={Position.Left} />
-        <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onDelete={data.onDelete} />
+      <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <PortBadge label={data.portLabel} />
+        <NodeResizer minWidth={120} minHeight={60} isVisible={data.selected} />
+        <NodeHandles hasOutput={false} />
+            <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onDelete={data.onDelete} />
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <IconTableFilled size={28} color="#e67700" />
@@ -174,9 +178,11 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   if (zoomLevel === 'summary') {
     const modeLabel = mode === 'table' ? 'Table' : mode === 'bar' ? 'Bar chart' : mode === 'line' ? 'Line chart' : mode === 'scatter' ? 'Scatter' : 'Stats';
     return (
-      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
-        <Handle type="target" position={Position.Left} />
-        <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onAutoDescribe={data.onAutoDescribe} isAiDescribing={data.isAiDescribing} onDuplicate={data.onDuplicate} onDelete={data.onDelete} />
+      <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <PortBadge label={data.portLabel} />
+        <NodeResizer minWidth={200} minHeight={120} isVisible={data.selected} />
+        <NodeHandles hasOutput={false} />
+            <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onAutoDescribe={data.onAutoDescribe} isAiDescribing={data.isAiDescribing} onDuplicate={data.onDuplicate} onDelete={data.onDelete} />
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Box style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #f0f0f0' }}>
             <IconTableFilled size={22} color="#e67700" />
@@ -201,7 +207,9 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
 
   // ── Full view ──
   return (
-    <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <PortBadge label={data.portLabel} />
+    <NodeHandles hasOutput={false} />
     <NodeResizer minWidth={280} minHeight={180} isVisible={data.selected} />
     <Box
       className={`node-card ${statusClass(result)}`}
@@ -217,7 +225,6 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
         overflow: 'hidden',
       }}
     >
-      <Handle type="target" position={Position.Left} />
 
       <Box style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid #f0f0f0', overflow: 'hidden' }}>
         <IconTableFilled size={14} color="#e67700" style={{ flexShrink: 0 }} />

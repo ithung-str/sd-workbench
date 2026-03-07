@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
+import { NodeResizer, type NodeProps } from 'reactflow';
 import { ActionIcon, Badge, Box, Button, Text, TextInput, Tooltip } from '@mantine/core';
 import { IconBrandGoogleDrive, IconCheck, IconTrash, IconUpload } from '@tabler/icons-react';
 import type { NodeResultResponse } from '../../../lib/api';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { RunMenu } from './RunMenu';
-import { useZoomTransition, StatusDot, ShapeBadge, ZoomControls } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, StatusDot, ShapeBadge, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
 import './analysisNodes.css';
 
 type SheetsExportData = {
@@ -20,6 +20,7 @@ type SheetsExportData = {
   result?: NodeResultResponse;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
+  portLabel?: string;
 };
 
 function statusClass(result?: NodeResultResponse): string {
@@ -31,6 +32,7 @@ export function SheetsExportNode({ data }: NodeProps<SheetsExportData>) {
   const result = data.result;
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
+  const hover = useNodeHover();
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
 
@@ -50,8 +52,10 @@ export function SheetsExportNode({ data }: NodeProps<SheetsExportData>) {
 
   if (zoomLevel === 'mini') {
     return (
-      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
-        <Handle type="target" position={Position.Left} />
+      <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <PortBadge label={data.portLabel} />
+        <NodeResizer minWidth={120} minHeight={60} isVisible={data.selected} />
+        <NodeHandles />
         <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onDelete={data.onDelete} />
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -67,8 +71,10 @@ export function SheetsExportNode({ data }: NodeProps<SheetsExportData>) {
 
   if (zoomLevel === 'summary') {
     return (
-      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
-        <Handle type="target" position={Position.Left} />
+      <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <PortBadge label={data.portLabel} />
+        <NodeResizer minWidth={180} minHeight={100} isVisible={data.selected} />
+        <NodeHandles />
         <ZoomControls zoomLevel={zoomLevel} onRunScope={data.onRunScope} onDuplicate={data.onDuplicate} onDelete={data.onDelete} />
         <Box className={`node-card ${statusClass(result)}`} style={{ background: '#fff', borderRadius: 8, border: '1px solid #dee2e6', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Box style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #f0f0f0' }}>
@@ -91,8 +97,10 @@ export function SheetsExportNode({ data }: NodeProps<SheetsExportData>) {
   }
 
   return (
-    <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+      <PortBadge label={data.portLabel} />
       <NodeResizer minWidth={280} minHeight={180} isVisible={data.selected} />
+      <NodeHandles />
       <Box
         className={`node-card ${statusClass(result)}`}
         style={{
@@ -107,7 +115,6 @@ export function SheetsExportNode({ data }: NodeProps<SheetsExportData>) {
           overflow: 'hidden',
         }}
       >
-        <Handle type="target" position={Position.Left} />
 
         <Box style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid #f0f0f0', overflow: 'hidden' }}>
           <IconBrandGoogleDrive size={14} color="#0f9d58" style={{ flexShrink: 0 }} />

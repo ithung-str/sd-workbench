@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Handle, Position, NodeResizer, type NodeProps } from 'reactflow';
+import { NodeResizer, type NodeProps } from 'reactflow';
 import { ActionIcon, Box, Text, Tooltip } from '@mantine/core';
 import { IconMarkdown, IconTrash } from '@tabler/icons-react';
 import type { ZoomLevel } from '../AnalysisPage';
-import { useZoomTransition, ZoomControls } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, ZoomControls, NodeHandles } from './nodeZoomHelpers';
 import './analysisNodes.css';
 
 type NoteData = {
@@ -58,6 +58,7 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
+  const hover = useNodeHover();
   const content = data.content ?? '';
 
   useEffect(() => {
@@ -70,7 +71,9 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
   // ── Mini view ──
   if (zoomLevel === 'mini') {
     return (
-      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+      <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <NodeResizer minWidth={100} minHeight={50} isVisible={data.selected} />
+        <NodeHandles />
         <ZoomControls zoomLevel={zoomLevel} onDelete={data.onDelete} />
         <Box className="node-card node-card--none" style={{ background: '#fffde7', borderRadius: 8, border: '1px solid #e0d97e', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -85,7 +88,9 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
   // ── Summary view ──
   if (zoomLevel === 'summary') {
     return (
-      <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+      <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+        <NodeResizer minWidth={150} minHeight={80} isVisible={data.selected} />
+        <NodeHandles />
         <ZoomControls zoomLevel={zoomLevel} onDuplicate={data.onDuplicate} onDelete={data.onDelete} />
         <Box className="node-card node-card--none" style={{ background: '#fffde7', borderRadius: 8, border: '1px solid #e0d97e', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Box style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #f0e68c' }}>
@@ -102,7 +107,7 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
 
   // ── Full view ──
   return (
-    <div className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
       <NodeResizer minWidth={200} minHeight={120} isVisible={data.selected} />
       <Box
         className="node-card node-card--none"
@@ -178,8 +183,7 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
         </Box>
 
         {/* Optional handles for connecting to context */}
-        <Handle type="target" position={Position.Left} style={{ opacity: 0.3 }} />
-        <Handle type="source" position={Position.Right} style={{ opacity: 0.3 }} />
+        <NodeHandles />
       </Box>
     </div>
   );

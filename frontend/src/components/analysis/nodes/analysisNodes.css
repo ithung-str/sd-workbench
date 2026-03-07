@@ -19,7 +19,8 @@
   pointer-events: none;
 }
 
-.analysis-node:hover .node-controls {
+.react-flow__node.node-hovered .node-controls,
+.react-flow__node:hover .node-controls {
   opacity: 1;
   pointer-events: auto;
 }
@@ -49,3 +50,29 @@
 .analysis-node .status-dot--ok { background: #2f9e44; }
 .analysis-node .status-dot--error { background: #e03131; }
 .analysis-node .status-dot--none { background: #dee2e6; }
+
+/* Prevent cursor flickering: override ReactFlow's grab cursor on node wrapper */
+.react-flow__node:has(.analysis-node) {
+  cursor: default;
+}
+.react-flow__node:has(.analysis-node).dragging {
+  cursor: grabbing;
+}
+
+/* Handle styling for 4-directional connections */
+.analysis-node .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  background: #868e96;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #dee2e6;
+  transition: background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  cursor: crosshair;
+}
+
+.analysis-node .react-flow__handle:hover {
+  background: #4263eb;
+  box-shadow: 0 0 0 3px rgba(66, 99, 235, 0.3);
+  transform: scale(1.2);
+  cursor: crosshair;
+}
