@@ -17,7 +17,7 @@ def _db_path() -> Path:
 
 
 def init_db() -> None:
-    """Create tables if they don't exist."""
+    """Create tables if they don't exist and run migrations."""
     with connect() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS data_tables (
@@ -42,6 +42,36 @@ def init_db() -> None:
                 PRIMARY KEY (pipeline_id, node_id)
             );
         """)
+        _migrate_assets(conn)
+
+
+def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    info = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(row["name"] == column for row in info)
+
+
+def _migrate_assets(conn: sqlite3.Connection) -> None:
+    """Add asset columns to data_tables (additive, idempotent)."""
+    migrations = [
+        ("kind", "TEXT NOT NULL DEFAULT 'table'"),
+        ("slug", "TEXT"),
+        ("content_text", "TEXT"),
+        ("value_json", "TEXT"),
+        ("pipeline_id", "TEXT"),
+        ("node_id", "TEXT"),
+        ("run_at", "TEXT"),
+        ("version", "INTEGER NOT NULL DEFAULT 1"),
+        ("version_of", "TEXT"),
+    ]
+    for col_name, col_def in migrations:
+        if not _has_column(conn, "data_tables", col_name):
+            conn.execute(f"ALTER TABLE data_tables ADD COLUMN {col_name} {col_def}")
+
+    # Create unique index on slug (if not exists)
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_data_tables_slug
+        ON data_tables(slug) WHERE slug IS NOT NULL
+    """)
 
 
 @contextmanager

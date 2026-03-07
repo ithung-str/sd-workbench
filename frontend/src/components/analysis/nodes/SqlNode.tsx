@@ -1,13 +1,13 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type NodeProps, NodeResizer } from 'reactflow';
 import { ActionIcon, Box, Select, Text, Tooltip } from '@mantine/core';
 import { IconSparkles, IconSql, IconTrash } from '@tabler/icons-react';
-import Editor from '@monaco-editor/react';
+import Editor, { type Monaco } from '@monaco-editor/react';
 import type { NodeResultResponse } from '../../../lib/api';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { RunMenu } from './RunMenu';
-import { useNodeHover, useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, useNodeFocus, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
 import { CompactResultBar, DataPreviewModal } from './DataPreviewModal';
 import './analysisNodes.css';
 
@@ -26,6 +26,9 @@ type SqlData = {
   onRunScope?: (scope: RunScope) => void;
   onDuplicate?: () => void;
   onAutoDescribe?: () => void;
+  onDeselect?: () => void;
+  onAddNode?: (type: import('../../../types/model').AnalysisNodeType) => void;
+  onEditorFocusChange?: (editing: boolean) => void;
   isAiDescribing?: boolean;
   result?: NodeResultResponse;
   selected?: boolean;
@@ -45,6 +48,25 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
   const hover = useNodeHover();
+  const focus = useNodeFocus({
+    selected: data.selected,
+    onDelete: data.onDelete,
+    onDeselect: data.onDeselect,
+    onAddNode: data.onAddNode,
+  });
+  const mergedRef = useCallback((el: HTMLDivElement | null) => {
+    (hover.ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    focus.wrapperRef.current = el;
+  }, [hover.ref, focus.wrapperRef]);
+
+  const onRunScopeRef = useRef(data.onRunScope);
+  onRunScopeRef.current = data.onRunScope;
+  const exitEditorRef = useRef(focus.exitEditorFocus);
+  exitEditorRef.current = focus.exitEditorFocus;
+
+  useEffect(() => {
+    data.onEditorFocusChange?.(focus.focusMode === 'editor');
+  }, [focus.focusMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSqlChange = useCallback(
     (value: string | undefined) => {
@@ -53,10 +75,28 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
     [data],
   );
 
+  const handleEditorMount = useCallback(
+    (_editor: unknown, _monaco: Monaco) => {
+      const editor = _editor as import('monaco-editor').editor.IStandaloneCodeEditor;
+      const domNode = editor.getDomNode();
+      if (domNode) {
+        domNode.addEventListener('keydown', (e: KeyboardEvent) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            onRunScopeRef.current?.('smart');
+            exitEditorRef.current();
+          }
+        });
+      }
+    },
+    [],
+  );
+
   const result = data.result;
   const preview = result?.ok ? result.preview : null;
   const showSql = viewMode === 'all' || viewMode === 'sql';
-  const showResult = viewMode === 'all' || viewMode === 'result';
+  const showResult = viewMode === 'all' || viewMode === 'result' || viewMode === 'sql';
   const showStats = viewMode === 'stats';
 
   // Build helper text showing available table names
@@ -117,8 +157,9 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
   }
 
   // ── Full view ──
+  const focusClass = focus.focusMode === 'node' ? 'focus-node' : focus.focusMode === 'editor' ? 'focus-editor' : '';
   return (
-    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={mergedRef} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass} ${focusClass}`} style={{ width: '100%', height: '100%', outline: 'none' }} {...focus.nodeWrapperProps}>
       <PortBadge label={data.portLabel} />
       <NodeResizer minWidth={320} minHeight={250} isVisible={data.selected} />
       <Box
@@ -208,13 +249,19 @@ export function SqlNode({ data }: NodeProps<SqlData>) {
 
         {/* SQL editor */}
         {showSql && (
-          <Box style={{ flex: 1, minHeight: 100 }}>
+          <Box
+            className={focus.editorWrapperClass}
+            style={{ flex: 1, minHeight: 100 }}
+            onClick={focus.enterEditorFocus}
+            onKeyDown={focus.editorKeyDown}
+          >
             <Editor
               height="100%"
               language="sql"
               theme="vs-light"
               value={data.sql ?? '-- Input tables: df_in (single parent) or df_in1, df_in2, ...\n\nSELECT * FROM df_in\n'}
               onChange={handleSqlChange}
+              onMount={handleEditorMount}
               options={{
                 minimap: { enabled: false },
                 fontSize: 12,

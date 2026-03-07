@@ -89,6 +89,7 @@ class NodeResultResponse(BaseModel):
     shape: Optional[list[int]] = None
     value_kind: Optional[Literal["dataframe", "scalar", "dict", "list", "text"]] = None
     generic_value: Optional[object] = None  # JSON-serializable non-DataFrame output
+    display: Optional[str] = None  # notebook-style last expression text
     logs: Optional[str] = None
     error: Optional[str] = None
 

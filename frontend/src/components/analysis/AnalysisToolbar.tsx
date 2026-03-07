@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { ActionIcon, Button, Group, Menu, Text, TextInput, Tooltip } from '@mantine/core';
-import { IconBookmark, IconHistory, IconPlayerPlay } from '@tabler/icons-react';
+import { IconBookmark, IconHistory, IconPlayerPlay, IconTrash } from '@tabler/icons-react';
 import type { AnalysisPipeline, PipelineCheckpoint } from '../../types/model';
 
 type Props = {
@@ -10,9 +9,10 @@ type Props = {
   onRun: () => void;
   onCreateCheckpoint?: () => void;
   onRestoreCheckpoint?: (checkpoint: PipelineCheckpoint) => void;
+  onDelete?: () => void;
 };
 
-export function AnalysisToolbar({ pipeline, isRunning, onUpdatePipeline, onRun, onCreateCheckpoint, onRestoreCheckpoint }: Props) {
+export function AnalysisToolbar({ pipeline, isRunning, onUpdatePipeline, onRun, onCreateCheckpoint, onRestoreCheckpoint, onDelete }: Props) {
   const checkpoints = pipeline.checkpoints ?? [];
 
   return (
@@ -70,6 +70,23 @@ export function AnalysisToolbar({ pipeline, isRunning, onUpdatePipeline, onRun, 
         styles={{ input: { fontWeight: 600 } }}
         style={{ flex: 1 }}
       />
+
+      {onDelete && (
+        <Menu position="bottom-end" withArrow>
+          <Menu.Target>
+            <Tooltip label="Delete pipeline">
+              <ActionIcon size="sm" variant="subtle" color="red">
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={onDelete}>
+              Delete "{pipeline.name}"
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      )}
     </Group>
   );
 }

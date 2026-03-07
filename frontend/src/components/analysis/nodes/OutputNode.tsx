@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { type NodeProps, NodeResizer } from 'reactflow';
 import { ActionIcon, Badge, Box, ScrollArea, SegmentedControl, Table, Text, Textarea, TextInput, Tooltip as MantineTooltip } from '@mantine/core';
 import { IconCamera, IconMaximize, IconSparkles, IconTableFilled, IconTrash, IconX } from '@tabler/icons-react';
@@ -12,7 +12,7 @@ import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { RunMenu } from './RunMenu';
 import { ChartConfigPanel } from './ChartConfigPanel';
-import { useNodeHover, useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, useNodeFocus, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
 import { CompactResultBar, DataPreviewModal } from './DataPreviewModal';
 import './analysisNodes.css';
 
@@ -32,6 +32,9 @@ type OutputData = {
   onClearMock?: () => void;
   onDuplicate?: () => void;
   onAutoDescribe?: () => void;
+  onDeselect?: () => void;
+  onAddNode?: (type: import('../../../types/model').AnalysisNodeType) => void;
+  onEditorFocusChange?: (editing: boolean) => void;
   isAiDescribing?: boolean;
   isMockPreview?: boolean;
   result?: NodeResultResponse;
@@ -130,6 +133,16 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
   const hover = useNodeHover();
+  const focus = useNodeFocus({
+    selected: data.selected,
+    onDelete: data.onDelete,
+    onDeselect: data.onDeselect,
+    onAddNode: data.onAddNode,
+  });
+  const mergedRef = useCallback((el: HTMLDivElement | null) => {
+    (hover.ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    focus.wrapperRef.current = el;
+  }, [hover.ref, focus.wrapperRef]);
   const chartConfig = data.chart_config ?? {};
   const [dataModalOpen, setDataModalOpen] = useState(false);
 
@@ -206,8 +219,9 @@ export function OutputNode({ data }: NodeProps<OutputData>) {
   }
 
   // ── Full view ──
+  const focusClass = focus.focusMode === 'node' ? 'focus-node' : '';
   return (
-    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={mergedRef} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass} ${focusClass}`} style={{ width: '100%', height: '100%', outline: 'none' }} {...focus.nodeWrapperProps}>
     <PortBadge label={data.portLabel} />
     <NodeHandles hasOutput={false} />
     <NodeResizer minWidth={280} minHeight={180} isVisible={data.selected} />

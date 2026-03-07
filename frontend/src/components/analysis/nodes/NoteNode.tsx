@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { NodeResizer, type NodeProps } from 'reactflow';
 import { ActionIcon, Box, Text, Tooltip } from '@mantine/core';
 import { IconMarkdown, IconTrash } from '@tabler/icons-react';
 import type { ZoomLevel } from '../AnalysisPage';
-import { useNodeHover, useZoomTransition, ZoomControls, NodeHandles } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, useNodeFocus, ZoomControls, NodeHandles } from './nodeZoomHelpers';
 import './analysisNodes.css';
 
 type NoteData = {
@@ -12,6 +12,9 @@ type NoteData = {
   onUpdate: (patch: Record<string, unknown>) => void;
   onDelete?: () => void;
   onDuplicate?: () => void;
+  onDeselect?: () => void;
+  onAddNode?: (type: import('../../../types/model').AnalysisNodeType) => void;
+  onEditorFocusChange?: (editing: boolean) => void;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
 };
@@ -59,7 +62,21 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
   const hover = useNodeHover();
+  const focus = useNodeFocus({
+    selected: data.selected,
+    onDelete: data.onDelete,
+    onDeselect: data.onDeselect,
+    onAddNode: data.onAddNode,
+  });
+  const mergedRef = useCallback((el: HTMLDivElement | null) => {
+    (hover.ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    focus.wrapperRef.current = el;
+  }, [hover.ref, focus.wrapperRef]);
   const content = data.content ?? '';
+
+  useEffect(() => {
+    data.onEditorFocusChange?.(editing);
+  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (editing && textareaRef.current) {
@@ -106,8 +123,9 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
   }
 
   // ── Full view ──
+  const focusClass = focus.focusMode === 'node' ? 'focus-node' : editing ? 'focus-editor' : '';
   return (
-    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={mergedRef} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass} ${focusClass}`} style={{ width: '100%', height: '100%', outline: 'none' }} {...focus.nodeWrapperProps}>
       <NodeResizer minWidth={200} minHeight={120} isVisible={data.selected} />
       <Box
         className="node-card node-card--none"
@@ -148,8 +166,9 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
 
         {/* Content: edit or render */}
         <Box
+          className={editing ? 'nodrag nopan nowheel' : ''}
           style={{ flex: 1, overflow: 'auto', cursor: editing ? undefined : 'text' }}
-          onDoubleClick={() => !editing && setEditing(true)}
+          onDoubleClick={() => { if (!editing) { setEditing(true); focus.enterEditorFocus(); } }}
         >
           {editing ? (
             <textarea
@@ -158,7 +177,7 @@ export function NoteNode({ data }: NodeProps<NoteData>) {
               onChange={(e) => data.onUpdate({ content: e.target.value })}
               onBlur={() => setEditing(false)}
               onKeyDown={(e) => {
-                if (e.key === 'Escape') setEditing(false);
+                if (e.key === 'Escape') { setEditing(false); return; }
                 // Allow normal typing without node deletion
                 e.stopPropagation();
               }}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { type NodeProps, NodeResizer } from 'reactflow';
 import { ActionIcon, Badge, Box, Button, ScrollArea, SegmentedControl, Select, Table, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
 import { IconDatabase, IconMaximize, IconSparkles, IconTrash } from '@tabler/icons-react';
@@ -9,7 +9,7 @@ import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { DataPreviewModal } from './DataPreviewModal';
 import { RunMenu } from './RunMenu';
-import { useNodeHover, useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, useNodeFocus, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
 import './analysisNodes.css';
 
 type ViewMode = 'info' | 'table' | 'stats';
@@ -26,6 +26,9 @@ type DataSourceData = {
   onGenerateMock?: () => void;
   onDuplicate?: () => void;
   onAutoDescribe?: () => void;
+  onDeselect?: () => void;
+  onAddNode?: (type: import('../../../types/model').AnalysisNodeType) => void;
+  onEditorFocusChange?: (editing: boolean) => void;
   isAiDescribing?: boolean;
   result?: NodeResultResponse;
   isMockPreview?: boolean;
@@ -46,6 +49,16 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
   const hover = useNodeHover();
+  const focus = useNodeFocus({
+    selected: data.selected,
+    onDelete: data.onDelete,
+    onDeselect: data.onDeselect,
+    onAddNode: data.onAddNode,
+  });
+  const mergedRef = useCallback((el: HTMLDivElement | null) => {
+    (hover.ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    focus.wrapperRef.current = el;
+  }, [hover.ref, focus.wrapperRef]);
 
   useEffect(() => {
     listDataTables().then(setTables).catch(() => setTables([]));
@@ -118,8 +131,9 @@ export function DataSourceNode({ data }: NodeProps<DataSourceData>) {
   }
 
   // ── Full view ──
+  const focusClass = focus.focusMode === 'node' ? 'focus-node' : '';
   return (
-    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={mergedRef} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass} ${focusClass}`} style={{ width: '100%', height: '100%', outline: 'none' }} {...focus.nodeWrapperProps}>
     <PortBadge label={data.portLabel} />
     <NodeResizer minWidth={200} minHeight={100} isVisible={data.selected} />
     <Box

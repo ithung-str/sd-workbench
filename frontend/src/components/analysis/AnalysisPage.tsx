@@ -96,10 +96,12 @@ function computeRunNodeIds(
   if (scope === 'this') return [nodeId];
 
   if (scope === 'smart') {
-    // Run this node + upstream nodes that don't have successful results
+    // Run this node + all upstream nodes.
+    // Backend cache is ephemeral (in-memory, lost between requests), so we must
+    // always re-run the full upstream chain to populate it.
     const upstream = new Set<string>();
     collectUp(nodeId, upstream);
-    return [...upstream].filter((id) => id === nodeId || !results?.[id]?.ok);
+    return [...upstream];
   }
 
   if (scope === 'upstream') {
@@ -176,6 +178,9 @@ function pipelineNodesToFlow(
   onExportToSheets: (nodeId: string) => void,
   onDuplicate: (nodeId: string) => void,
   onAutoDescribe: (nodeId: string) => void,
+  onDeselect: () => void,
+  onAddConnectedNode: (sourceNodeId: string, type: AnalysisNodeType) => void,
+  onEditorFocusChange: (nodeId: string, editing: boolean) => void,
   aiDescribingNodeId: string | null,
   pipelineId: string,
   selectedNodeId: string | null,
@@ -216,10 +221,12 @@ function pipelineNodesToFlow(
     const isPort = (n as any)._isPort === true;
     const portLabel = (n as any)._portLabel as string | undefined;
 
+    const isSelected = n.id === selectedNodeId || multiSelectedIds.includes(n.id);
     return {
       id: n.id,
       type: n.type,
       position: { x: n.x, y: n.y },
+      selected: isSelected,
       style: {
         width: n.w ?? 280,
         height: n.h ?? 200,
@@ -229,7 +236,7 @@ function pipelineNodesToFlow(
       data: {
         ...n,
         result: effective?.result,
-        selected: n.id === selectedNodeId || multiSelectedIds.includes(n.id),
+        selected: isSelected,
         zoomLevel,
         inputVars,
         childCount,
@@ -245,6 +252,9 @@ function pipelineNodesToFlow(
         onExportToSheets: n.type === 'sheets_export' && !isPort ? () => onExportToSheets(n.id) : undefined,
         onDuplicate: isPort ? undefined : () => onDuplicate(n.id),
         onAutoDescribe: isPort ? undefined : () => onAutoDescribe(n.id),
+        onDeselect,
+        onAddNode: isPort ? undefined : (type: AnalysisNodeType) => onAddConnectedNode(n.id, type),
+        onEditorFocusChange: (editing: boolean) => onEditorFocusChange(n.id, editing),
         isAiDescribing: n.id === aiDescribingNodeId,
         pipelineId,
         isMockPreview: effective?.isMock ?? false,
@@ -367,6 +377,47 @@ function AnalysisCanvas() {
     },
     [activePipeline, updatePipeline],
   );
+
+  /** Add a new node below the source node and connect them. */
+  const handleAddConnectedNode = useCallback(
+    (sourceNodeId: string, type: AnalysisNodeType) => {
+      if (!activePipeline) return;
+      const sourceNode = activePipeline.nodes.find((n) => n.id === sourceNodeId);
+      if (!sourceNode) return;
+      const sourceH = sourceNode.h ?? 200;
+      const position = { x: sourceNode.x, y: sourceNode.y + sourceH + 60 };
+      const id = `node_${Date.now()}`;
+      const newNode: AnalysisNodeT = {
+        id,
+        type,
+        x: position.x,
+        y: position.y,
+        ...(type === 'data_source' ? { w: 280, h: 200 } : {}),
+        ...(type === 'code' ? { code: '# df_in: input DataFrame from upstream node\n# df_out: output DataFrame to pass downstream\n\ndf_out = df_in\n', w: 600, h: 400 } : {}),
+        ...(type === 'sql' ? { sql: '-- Input tables: df_in (single parent) or df_in1, df_in2, ...\n\nSELECT * FROM df_in\n', w: 600, h: 350 } : {}),
+        ...(type === 'output' ? { w: 380, h: 320 } : {}),
+        ...(type === 'note' ? { content: '', w: 300, h: 200 } : {}),
+        ...(type === 'sheets_export' ? { w: 320, h: 280, sheet_name: 'Sheet1' } : {}),
+        ...(type === 'publish' ? { w: 300, h: 240, publish_mode: 'overwrite' as const } : {}),
+      };
+      const newEdge: AnalysisEdgeT = { id: `edge_${Date.now()}`, source: sourceNodeId, target: id };
+      updatePipeline(activePipeline.id, {
+        nodes: [...activePipeline.nodes, newNode],
+        edges: [...activePipeline.edges, newEdge],
+      });
+    },
+    [activePipeline, updatePipeline],
+  );
+
+  // Track whether any node is in editor focus (disables ReactFlow deleteKeyCode)
+  const [editorFocusNodeId, setEditorFocusNodeId] = useState<string | null>(null);
+  const handleEditorFocusChange = useCallback((nodeId: string, editing: boolean) => {
+    setEditorFocusNodeId(editing ? nodeId : null);
+  }, []);
+
+  const handleDeselect = useCallback(() => {
+    setSelectedNodeId(null);
+  }, []);
 
   /** Add node at a default stacked offset position (for click-to-add). */
   const handleAddNode = useCallback(
@@ -1037,9 +1088,9 @@ function AnalysisCanvas() {
   const derivedFlowNodes = useMemo(
     () => {
       const pipeline = focusedStageId ? focusedPipeline : activePipeline;
-      return pipeline ? pipelineNodesToFlow(pipeline.nodes, pipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, aiDescribingNodeId, pipeline.id, selectedNodeId, zoomLevel, multiSelectedIds) : [];
+      return pipeline ? pipelineNodesToFlow(pipeline.nodes, pipeline.edges, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, handleDeselect, handleAddConnectedNode, handleEditorFocusChange, aiDescribingNodeId, pipeline.id, selectedNodeId, zoomLevel, multiSelectedIds) : [];
     },
-    [focusedStageId, focusedPipeline, activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, aiDescribingNodeId, selectedNodeId, zoomLevel, multiSelectedIds],
+    [focusedStageId, focusedPipeline, activePipeline, analysisResults, handleUpdateNode, handleDeleteNode, handleRunScope, saveAnalysisComponent, handleToggleGroupCollapse, handleSnapshotMock, handleClearMock, handleGenerateMock, handleExportToSheets, handleDuplicateNode, handleAutoDescribe, handleDeselect, handleAddConnectedNode, handleEditorFocusChange, aiDescribingNodeId, selectedNodeId, zoomLevel, multiSelectedIds],
   );
 
   const derivedFlowEdges = useMemo(
@@ -1165,17 +1216,21 @@ function AnalysisCanvas() {
 
   // --- Drag-to-canvas: show node type menu when connection drops on empty canvas ---
   const connectStartNodeId = useRef<string | null>(null);
+  const connectStartHandleId = useRef<string | null>(null);
   const connectDropMenuJustOpened = useRef(false);
-  const [connectDropMenu, setConnectDropMenu] = useState<{ x: number; y: number; sourceNodeId: string } | null>(null);
+  const [connectDropMenu, setConnectDropMenu] = useState<{ x: number; y: number; sourceNodeId: string; sourceHandle: string } | null>(null);
 
   const onConnectStart: OnConnectStart = useCallback((_event, params) => {
     connectStartNodeId.current = params.nodeId ?? null;
+    connectStartHandleId.current = params.handleId ?? null;
   }, []);
 
   const onConnectEnd: OnConnectEnd = useCallback(
     (event) => {
       const sourceId = connectStartNodeId.current;
+      const sourceHandle = connectStartHandleId.current ?? 'bottom';
       connectStartNodeId.current = null;
+      connectStartHandleId.current = null;
       if (!sourceId) return;
       const target = (event as MouseEvent).target as HTMLElement;
       if (target?.closest('.react-flow__handle')) return;
@@ -1186,6 +1241,7 @@ function AnalysisCanvas() {
         x: (event as MouseEvent).clientX,
         y: (event as MouseEvent).clientY,
         sourceNodeId: sourceId,
+        sourceHandle,
       });
     },
     [],
@@ -1209,7 +1265,14 @@ function AnalysisCanvas() {
         ...(type === 'sheets_export' ? { w: 320, h: 280, sheet_name: 'Sheet1' } : {}),
         ...(type === 'publish' ? { w: 300, h: 240, publish_mode: 'overwrite' as const } : {}),
       };
-      const newEdge: AnalysisEdgeT = { id: `edge_${Date.now()}`, source: connectDropMenu.sourceNodeId, target: id };
+      const oppositeHandle: Record<string, string> = { bottom: 'top', top: 'bottom', right: 'left', left: 'right' };
+      const newEdge: AnalysisEdgeT = {
+        id: `edge_${Date.now()}`,
+        source: connectDropMenu.sourceNodeId,
+        target: id,
+        sourceHandle: connectDropMenu.sourceHandle,
+        targetHandle: oppositeHandle[connectDropMenu.sourceHandle] ?? 'top',
+      };
       updatePipeline(activePipeline.id, {
         nodes: [...activePipeline.nodes, newNode],
         edges: [...activePipeline.edges, newEdge],
@@ -1413,7 +1476,9 @@ function AnalysisCanvas() {
             }}
             fitView
             minZoom={0.05}
-            deleteKeyCode={['Delete', 'Backspace']}
+            deleteKeyCode={editorFocusNodeId ? null : ['Delete', 'Backspace']}
+            selectionKeyCode={editorFocusNodeId ? null : 'Shift'}
+            panActivationKeyCode={editorFocusNodeId ? null : 'Space'}
           >
             <Background />
             <Controls />

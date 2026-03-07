@@ -267,6 +267,7 @@ export type NodeResultResponse = {
   shape?: number[];
   value_kind?: ValueKind;
   generic_value?: unknown;
+  display?: string;  // notebook-style last expression text
   logs?: string;
   error?: string;
 };
@@ -425,6 +426,129 @@ export function apiDataTableCsvUrl(id: string): string {
   return `${API_BASE}/api/data/tables/${id}/export/csv`;
 }
 
+// ── Assets API ──
+
+export type AssetKind = 'table' | 'file' | 'value';
+
+export type AssetLineage = {
+  pipeline_id: string;
+  node_id: string;
+  run_at?: string;
+};
+
+export type AssetMeta = {
+  id: string;
+  slug: string | null;
+  name: string;
+  kind: AssetKind;
+  source: string;
+  description: string;
+  tags: string[];
+  version: number;
+  versions_count: number;
+  lineage: AssetLineage | null;
+  columns: { key: string; label: string; type: string }[] | null;
+  row_count: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AssetDetail = AssetMeta & {
+  rows: (string | number | null)[][] | null;
+  column_stats: Record<string, any> | null;
+  content_text: string | null;
+  value: any;
+};
+
+export type AssetVersionMeta = {
+  id: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+  row_count: number | null;
+  lineage: AssetLineage | null;
+};
+
+export async function apiListAssets(params?: {
+  kind?: string;
+  source?: string;
+  tag?: string;
+  search?: string;
+  pipeline_id?: string;
+}): Promise<AssetMeta[]> {
+  const query = new URLSearchParams();
+  if (params?.kind) query.set('kind', params.kind);
+  if (params?.source) query.set('source', params.source);
+  if (params?.tag) query.set('tag', params.tag);
+  if (params?.search) query.set('search', params.search);
+  if (params?.pipeline_id) query.set('pipeline_id', params.pipeline_id);
+  const qs = query.toString();
+  const res = await fetch(`${API_BASE}/api/assets${qs ? '?' + qs : ''}`);
+  return parseJson(res);
+}
+
+export async function apiGetAsset(id: string): Promise<AssetDetail> {
+  const res = await fetch(`${API_BASE}/api/assets/${id}`);
+  return parseJson(res);
+}
+
+export async function apiGetAssetBySlug(slug: string): Promise<AssetDetail> {
+  const res = await fetch(`${API_BASE}/api/assets/by-slug/${slug}`);
+  return parseJson(res);
+}
+
+export async function apiGetAssetVersions(id: string): Promise<AssetVersionMeta[]> {
+  const res = await fetch(`${API_BASE}/api/assets/${id}/versions`);
+  return parseJson(res);
+}
+
+export async function apiCreateAsset(asset: {
+  name: string;
+  kind?: AssetKind;
+  source?: string;
+  slug?: string;
+  description?: string;
+  tags?: string[];
+  columns?: { key: string; label: string; type: string }[];
+  rows?: (string | number | null)[][];
+  content_text?: string;
+  value?: any;
+}): Promise<AssetMeta> {
+  const res = await fetch(`${API_BASE}/api/assets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(asset),
+  });
+  return parseJson(res);
+}
+
+export async function apiUpdateAsset(id: string, updates: {
+  name?: string;
+  slug?: string;
+  description?: string;
+  tags?: string[];
+}): Promise<AssetMeta> {
+  const res = await fetch(`${API_BASE}/api/assets/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return parseJson(res);
+}
+
+export async function apiDeleteAsset(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/assets/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw body?.detail ?? 'Delete failed';
+  }
+}
+
+export function apiAssetDataUrl(idOrSlug: string, format: string = 'json', bySlug = false): string {
+  const path = bySlug ? `by-slug/${idOrSlug}` : idOrSlug;
+  return `${API_BASE}/api/assets/${path}/data?format=${format}`;
+}
+
 // ── AI Node Describe ──
 
 export type NodeDescribeRequest = {
@@ -473,6 +597,38 @@ export type ExportHint = {
   filename?: string | null;
 };
 
+export type NotebookSection = {
+  id: string;
+  name: string;
+  purpose: string;
+  cell_indices: number[];
+};
+
+export type NotebookAnalysis = {
+  total_cells?: number;
+  code_cell_count: number;
+  markdown_cell_count?: number;
+  output_cell_count?: number;
+  export_cell_count?: number;
+  stage_count: number;
+  complexity_tier: 'small' | 'medium' | 'large';
+};
+
+export type NotebookStagePlanEvent = {
+  stages: NotebookSection[];
+};
+
+export type NotebookStageProgressEvent = {
+  stage_id: string;
+  stage_name?: string | null;
+  state: 'queued' | 'building' | 'done' | 'needs_review';
+};
+
+export type NotebookWorkflowEvent = {
+  main_path_stage_ids: string[];
+  collapsed_stage_ids?: string[];
+};
+
 export type TransformNodeDef = {
   type: 'data_source' | 'code' | 'sql' | 'output' | 'note' | 'group' | 'sheets_export' | 'publish';
   name: string;
@@ -484,6 +640,8 @@ export type TransformNodeDef = {
   original_cells: number[];
   source_hint?: SourceHint | null;
   export_hint?: ExportHint | null;
+  group_id?: string | null;
+  group_name?: string | null;
 };
 
 export type TransformEdgeDef = {
@@ -493,6 +651,7 @@ export type TransformEdgeDef = {
 
 export type TransformNotebookResponse = {
   ok: boolean;
+  sections: NotebookSection[];
   nodes: TransformNodeDef[];
   edges: TransformEdgeDef[];
   warnings: string[];
@@ -527,6 +686,13 @@ export async function transformNotebookStream(
   onText: (chunk: string) => void,
   onNode: (index: number, node: TransformNodeDef) => void,
   onStatus: (message: string) => void,
+  opts?: {
+    onAnalysis?: (analysis: NotebookAnalysis) => void;
+    onStagePlan?: (plan: NotebookStagePlanEvent) => void;
+    onStageProgress?: (progress: NotebookStageProgressEvent) => void;
+    onWorkflow?: (workflow: NotebookWorkflowEvent) => void;
+    onWarning?: (warning: { message: string }) => void;
+  },
 ): Promise<TransformNotebookResponse> {
   const res = await fetch(`${API_BASE}/api/notebook/transform-stream`, {
     method: 'POST',
@@ -562,6 +728,16 @@ export async function transformNotebookStream(
         const data = JSON.parse(line.slice(6));
         if (eventType === 'status') {
           onStatus(data.message ?? '');
+        } else if (eventType === 'analysis') {
+          opts?.onAnalysis?.(data as NotebookAnalysis);
+        } else if (eventType === 'stage_plan') {
+          opts?.onStagePlan?.(data as NotebookStagePlanEvent);
+        } else if (eventType === 'stage_progress') {
+          opts?.onStageProgress?.(data as NotebookStageProgressEvent);
+        } else if (eventType === 'workflow') {
+          opts?.onWorkflow?.(data as NotebookWorkflowEvent);
+        } else if (eventType === 'warning') {
+          opts?.onWarning?.(data as { message: string });
         } else if (eventType === 'text') {
           onText(data.chunk ?? '');
         } else if (eventType === 'node') {

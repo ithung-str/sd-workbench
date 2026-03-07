@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { NodeResizer, type NodeProps } from 'reactflow';
 import { ActionIcon, Badge, Box, Button, Text, TextInput, Tooltip } from '@mantine/core';
 import { IconBrandGoogleDrive, IconCheck, IconTrash, IconUpload } from '@tabler/icons-react';
 import type { NodeResultResponse } from '../../../lib/api';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { RunMenu } from './RunMenu';
-import { useNodeHover, useZoomTransition, StatusDot, ShapeBadge, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, useNodeFocus, StatusDot, ShapeBadge, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
 import './analysisNodes.css';
 
 type SheetsExportData = {
@@ -17,6 +17,9 @@ type SheetsExportData = {
   onDuplicate?: () => void;
   onRunScope?: (scope: RunScope) => void;
   onExportToSheets?: () => Promise<void> | void;
+  onDeselect?: () => void;
+  onAddNode?: (type: import('../../../types/model').AnalysisNodeType) => void;
+  onEditorFocusChange?: (editing: boolean) => void;
   result?: NodeResultResponse;
   selected?: boolean;
   zoomLevel?: ZoomLevel;
@@ -33,6 +36,16 @@ export function SheetsExportNode({ data }: NodeProps<SheetsExportData>) {
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
   const hover = useNodeHover();
+  const focus = useNodeFocus({
+    selected: data.selected,
+    onDelete: data.onDelete,
+    onDeselect: data.onDeselect,
+    onAddNode: data.onAddNode,
+  });
+  const mergedRef = useCallback((el: HTMLDivElement | null) => {
+    (hover.ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    focus.wrapperRef.current = el;
+  }, [hover.ref, focus.wrapperRef]);
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
 
@@ -96,8 +109,9 @@ export function SheetsExportNode({ data }: NodeProps<SheetsExportData>) {
     );
   }
 
+  const focusClass = focus.focusMode === 'node' ? 'focus-node' : '';
   return (
-    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={mergedRef} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass} ${focusClass}`} style={{ width: '100%', height: '100%', outline: 'none' }} {...focus.nodeWrapperProps}>
       <PortBadge label={data.portLabel} />
       <NodeResizer minWidth={280} minHeight={180} isVisible={data.selected} />
       <NodeHandles />

@@ -3,6 +3,7 @@ import { Handle, Position } from 'reactflow';
 import { ActionIcon, Box, Badge, Text, Tooltip } from '@mantine/core';
 import { IconCopy, IconPlayerPlay, IconSparkles, IconTrash } from '@tabler/icons-react';
 import type { NodeResultResponse } from '../../../lib/api';
+import type { AnalysisNodeType } from '../../../types/model';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 
 /**
@@ -98,6 +99,128 @@ export function PortBadge({ label }: { label?: string }) {
       </Badge>
     </div>
   );
+}
+
+/**
+ * Two-level focus system for analysis nodes:
+ * - 'node': node is selected. Drag moves node, Backspace/d+d deletes, a+a adds.
+ * - 'editor': clicked into editor. Normal text editing, drag selects text.
+ * - Esc transitions: editor → node → deselect.
+ *
+ * The hook returns:
+ * - focusMode: current focus level
+ * - enterEditorFocus: call when clicking into editor area
+ * - nodeWrapperProps: spread onto the outer node div (handles keyDown, click)
+ * - editorWrapperClass: CSS classes for the editor container ('nodrag nopan nowheel' when editing)
+ */
+export function useNodeFocus({
+  selected,
+  onDelete,
+  onDeselect,
+  onAddNode,
+}: {
+  selected?: boolean;
+  onDelete?: () => void;
+  onDeselect?: () => void;
+  onAddNode?: (type: AnalysisNodeType) => void;
+}) {
+  const [focusMode, setFocusMode] = useState<'node' | 'editor' | null>(null);
+  const lastKeyRef = useRef<{ key: string; time: number } | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  // Sync with external selection state & focus the wrapper div
+  useEffect(() => {
+    if (!selected) setFocusMode(null);
+    else if (selected && focusMode === null) {
+      setFocusMode('node');
+      // Focus the wrapper div so it receives keyboard events
+      requestAnimationFrame(() => wrapperRef.current?.focus());
+    }
+  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const enterEditorFocus = useCallback(() => {
+    setFocusMode('editor');
+  }, []);
+
+  const exitEditorFocus = useCallback(() => {
+    setFocusMode('node');
+    (document.activeElement as HTMLElement)?.blur?.();
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // Only handle keys in node focus mode
+      if (focusMode !== 'node') return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setFocusMode(null);
+        onDeselect?.();
+        return;
+      }
+
+      // Double-tap detection for d+d (delete) and a+a (add)
+      const now = Date.now();
+      const last = lastKeyRef.current;
+      const isDoubleTap = last && last.key === e.key && now - last.time < 400;
+      lastKeyRef.current = { key: e.key, time: now };
+
+      if (e.key === 'd' && isDoubleTap) {
+        e.preventDefault();
+        e.stopPropagation();
+        onDelete?.();
+        return;
+      }
+      if (e.key === 'a' && isDoubleTap) {
+        e.preventDefault();
+        e.stopPropagation();
+        onAddNode?.('code');
+        return;
+      }
+    },
+    [focusMode, onDelete, onDeselect, onAddNode],
+  );
+
+  const handleEditorKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (focusMode !== 'editor') return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setFocusMode('node');
+        (document.activeElement as HTMLElement)?.blur?.();
+        return;
+      }
+      // Stop all key events from reaching ReactFlow (prevents space→pan, delete→node delete, etc.)
+      e.stopPropagation();
+    },
+    [focusMode],
+  );
+
+  // Re-focus wrapper when returning from editor to node mode
+  useEffect(() => {
+    if (focusMode === 'node') {
+      requestAnimationFrame(() => wrapperRef.current?.focus());
+    }
+  }, [focusMode]);
+
+  return {
+    focusMode,
+    enterEditorFocus,
+    exitEditorFocus,
+    /** Ref to attach to the outer node div (merge with hover.ref) */
+    wrapperRef,
+    /** Spread onto outer node div (do NOT include ref — use wrapperRef separately) */
+    nodeWrapperProps: {
+      tabIndex: 0,
+      onKeyDown: handleKeyDown,
+    },
+    /** Spread onto editor container div — stops keys from reaching ReactFlow */
+    editorKeyDown: handleEditorKeyDown,
+    /** CSS classes for editor wrapper — prevents node drag when editing */
+    editorWrapperClass: focusMode === 'editor' ? 'nodrag nopan nowheel' : '',
+  };
 }
 
 /** Standard 4-directional handles for analysis nodes. */

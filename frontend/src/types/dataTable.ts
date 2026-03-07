@@ -30,7 +30,7 @@ export type ColumnStats = {
 export type DataTable = {
   id: string;
   name: string;
-  source: 'csv' | 'google_sheets';
+  source: 'csv' | 'excel' | 'google_sheets';
   description: string;
   tags: string[];
   columns: DataColumn[];
@@ -45,7 +45,7 @@ export type DataTable = {
 export type DataTableMeta = {
   id: string;
   name: string;
-  source: 'csv' | 'google_sheets';
+  source: 'csv' | 'excel' | 'google_sheets';
   description: string;
   tags: string[];
   columns: DataColumn[];

@@ -3,7 +3,7 @@ import { ActionIcon, Badge, Box, Group, Stack, Text, Tooltip, UnstyledButton } f
 import { IconBrandGoogle, IconRefresh, IconTrash, IconUpload } from '@tabler/icons-react';
 import type { DataTableMeta } from '../../../types/dataTable';
 import { listDataTables, deleteDataTable, saveDataTable, loadDataTable } from '../../../lib/dataTableStorage';
-import { parseCSV } from '../../../lib/csvParser';
+import { importSpreadsheetTables, isSupportedSpreadsheetFile } from '../../../lib/spreadsheetImport';
 import { GoogleSheetsImportModal } from '../GoogleSheetsImportModal';
 import { refreshGoogleSheetsTable } from '../../../lib/googleSheetsApi';
 import { useGoogleAuth } from '../../../lib/googleAuth';
@@ -81,20 +81,22 @@ export function AnalysisDataFlyout({ onSelectTable }: Props) {
 
   useEffect(() => { void refresh(); }, []);
 
-  const importCSV = async (file: File) => {
+  const importFile = async (file: File) => {
     try {
-      const table = await parseCSV(file);
-      await saveDataTable(table);
+      const tables = await importSpreadsheetTables(file);
+      for (const table of tables) {
+        await saveDataTable(table);
+      }
       await refresh();
     } catch (err) {
-      window.alert(`CSV import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      window.alert(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    await importCSV(file);
+    await importFile(file);
     e.target.value = '';
   };
 
@@ -102,8 +104,8 @@ export function AnalysisDataFlyout({ onSelectTable }: Props) {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.csv')) {
-      await importCSV(file);
+    if (file && isSupportedSpreadsheetFile(file)) {
+      await importFile(file);
     }
   };
 
@@ -121,7 +123,7 @@ export function AnalysisDataFlyout({ onSelectTable }: Props) {
       onDrop={handleDrop}
     >
       <Group gap="xs">
-        <Tooltip label="Upload CSV">
+        <Tooltip label="Upload CSV / Excel">
           <ActionIcon variant="light" size="sm" onClick={() => fileRef.current?.click()}>
             <IconUpload size={14} />
           </ActionIcon>
@@ -129,18 +131,18 @@ export function AnalysisDataFlyout({ onSelectTable }: Props) {
         {googleClientId && <SheetsControls onImported={refresh} />}
         <Text size="xs" c="dimmed">{tables.length} table{tables.length !== 1 ? 's' : ''}</Text>
       </Group>
-      <input ref={fileRef} type="file" accept=".csv" onChange={handleUpload} hidden />
+      <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleUpload} hidden />
 
       {dragOver && (
         <Box style={{ border: '2px dashed var(--mantine-color-teal-4)', borderRadius: 8, padding: 16, textAlign: 'center' }}>
-          <Text size="xs" c="teal">Drop CSV here</Text>
+          <Text size="xs" c="teal">Drop CSV / Excel here</Text>
         </Box>
       )}
 
       {loading && <Text size="xs" c="dimmed">Loading...</Text>}
 
       {!loading && tables.length === 0 && (
-        <Text size="xs" c="dimmed">No data tables. Upload a CSV{googleClientId ? ' or import from Google Sheets' : ''}.</Text>
+        <Text size="xs" c="dimmed">No data tables. Upload CSV / Excel{googleClientId ? ' or import from Google Sheets' : ''}.</Text>
       )}
 
       {tables.map((t) => (

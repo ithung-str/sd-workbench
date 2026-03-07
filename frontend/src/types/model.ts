@@ -363,12 +363,29 @@ export type AnalysisNode = {
     shape?: number[];
     generic_value?: unknown;
   };
+  /** Notebook import provenance used for grouping/layout heuristics */
+  original_cells?: number[];
+  /** Notebook import semantic grouping from backend planner */
+  import_group_id?: string;
+  import_group_name?: string;
+  /** Imported notebook stages get richer stage-card treatment in the canvas */
+  importedStage?: boolean;
+  placeholder?: boolean;
+  importStageState?: NotebookImportStageState;
+  stageOrder?: number;
+  stagePurpose?: string;
+  stageInputs?: string[];
+  stageOutputs?: string[];
+  stageNodeCount?: number;
+  stageRole?: 'main' | 'branch';
 };
 
 export type AnalysisEdge = {
   id: string;
   source: string;
   target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
 };
 
 export type PipelineCheckpoint = {
@@ -653,6 +670,27 @@ export type AIChatMessage = {
   debugRawResponse?: string;
   /** Grouped components created/modified by this AI response */
   components?: AIChatComponentGroup[];
+};
+
+export type NotebookImportStageState = 'queued' | 'building' | 'done' | 'needs_review';
+
+export type NotebookImportStage = {
+  id: string;
+  name: string;
+  purpose?: string;
+  state: NotebookImportStageState;
+};
+
+export type NotebookImportProgress = {
+  phase: string;
+  message: string;
+  complexityTier?: 'small' | 'medium' | 'large';
+  stageCount?: number;
+  currentStageId?: string | null;
+  stages: NotebookImportStage[];
+  warnings: string[];
+  mainPathStageIds: string[];
+  isReviewPass: boolean;
 };
 
 export type AIPatch = {

@@ -40,6 +40,7 @@ import type {
   MonteCarloParameter,
   MonteCarloResponse,
   NodeModel,
+  NotebookImportProgress,
   OATSensitivityResponse,
   OptimisationConfig,
   OptimisationResult,
@@ -54,7 +55,7 @@ import type {
 
 export type DockTab = 'validation' | 'chart' | 'table' | 'compare';
 export type WorkbenchTab = 'canvas' | 'formulas' | 'dashboard' | 'scenarios' | 'sensitivity' | 'optimisation' | 'data' | 'analysis';
-export type RightSidebarMode = 'inspector' | 'chat' | 'simulation' | 'validation' | 'analysis-inspector';
+export type RightSidebarMode = 'inspector' | 'chat' | 'simulation' | 'validation' | 'analysis-inspector' | 'analysis-stages';
 
 type Selection =
   | { kind: 'node'; id: string }
@@ -125,6 +126,7 @@ type EditorState = {
   isApplyingAi: boolean;
   aiStatusMessage: string;
   aiStreamingRaw: string;
+  notebookImportProgress: NotebookImportProgress | null;
   aiStreamingChunks: StreamChunk[];
   isRunningBatch: boolean;
   isRunningSensitivity: boolean;
@@ -213,6 +215,8 @@ type EditorState = {
   activePipelineId: string | null;
   analysisResults: Record<string, NodeResultResponse>;
   selectedAnalysisNodeId: string | null;
+  focusedAnalysisStageId: string | null;
+  setFocusedAnalysisStageId: (id: string | null) => void;
   isRunningPipeline: boolean;
   createPipeline: (name?: string) => void;
   updatePipeline: (id: string, patch: Partial<AnalysisPipeline>) => void;
@@ -543,6 +547,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
     activePipelineId: (initialModel.metadata?.analysis as any)?.defaults?.active_pipeline_id ?? null,
     analysisResults: {},
     selectedAnalysisNodeId: null,
+    focusedAnalysisStageId: null,
+    setFocusedAnalysisStageId: (id) => set({ focusedAnalysisStageId: id }),
     isRunningPipeline: false,
     analysisComponents: (initialModel.metadata?.analysis as any)?.analysis_components ?? [],
     optimisationResults: null,
@@ -564,6 +570,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     isApplyingAi: false,
     aiStatusMessage: '',
     aiStreamingRaw: '',
+    notebookImportProgress: null,
     aiStreamingChunks: [],
     isRunningBatch: false,
     isRunningSensitivity: false,
@@ -1246,7 +1253,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         });
       }
     },
-    clearAiChat: () => set({ aiChatHistory: [], aiStreamingChunks: [], rightSidebarMode: 'inspector' as RightSidebarMode, aiCommand: '' }),
+    clearAiChat: () => set({ aiChatHistory: [], aiStreamingChunks: [], rightSidebarMode: 'inspector' as RightSidebarMode, aiCommand: '', notebookImportProgress: null }),
     setRightSidebarMode: (mode) => set({ rightSidebarMode: mode }),
     startNewModel: () => {
       const fresh = cloneModel(blankModel);
@@ -1323,6 +1330,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         analysisComponents: componentsFromModel,
         analysisResults: {},
         selectedAnalysisNodeId: null,
+        focusedAnalysisStageId: null,
         isRunningPipeline: false,
         optimisationResults: null,
         isRunningOptimisation: false,
@@ -1814,6 +1822,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         activePipelineId: id,
         analysisResults: {},
         selectedAnalysisNodeId: null,
+        focusedAnalysisStageId: null,
         model: persistAnalysis(state.model, state.scenarios, state.activeScenarioId, state.dashboards, state.activeDashboardId, state.sensitivityConfigs, state.activeSensitivityConfigId, state.optimisationConfigs, state.activeOptimisationConfigId, state.pipelines, id, state.analysisComponents),
       }));
       // Load cached results from backend

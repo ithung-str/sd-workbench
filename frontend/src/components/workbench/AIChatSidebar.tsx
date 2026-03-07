@@ -23,7 +23,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useEditorStore, type WorkbenchTab } from '../../state/editorStore';
-import type { AIChatComponentGroup, AIChatMessage, RetryLogEntry } from '../../types/model';
+import type { AIChatComponentGroup, AIChatMessage, NotebookImportProgress, RetryLogEntry } from '../../types/model';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -169,6 +169,55 @@ function DebugRawResponseSection({ text }: { text: string }) {
   );
 }
 
+function NotebookImportProgressPanel({ progress }: { progress: NotebookImportProgress }) {
+  return (
+    <Box mt={8}>
+      <Text size="xs" fw={600} c="dark.6">Notebook import</Text>
+      <Text size="xs" c="dimmed" mb={6}>
+        {progress.stageCount != null ? `${progress.stageCount} stages` : null}
+        {progress.stageCount != null && progress.complexityTier ? ' · ' : null}
+        {progress.complexityTier ? `${progress.complexityTier} workflow` : null}
+      </Text>
+      {progress.stages.length > 0 && (
+        <Stack gap={4}>
+          {progress.stages.map((stage) => (
+            <Box
+              key={stage.id}
+              style={{
+                borderRadius: 8,
+                border: '1px solid rgba(134, 142, 150, 0.25)',
+                background: progress.mainPathStageIds.includes(stage.id) ? 'rgba(8, 127, 140, 0.06)' : 'rgba(255,255,255,0.7)',
+                padding: '6px 8px',
+              }}
+            >
+              <Group justify="space-between" gap={6} wrap="nowrap">
+                <Text size="xs" fw={600} lineClamp={1}>{stage.name}</Text>
+                <Badge
+                  size="xs"
+                  variant="light"
+                  color={stage.state === 'done' ? 'teal' : stage.state === 'building' ? 'orange' : stage.state === 'needs_review' ? 'yellow' : 'gray'}
+                >
+                  {stage.state.replace('_', ' ')}
+                </Badge>
+              </Group>
+              {stage.purpose && (
+                <Text size="xs" c="dimmed" lineClamp={2}>{stage.purpose}</Text>
+              )}
+            </Box>
+          ))}
+        </Stack>
+      )}
+      {progress.warnings.length > 0 && (
+        <Stack gap={4} mt={8}>
+          {progress.warnings.map((warning) => (
+            <Text key={warning} size="xs" c="yellow.8">{warning}</Text>
+          ))}
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
 function ComponentGroups({ groups }: { groups: AIChatComponentGroup[] }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -303,6 +352,7 @@ export function AIChatSidebar() {
   const aiStatusMessage = useEditorStore((s) => s.aiStatusMessage);
   const aiChatHistory = useEditorStore((s) => s.aiChatHistory);
   const aiStreamingRaw = useEditorStore((s) => s.aiStreamingRaw);
+  const notebookImportProgress = useEditorStore((s: any) => s.notebookImportProgress as NotebookImportProgress | null);
   const clearAiChat = useEditorStore((s) => s.clearAiChat);
   const activeTab = useEditorStore((s) => s.activeTab);
 
@@ -393,6 +443,9 @@ export function AIChatSidebar() {
                   <div className="ai-spinner" />
                   <Text size="sm" c="dimmed">{aiStatusMessage || 'Thinking...'}</Text>
                 </Group>
+                {notebookImportProgress && (
+                  <NotebookImportProgressPanel progress={notebookImportProgress} />
+                )}
                 {aiStreamingRaw && (
                   <Box
                     mt={6}

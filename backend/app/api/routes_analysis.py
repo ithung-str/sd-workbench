@@ -10,7 +10,9 @@ from app.analysis.cache import NodeValue, pipeline_cache
 from app.analysis.executor import execute_node
 from app.analysis.sql_executor import execute_sql
 from app.db import connect
-from app.services import data_service
+from app.schemas.asset import AssetCreate, AssetKind, AssetLineage, AssetPublish, AssetUpdate
+from app.schemas.data_table import DataColumnSchema
+from app.services import asset_service, data_service
 from app.schemas.analysis import (
     ExecutePipelineRequest,
     ExecutePipelineResponse,
@@ -97,10 +99,12 @@ def _truncate(val: object, max_len: int = 200) -> object:
 @router.post("/execute", response_model=ExecutePipelineResponse)
 def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
     nodes_by_id = {n.id: n for n in req.nodes}
-    edges_raw = [{"source": e.source, "target": e.target} for e in req.edges]
+    # Filter edges to only those connecting nodes in this run
+    relevant_edges = [e for e in req.edges if e.source in nodes_by_id and e.target in nodes_by_id]
+    edges_raw = [{"source": e.source, "target": e.target} for e in relevant_edges]
 
     parent_map: dict[str, list[str]] = defaultdict(list)
-    for edge in req.edges:
+    for edge in relevant_edges:
         parent_map[edge.target].append(edge.source)
 
     order = _topological_sort(list(nodes_by_id.keys()), edges_raw)
@@ -186,6 +190,7 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
                         ok=True, preview=_df_preview(exec_result.output_df),
                         shape=list(exec_result.output_df.shape),
                         value_kind="dataframe",
+                        display=exec_result.display,
                         logs=exec_result.logs or None,
                     )
                 elif exec_result.generic_output is not None:
@@ -196,6 +201,7 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
                         preview=_generic_preview(exec_result.generic_output, exec_result.value_kind),
                         value_kind=exec_result.value_kind,
                         generic_value=exec_result.generic_output,
+                        display=exec_result.display,
                         logs=exec_result.logs or None,
                     )
                 else:
@@ -240,7 +246,7 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
                 failed.add(node_id)
             continue
 
-        # Publish node (save DataFrame as a data asset)
+        # Publish node (save DataFrame as an asset)
         if node.type == "publish":
             if parents:
                 parent_df = pipeline_cache.get(req.pipeline_id, parents[0])
@@ -249,56 +255,57 @@ def execute_pipeline(req: ExecutePipelineRequest) -> ExecutePipelineResponse:
                     preview = _df_preview(parent_df)
                     shape = list(parent_df.shape)
 
-                    # Persist to data catalog
                     table_name = node.publish_table_name or f"Published {node_id}"
                     table_id = node.publish_table_id
+                    now = datetime.now(timezone.utc).isoformat()
                     columns_meta = [
-                        {"key": col, "label": col, "type": "number" if pd.api.types.is_numeric_dtype(parent_df[col]) else "string"}
+                        DataColumnSchema(key=col, label=col, type="number" if pd.api.types.is_numeric_dtype(parent_df[col]) else "string")
                         for col in parent_df.columns
                     ]
                     rows_data = parent_df.values.tolist()
-                    now = datetime.now(timezone.utc).isoformat()
+                    lineage = AssetLineage(pipeline_id=req.pipeline_id, node_id=node_id, run_at=now)
 
                     if table_id and node.publish_mode == "append":
-                        # Append: load existing + concat
-                        existing = data_service.get_table(table_id)
-                        if existing:
-                            existing_rows = json.loads(existing["rows_json"]) if existing.get("rows_json") else []
-                            rows_data = existing_rows + rows_data
-                            data_service.update_table(table_id, {"rows_json": json.dumps(rows_data), "updated_at": now})
+                        existing = asset_service.get_asset(table_id)
+                        if existing and existing.rows is not None:
+                            rows_data = existing.rows + rows_data
+                            asset_service.update_asset(table_id, AssetUpdate(
+                                columns=columns_meta, rows=rows_data,
+                            ))
                             results[node_id] = NodeResultResponse(
                                 ok=True, preview=preview, shape=shape,
                                 logs=f"Appended {len(parent_df)} rows to '{table_name}' (total: {len(rows_data)})",
                             )
                             continue
 
-                    # Overwrite or create new
-                    table_data = {
-                        "name": table_name,
-                        "source": "pipeline",
-                        "description": f"Published from pipeline '{req.pipeline_id}'",
-                        "tags_json": json.dumps(["pipeline", "published"]),
-                        "columns_json": json.dumps(columns_meta),
-                        "rows_json": json.dumps(rows_data),
-                        "created_at": now,
-                        "updated_at": now,
-                    }
-
                     if table_id:
-                        data_service.update_table(table_id, {
-                            "name": table_name,
-                            "columns_json": json.dumps(columns_meta),
-                            "rows_json": json.dumps(rows_data),
-                            "updated_at": now,
-                        })
+                        # Publish new version
+                        try:
+                            asset_service.publish_version(table_id, AssetPublish(
+                                columns=columns_meta, rows=rows_data, lineage=lineage,
+                            ))
+                        except ValueError:
+                            # Asset doesn't exist yet, create it
+                            asset_service.create_asset(AssetCreate(
+                                id=table_id, name=table_name, kind=AssetKind.table,
+                                source="pipeline", description=f"Published from pipeline '{req.pipeline_id}'",
+                                tags=["pipeline", "published"],
+                                columns=columns_meta, rows=rows_data, lineage=lineage,
+                            ))
                     else:
                         table_id = f"dt_{node_id}_{int(datetime.now(timezone.utc).timestamp())}"
-                        table_data["id"] = table_id
-                        data_service.create_table(table_data)
+                        asset_service.create_asset(AssetCreate(
+                            id=table_id, name=table_name, kind=AssetKind.table,
+                            source="pipeline", description=f"Published from pipeline '{req.pipeline_id}'",
+                            tags=["pipeline", "published"],
+                            columns=columns_meta, rows=rows_data, lineage=lineage,
+                        ))
 
+                    asset = asset_service.get_asset(table_id)
+                    slug_info = f" (slug: {asset.slug})" if asset and asset.slug else ""
                     results[node_id] = NodeResultResponse(
                         ok=True, preview=preview, shape=shape,
-                        logs=f"Published as '{table_name}' (id: {table_id})",
+                        logs=f"Published as '{table_name}' (id: {table_id}){slug_info}",
                     )
                     continue
             results[node_id] = NodeResultResponse(ok=False, error="No input data")

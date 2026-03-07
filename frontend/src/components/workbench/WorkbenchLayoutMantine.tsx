@@ -24,6 +24,7 @@ import {
   IconCheck,
   IconDeviceFloppy,
   IconSearch as IconInspector,
+  IconLayersSubtract,
 } from '@tabler/icons-react';
 import { ModelCanvas } from '../canvas/ModelCanvas';
 import { InspectorPanel } from '../inspector/InspectorPanelMantine';
@@ -35,6 +36,7 @@ import { OptimisationPage } from '../optimisation/OptimisationPage';
 import { DataPage } from '../data/DataPage';
 import { AnalysisPage } from '../analysis/AnalysisPage';
 import { AnalysisInspectorPanel } from '../analysis/AnalysisInspectorPanel';
+import { AnalysisStagesPanel } from '../analysis/AnalysisStagesPanel';
 import { AIChatSidebar } from './AIChatSidebar';
 import { ImportExportControls } from '../io/ImportExportControls';
 import { IconStrip } from './IconStrip';
@@ -75,7 +77,7 @@ export function WorkbenchLayout() {
     if (!isCanvas && (rightSidebarMode === 'inspector' || rightSidebarMode === 'simulation')) {
       setRightSidebarMode('chat');
     }
-    if (!isAnalysis && rightSidebarMode === 'analysis-inspector') {
+    if (!isAnalysis && (rightSidebarMode === 'analysis-inspector' || rightSidebarMode === 'analysis-stages')) {
       setRightSidebarMode('chat');
     }
   }, [isCanvas, isAnalysis, rightSidebarMode, setRightSidebarMode]);
@@ -330,6 +332,7 @@ export function WorkbenchLayout() {
                   },
                 ] : isAnalysis ? [
                   { value: 'analysis-inspector', label: 'Inspector' },
+                  { value: 'analysis-stages', label: 'Stages' },
                   { value: 'chat', label: 'AI Chat' },
                   {
                     value: 'validation',
@@ -375,6 +378,9 @@ export function WorkbenchLayout() {
             )}
             {rightSidebarMode === 'analysis-inspector' && isAnalysis && (
               <AnalysisInspectorPanel />
+            )}
+            {rightSidebarMode === 'analysis-stages' && isAnalysis && (
+              <AnalysisStagesPanel />
             )}
             {rightSidebarMode === 'chat' && <AIChatSidebar />}
             {rightSidebarMode === 'simulation' && isCanvas && <SimulationPanel />}
@@ -453,6 +459,22 @@ export function WorkbenchLayout() {
                   aria-label="Analysis Inspector"
                 >
                   <IconInspector size={18} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {isAnalysis && (
+              <Tooltip label="Stages" position="left" withArrow>
+                <ActionIcon
+                  size="lg"
+                  variant="subtle"
+                  className="sidebar-collapsed-btn"
+                  onClick={() => {
+                    setRightSidebarMode('analysis-stages');
+                    openRight();
+                  }}
+                  aria-label="Stages"
+                >
+                  <IconLayersSubtract size={18} />
                 </ActionIcon>
               </Tooltip>
             )}

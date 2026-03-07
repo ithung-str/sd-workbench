@@ -35,6 +35,23 @@ class ExportHint(BaseModel):
     filename: Optional[str] = None
 
 
+class NotebookSection(BaseModel):
+    id: str
+    name: str
+    purpose: str = ""
+    cell_indices: list[int] = []
+
+
+class NotebookAnalysis(BaseModel):
+    total_cells: int = 0
+    code_cell_count: int = 0
+    markdown_cell_count: int = 0
+    output_cell_count: int = 0
+    export_cell_count: int = 0
+    stage_count: int = 0
+    complexity_tier: Literal["small", "medium", "large"] = "small"
+
+
 class TransformNodeDef(BaseModel):
     type: Literal["data_source", "code", "sql", "output", "note", "group", "sheets_export", "publish"]
     name: str = ""
@@ -46,6 +63,8 @@ class TransformNodeDef(BaseModel):
     original_cells: list[int] = []
     source_hint: Optional[SourceHint] = None
     export_hint: Optional[ExportHint] = None
+    group_id: Optional[str] = None
+    group_name: Optional[str] = None
 
 
 class TransformEdgeDef(BaseModel):
@@ -55,6 +74,7 @@ class TransformEdgeDef(BaseModel):
 
 class TransformNotebookResponse(BaseModel):
     ok: bool
+    sections: list[NotebookSection] = []
     nodes: list[TransformNodeDef] = []
     edges: list[TransformEdgeDef] = []
     warnings: list[str] = []

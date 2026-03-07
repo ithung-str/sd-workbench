@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Chip,
+  CopyButton,
   Group,
   ScrollArea,
   Stack,
@@ -20,11 +21,17 @@ import {
   IconBrandGoogle,
   IconCheck,
   IconClock,
+  IconCopy,
+  IconDatabase,
   IconDownload,
   IconEdit,
+  IconFile,
   IconFilter,
+  IconHash,
+  IconLink,
   IconRefresh,
   IconSearch,
+  IconTable,
   IconTag,
   IconTrash,
   IconUpload,
@@ -32,13 +39,18 @@ import {
 } from '@tabler/icons-react';
 import type { DataTable, DataTableMeta, ColumnStats } from '../../types/dataTable';
 import {
-  apiListDataTables,
-  apiGetDataTable,
+  apiListAssets,
+  apiGetAsset,
   apiCreateDataTable,
-  apiUpdateDataTable,
-  apiDeleteDataTable,
+  apiUpdateAsset,
+  apiDeleteAsset,
+  apiAssetDataUrl,
+  apiGetAssetVersions,
+  apiGetDataTable,
   apiUpsertDataTable,
-  apiDataTableCsvUrl,
+  type AssetMeta,
+  type AssetDetail,
+  type AssetVersionMeta,
 } from '../../lib/api';
 import { parseCSV } from '../../lib/csvParser';
 import { GoogleSheetsImportModal } from '../analysis/GoogleSheetsImportModal';
@@ -46,6 +58,7 @@ import { refreshGoogleSheetsTable } from '../../lib/googleSheetsApi';
 import { useGoogleAuth } from '../../lib/googleAuth';
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 // ── Sub-components (isolated for hook safety) ──
 
@@ -251,48 +264,120 @@ function StalenessIndicator({ updatedAt }: { updatedAt: string }) {
   );
 }
 
+// ── Kind icons & labels ──
+
+function KindIcon({ kind, size = 14 }: { kind: string; size?: number }) {
+  if (kind === 'file') return <IconFile size={size} />;
+  if (kind === 'value') return <IconHash size={size} />;
+  return <IconTable size={size} />;
+}
+
+function kindLabel(kind: string): string {
+  if (kind === 'file') return 'File';
+  if (kind === 'value') return 'Value';
+  return 'Table';
+}
+
+function sourceLabel(source: string): string {
+  if (source === 'google_sheets') return 'Google Sheets';
+  if (source === 'excel') return 'Excel';
+  if (source === 'pipeline') return 'Pipeline';
+  if (source === 'api') return 'API';
+  return 'Upload';
+}
+
+// ── Slug + API URL display ──
+
+function SlugDisplay({ slug }: { slug: string | null }) {
+  if (!slug) return null;
+  const apiUrl = `${API_BASE}/api/assets/by-slug/${slug}/data`;
+  return (
+    <Group gap={4} wrap="nowrap">
+      <IconLink size={10} color="#868e96" />
+      <Text size="xs" c="dimmed" ff="monospace" style={{ fontSize: 10 }}>{slug}</Text>
+      <CopyButton value={apiUrl}>
+        {({ copied, copy }) => (
+          <Tooltip label={copied ? 'Copied!' : 'Copy API URL'}>
+            <ActionIcon size={14} variant="subtle" color={copied ? 'green' : 'gray'} onClick={copy}>
+              {copied ? <IconCheck size={10} /> : <IconCopy size={10} />}
+            </ActionIcon>
+          </Tooltip>
+        )}
+      </CopyButton>
+    </Group>
+  );
+}
+
+// ── Version list ──
+
+function VersionList({ versions }: { versions: AssetVersionMeta[] }) {
+  if (versions.length <= 1) return null;
+  return (
+    <Box mt={4}>
+      <Text size="xs" fw={600} c="dimmed" mb={2}>Versions ({versions.length})</Text>
+      <Stack gap={2}>
+        {versions.map((v) => (
+          <Group key={v.id} gap={6} style={{ fontSize: '0.7rem' }}>
+            <Badge size="xs" variant="light">v{v.version}</Badge>
+            <Text size="xs" c="dimmed">{new Date(v.created_at).toLocaleDateString()}</Text>
+            {v.row_count != null && <Text size="xs" c="dimmed">{v.row_count} rows</Text>}
+            {v.lineage && <Badge size="xs" variant="dot" color="violet">pipeline</Badge>}
+          </Group>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
 // ── Main page ──
 
 export function DataPage() {
-  const [tables, setTables] = useState<DataTableMeta[]>([]);
+  const [assets, setAssets] = useState<AssetMeta[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedTable, setSelectedTable] = useState<DataTable | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<AssetDetail | null>(null);
+  const [versions, setVersions] = useState<AssetVersionMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await apiListDataTables({
+      const list = await apiListAssets({
         search: search || undefined,
+        kind: kindFilter || undefined,
         source: sourceFilter || undefined,
       });
-      setTables(list);
+      setAssets(list);
     } catch (err) {
-      console.warn('[DataPage] Failed to load data tables:', err);
-      setTables([]);
+      console.warn('[AssetsPage] Failed to load assets:', err);
+      setAssets([]);
     }
     setLoading(false);
-  }, [search, sourceFilter]);
+  }, [search, kindFilter, sourceFilter]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
     if (!selectedId) {
-      setSelectedTable(null);
+      setSelectedAsset(null);
+      setVersions([]);
       return;
     }
-    void apiGetDataTable(selectedId).then(setSelectedTable).catch(() => setSelectedTable(null));
+    void apiGetAsset(selectedId).then((a) => {
+      setSelectedAsset(a);
+      void apiGetAssetVersions(selectedId).then(setVersions).catch(() => setVersions([]));
+    }).catch(() => { setSelectedAsset(null); setVersions([]); });
   }, [selectedId]);
 
-  // Auto-select first table
+  // Auto-select first
   useEffect(() => {
-    if (!selectedId && tables.length > 0) {
-      setSelectedId(tables[0].id);
+    if (!selectedId && assets.length > 0) {
+      setSelectedId(assets[0].id);
     }
-  }, [tables, selectedId]);
+  }, [assets, selectedId]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -330,36 +415,32 @@ export function DataPage() {
 
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`Delete "${name}"?`)) return;
-    await apiDeleteDataTable(id);
+    await apiDeleteAsset(id);
     if (selectedId === id) setSelectedId(null);
     await refresh();
   };
 
   const handleRename = async (name: string) => {
     if (!selectedId) return;
-    await apiUpdateDataTable(selectedId, { name });
+    await apiUpdateAsset(selectedId, { name });
     await refresh();
-    // Reload detail to reflect updated name
-    const updated = await apiGetDataTable(selectedId);
-    setSelectedTable(updated);
+    const updated = await apiGetAsset(selectedId);
+    setSelectedAsset(updated);
   };
 
   const handleUpdateDescription = async (description: string) => {
     if (!selectedId) return;
-    await apiUpdateDataTable(selectedId, { description });
+    await apiUpdateAsset(selectedId, { description });
     await refresh();
   };
 
   const handleUpdateTags = async (tags: string[]) => {
     if (!selectedId) return;
-    await apiUpdateDataTable(selectedId, { tags });
+    await apiUpdateAsset(selectedId, { tags });
     await refresh();
-    const updated = await apiGetDataTable(selectedId);
-    setSelectedTable(updated);
+    const updated = await apiGetAsset(selectedId);
+    setSelectedAsset(updated);
   };
-
-  // Filter tables by source and tags
-  const filteredTables = tables;
 
   return (
     <Box style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -370,7 +451,7 @@ export function DataPage() {
         py="xs"
         style={{ borderBottom: '1px solid var(--mantine-color-gray-3)', flexShrink: 0 }}
       >
-        <Title order={4}>Data Tables</Title>
+        <Title order={4}>Assets</Title>
         <Group gap="xs">
           <Button
             size="compact-sm"
@@ -389,10 +470,10 @@ export function DataPage() {
 
       {/* Body: list + viewer */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* Left: table list with search + filters */}
+        {/* Left: asset list with search + filters */}
         <Box
           style={{
-            width: 260,
+            width: 280,
             flexShrink: 0,
             borderRight: '1px solid var(--mantine-color-gray-3)',
             display: 'flex',
@@ -403,18 +484,29 @@ export function DataPage() {
           <Box px="xs" pt="xs" pb={4}>
             <TextInput
               size="xs"
-              placeholder="Search tables..."
+              placeholder="Search assets..."
               leftSection={<IconSearch size={12} />}
               value={search}
               onChange={(e) => setSearch(e.currentTarget.value)}
             />
           </Box>
 
+          {/* Kind filter chips */}
+          <Group gap={4} px="xs" pb={2}>
+            <Chip.Group value={kindFilter ?? 'all'} onChange={(v) => setKindFilter(v === 'all' ? null : (v as string))}>
+              <Chip size="xs" value="all" variant="light">All</Chip>
+              <Chip size="xs" value="table" variant="light"><IconTable size={10} style={{ marginRight: 2 }} />Tables</Chip>
+              <Chip size="xs" value="file" variant="light"><IconFile size={10} style={{ marginRight: 2 }} />Files</Chip>
+              <Chip size="xs" value="value" variant="light"><IconHash size={10} style={{ marginRight: 2 }} />Values</Chip>
+            </Chip.Group>
+          </Group>
+
           {/* Source filter chips */}
           <Group gap={4} px="xs" pb={6}>
             <Chip.Group value={sourceFilter ?? 'all'} onChange={(v) => setSourceFilter(v === 'all' ? null : (v as string))}>
               <Chip size="xs" value="all" variant="light">All</Chip>
-              <Chip size="xs" value="csv" variant="light">CSV</Chip>
+              <Chip size="xs" value="upload" variant="light">Upload</Chip>
+              <Chip size="xs" value="pipeline" variant="light" color="violet">Pipeline</Chip>
               <Chip size="xs" value="google_sheets" variant="light" color="teal">Sheets</Chip>
             </Chip.Group>
           </Group>
@@ -422,47 +514,56 @@ export function DataPage() {
           <ScrollArea style={{ flex: 1 }} type="auto">
             <Stack gap={2} px="xs" pb="xs">
               {loading && <Text size="xs" c="dimmed">Loading...</Text>}
-              {!loading && filteredTables.length === 0 && (
+              {!loading && assets.length === 0 && (
                 <Text size="xs" c="dimmed" p="xs">
-                  {tables.length === 0 ? 'No data tables yet. Upload a CSV or import from Google Sheets.' : 'No tables match your filter.'}
+                  No assets yet. Upload a CSV, import from Google Sheets, or publish from a pipeline.
                 </Text>
               )}
-              {filteredTables.map((t) => (
+              {assets.map((a) => (
                 <Group
-                  key={t.id}
+                  key={a.id}
                   gap={4}
                   wrap="nowrap"
                   style={{
                     padding: '6px 8px',
                     borderRadius: 4,
                     cursor: 'pointer',
-                    background: selectedId === t.id ? 'var(--mantine-color-violet-0)' : undefined,
+                    background: selectedId === a.id ? 'var(--mantine-color-violet-0)' : undefined,
                   }}
                 >
                   <UnstyledButton
                     style={{ flex: 1, overflow: 'hidden' }}
-                    onClick={() => setSelectedId(t.id)}
+                    onClick={() => setSelectedId(a.id)}
                   >
-                    <Text size="xs" fw={500} truncate>{t.name}</Text>
-                    <Group gap={4}>
-                      <Badge size="xs" variant="light">{t.rowCount} rows</Badge>
-                      <Badge size="xs" variant="light" color="gray">{t.columns.length} cols</Badge>
-                      {t.source === 'google_sheets' && <Badge size="xs" variant="light" color="teal">Sheets</Badge>}
+                    <Group gap={4} wrap="nowrap">
+                      <KindIcon kind={a.kind} size={12} />
+                      <Text size="xs" fw={500} truncate>{a.name}</Text>
                     </Group>
-                    {t.tags.length > 0 && (
-                      <Group gap={2} mt={2}>
-                        {t.tags.slice(0, 3).map((tag) => (
-                          <Badge key={tag} size="xs" variant="dot" color="grape">{tag}</Badge>
-                        ))}
-                        {t.tags.length > 3 && <Text size="xs" c="dimmed">+{t.tags.length - 3}</Text>}
-                      </Group>
+                    <Group gap={4} mt={2}>
+                      {a.kind === 'table' && a.row_count != null && (
+                        <Badge size="xs" variant="light">{a.row_count} rows</Badge>
+                      )}
+                      {a.source === 'pipeline' && (
+                        <Badge size="xs" variant="light" color="violet">Pipeline</Badge>
+                      )}
+                      {a.source === 'google_sheets' && (
+                        <Badge size="xs" variant="light" color="teal">Sheets</Badge>
+                      )}
+                      {a.version > 1 && (
+                        <Badge size="xs" variant="light" color="gray">v{a.version}</Badge>
+                      )}
+                    </Group>
+                    {a.slug && (
+                      <Text size="xs" c="dimmed" ff="monospace" style={{ fontSize: 9 }} mt={1} truncate>
+                        {a.slug}
+                      </Text>
                     )}
                   </UnstyledButton>
-                  {t.source === 'google_sheets' && googleClientId && (
-                    <RefreshSheetButton tableId={t.id} onRefreshed={refresh} />
+                  {a.source === 'google_sheets' && googleClientId && (
+                    <RefreshSheetButton tableId={a.id} onRefreshed={refresh} />
                   )}
                   <Tooltip label="Delete">
-                    <ActionIcon size="xs" variant="subtle" color="red" onClick={() => handleDelete(t.id, t.name)}>
+                    <ActionIcon size="xs" variant="subtle" color="red" onClick={() => handleDelete(a.id, a.name)}>
                       <IconTrash size={12} />
                     </ActionIcon>
                   </Tooltip>
@@ -472,62 +573,84 @@ export function DataPage() {
           </ScrollArea>
         </Box>
 
-        {/* Right: table viewer */}
+        {/* Right: asset detail viewer */}
         <Box style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          {!selectedTable && (
+          {!selectedAsset && (
             <Box p="xl" style={{ display: 'grid', placeItems: 'center', flex: 1 }}>
-              <Text c="dimmed">Select a table to view its contents</Text>
+              <Text c="dimmed">Select an asset to view its contents</Text>
             </Box>
           )}
-          {selectedTable && (
+          {selectedAsset && (
             <>
-              {/* Table header with metadata */}
+              {/* Asset header with metadata */}
               <Stack gap={4} px="md" py="xs" style={{ borderBottom: '1px solid var(--mantine-color-gray-2)', flexShrink: 0 }}>
                 <Group gap="sm" justify="space-between">
                   <Group gap="sm">
-                    <EditableName value={selectedTable.name} onSave={handleRename} />
-                    <Badge size="xs" variant="light">{selectedTable.rows.length} rows</Badge>
-                    <Badge size="xs" variant="light" color="gray">{selectedTable.columns.length} columns</Badge>
-                    <StalenessIndicator updatedAt={selectedTable.updatedAt} />
+                    <KindIcon kind={selectedAsset.kind} size={16} />
+                    <EditableName value={selectedAsset.name} onSave={handleRename} />
+                    <Badge size="xs" variant="light" color="gray">{kindLabel(selectedAsset.kind)}</Badge>
+                    {selectedAsset.kind === 'table' && selectedAsset.row_count != null && (
+                      <Badge size="xs" variant="light">{selectedAsset.row_count} rows</Badge>
+                    )}
+                    {selectedAsset.version > 1 && (
+                      <Badge size="xs" variant="light" color="blue">v{selectedAsset.version}</Badge>
+                    )}
+                    <StalenessIndicator updatedAt={selectedAsset.updated_at} />
                   </Group>
-                  <Button
-                    size="compact-xs"
-                    variant="light"
-                    color="gray"
-                    leftSection={<IconDownload size={12} />}
-                    component="a"
-                    href={apiDataTableCsvUrl(selectedTable.id)}
-                    download
-                  >
-                    CSV
-                  </Button>
+                  <Group gap={4}>
+                    {selectedAsset.kind === 'table' && (
+                      <Button
+                        size="compact-xs"
+                        variant="light"
+                        color="gray"
+                        leftSection={<IconDownload size={12} />}
+                        component="a"
+                        href={apiAssetDataUrl(selectedAsset.id, 'csv')}
+                        download
+                      >
+                        CSV
+                      </Button>
+                    )}
+                    <Button
+                      size="compact-xs"
+                      variant="light"
+                      color="gray"
+                      leftSection={<IconDownload size={12} />}
+                      component="a"
+                      href={apiAssetDataUrl(selectedAsset.id, 'json')}
+                      download
+                    >
+                      JSON
+                    </Button>
+                  </Group>
                 </Group>
+
+                {/* Slug + API URL */}
+                <SlugDisplay slug={selectedAsset.slug} />
 
                 {/* Tags */}
                 <Group gap={4}>
-                  <TagsEditor tags={selectedTable.tags ?? []} onSave={handleUpdateTags} />
+                  <TagsEditor tags={selectedAsset.tags ?? []} onSave={handleUpdateTags} />
                 </Group>
 
                 {/* Provenance */}
                 <Group gap={8} style={{ fontSize: '0.72rem', color: '#888' }}>
-                  <span>Source: {selectedTable.source === 'google_sheets' ? 'Google Sheets' : 'CSV'}</span>
-                  {selectedTable.original_filename && <span>File: {selectedTable.original_filename}</span>}
-                  {selectedTable.googleSheets && (
-                    <Tooltip label={selectedTable.googleSheets.spreadsheetUrl}>
-                      <span style={{ cursor: 'help' }}>Sheet: {selectedTable.googleSheets.sheetName}</span>
-                    </Tooltip>
+                  <span>Source: {sourceLabel(selectedAsset.source)}</span>
+                  {selectedAsset.lineage && (
+                    <Badge size="xs" variant="dot" color="violet">
+                      Pipeline: {selectedAsset.lineage.pipeline_id.slice(0, 8)}
+                    </Badge>
                   )}
-                  <span>Created: {new Date(selectedTable.createdAt).toLocaleDateString()}</span>
+                  <span>Created: {new Date(selectedAsset.created_at).toLocaleDateString()}</span>
                 </Group>
 
                 {/* Description */}
                 <Textarea
                   size="xs"
                   placeholder="Add a description..."
-                  value={selectedTable.description ?? ''}
+                  value={selectedAsset.description ?? ''}
                   onChange={(e) => {
-                    // Optimistic local update
-                    setSelectedTable((prev) => prev ? { ...prev, description: e.currentTarget.value } : prev);
+                    setSelectedAsset((prev) => prev ? { ...prev, description: e.currentTarget.value } : prev);
                   }}
                   onBlur={(e) => handleUpdateDescription(e.currentTarget.value)}
                   autosize
@@ -535,64 +658,114 @@ export function DataPage() {
                   maxRows={3}
                   styles={{ input: { fontSize: '0.78rem', color: '#555' } }}
                 />
+
+                {/* Version history */}
+                <VersionList versions={versions} />
               </Stack>
 
-              {/* Column stats strip */}
-              {selectedTable.column_stats && Object.keys(selectedTable.column_stats).length > 0 && (
-                <Box px="md" py={4} style={{ borderBottom: '1px solid var(--mantine-color-gray-1)', background: '#fafbfc' }}>
-                  <Group gap={16} wrap="wrap">
-                    {selectedTable.columns.map((col) => {
-                      const stats = selectedTable.column_stats?.[col.key];
-                      if (!stats) return null;
-                      return (
-                        <Box key={col.key}>
-                          <Text size="xs" fw={600} c="dimmed">{col.label}</Text>
-                          <StatsRow col={col} stats={stats} />
-                        </Box>
-                      );
-                    })}
-                  </Group>
-                </Box>
+              {/* Content area — kind-specific */}
+              {selectedAsset.kind === 'table' && selectedAsset.columns && (
+                <>
+                  {/* Column stats strip */}
+                  {selectedAsset.column_stats && Object.keys(selectedAsset.column_stats).length > 0 && (
+                    <Box px="md" py={4} style={{ borderBottom: '1px solid var(--mantine-color-gray-1)', background: '#fafbfc' }}>
+                      <Group gap={16} wrap="wrap">
+                        {selectedAsset.columns.map((col) => {
+                          const stats = selectedAsset.column_stats?.[col.key];
+                          if (!stats) return null;
+                          return (
+                            <Box key={col.key}>
+                              <Text size="xs" fw={600} c="dimmed">{col.label}</Text>
+                              <StatsRow col={col} stats={stats} />
+                            </Box>
+                          );
+                        })}
+                      </Group>
+                    </Box>
+                  )}
+
+                  {/* Table data */}
+                  <ScrollArea style={{ flex: 1 }} type="auto">
+                    <Table striped highlightOnHover withTableBorder withColumnBorders style={{ fontSize: '0.8rem' }}>
+                      <Table.Thead style={{ position: 'sticky', top: 0, background: '#f8f9fa', zIndex: 1 }}>
+                        <Table.Tr>
+                          <Table.Th style={{ width: 50, textAlign: 'center', color: '#999', fontSize: '0.72rem' }}>#</Table.Th>
+                          {selectedAsset.columns.map((col) => (
+                            <Table.Th key={col.key}>
+                              <Group gap={4} wrap="nowrap">
+                                <span>{col.label}</span>
+                                <Badge size="xs" variant="light" color={col.type === 'number' ? 'blue' : 'gray'}>
+                                  {col.type}
+                                </Badge>
+                              </Group>
+                            </Table.Th>
+                          ))}
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {(selectedAsset.rows ?? []).map((row, rowIdx) => (
+                          <Table.Tr key={rowIdx}>
+                            <Table.Td style={{ textAlign: 'center', color: '#999', fontSize: '0.72rem' }}>{rowIdx + 1}</Table.Td>
+                            {row.map((cell, colIdx) => (
+                              <Table.Td
+                                key={colIdx}
+                                style={{
+                                  textAlign: selectedAsset.columns![colIdx]?.type === 'number' ? 'right' : 'left',
+                                  fontVariantNumeric: selectedAsset.columns![colIdx]?.type === 'number' ? 'tabular-nums' : undefined,
+                                }}
+                              >
+                                {cell == null ? <Text span size="xs" c="dimmed">—</Text> : String(cell)}
+                              </Table.Td>
+                            ))}
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </ScrollArea>
+                </>
               )}
 
-              {/* Table data */}
-              <ScrollArea style={{ flex: 1 }} type="auto">
-                <Table striped highlightOnHover withTableBorder withColumnBorders style={{ fontSize: '0.8rem' }}>
-                  <Table.Thead style={{ position: 'sticky', top: 0, background: '#f8f9fa', zIndex: 1 }}>
-                    <Table.Tr>
-                      <Table.Th style={{ width: 50, textAlign: 'center', color: '#999', fontSize: '0.72rem' }}>#</Table.Th>
-                      {selectedTable.columns.map((col) => (
-                        <Table.Th key={col.key}>
-                          <Group gap={4} wrap="nowrap">
-                            <span>{col.label}</span>
-                            <Badge size="xs" variant="light" color={col.type === 'number' ? 'blue' : 'gray'}>
-                              {col.type}
-                            </Badge>
-                          </Group>
-                        </Table.Th>
-                      ))}
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {selectedTable.rows.map((row, rowIdx) => (
-                      <Table.Tr key={rowIdx}>
-                        <Table.Td style={{ textAlign: 'center', color: '#999', fontSize: '0.72rem' }}>{rowIdx + 1}</Table.Td>
-                        {row.map((cell, colIdx) => (
-                          <Table.Td
-                            key={colIdx}
-                            style={{
-                              textAlign: selectedTable.columns[colIdx]?.type === 'number' ? 'right' : 'left',
-                              fontVariantNumeric: selectedTable.columns[colIdx]?.type === 'number' ? 'tabular-nums' : undefined,
-                            }}
-                          >
-                            {cell == null ? <Text span size="xs" c="dimmed">—</Text> : String(cell)}
-                          </Table.Td>
-                        ))}
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              </ScrollArea>
+              {/* File content viewer */}
+              {selectedAsset.kind === 'file' && (
+                <ScrollArea style={{ flex: 1 }} type="auto">
+                  <Box px="md" py="sm">
+                    <pre style={{
+                      fontSize: '0.8rem',
+                      fontFamily: 'monospace',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      margin: 0,
+                      padding: 12,
+                      background: '#f8f9fa',
+                      borderRadius: 6,
+                      border: '1px solid #e9ecef',
+                    }}>
+                      {selectedAsset.content_text ?? '(empty)'}
+                    </pre>
+                  </Box>
+                </ScrollArea>
+              )}
+
+              {/* Value viewer */}
+              {selectedAsset.kind === 'value' && (
+                <ScrollArea style={{ flex: 1 }} type="auto">
+                  <Box px="md" py="sm">
+                    <pre style={{
+                      fontSize: '0.8rem',
+                      fontFamily: 'monospace',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      margin: 0,
+                      padding: 12,
+                      background: '#f8f9fa',
+                      borderRadius: 6,
+                      border: '1px solid #e9ecef',
+                    }}>
+                      {selectedAsset.value != null ? JSON.stringify(selectedAsset.value, null, 2) : '(empty)'}
+                    </pre>
+                  </Box>
+                </ScrollArea>
+              )}
             </>
           )}
         </Box>

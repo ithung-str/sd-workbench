@@ -51,12 +51,22 @@
 .analysis-node .status-dot--error { background: #e03131; }
 .analysis-node .status-dot--none { background: #dee2e6; }
 
-/* Prevent cursor flickering: override ReactFlow's grab cursor on node wrapper */
+/* Allow handles to render outside node bounds + prevent cursor flickering */
 .react-flow__node:has(.analysis-node) {
+  overflow: visible;
   cursor: default;
 }
 .react-flow__node:has(.analysis-node).dragging {
   cursor: grabbing;
+}
+
+/* Focus mode indicators */
+.analysis-node.focus-node > .node-card {
+  box-shadow: 0 0 0 2px #4263eb;
+}
+
+.analysis-node.focus-editor > .node-card {
+  box-shadow: 0 0 0 2px #4263eb44;
 }
 
 /* Handle styling for 4-directional connections */
@@ -68,6 +78,7 @@
   box-shadow: 0 0 0 1px #dee2e6;
   transition: background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
   cursor: crosshair;
+  z-index: 10;
 }
 
 .analysis-node .react-flow__handle:hover {

@@ -19,6 +19,7 @@ class NodeResult:
     output_df: pd.DataFrame | None = None
     value_kind: str = "dataframe"  # dataframe | scalar | dict | list | text
     generic_output: Any = None  # non-DataFrame output (JSON-serializable)
+    display: str | None = None  # notebook-style last expression display text
     logs: str = ""
     error: str | None = None
 
@@ -68,15 +69,17 @@ def execute_node(
         return NodeResult(ok=False, error=output.get("error", "Unknown error"), logs=stderr)
 
     kind = output.get("kind", "dataframe")
+    display = output.get("display")
 
     if kind == "dataframe":
         output_df = _deserialize_df(output["output"])
-        return NodeResult(ok=True, output_df=output_df, value_kind="dataframe", logs=stderr)
+        return NodeResult(ok=True, output_df=output_df, value_kind="dataframe", display=display, logs=stderr)
 
     # Generic (non-DataFrame) output
     return NodeResult(
         ok=True,
         value_kind=kind,
         generic_output=output.get("generic_output"),
+        display=display,
         logs=stderr,
     )

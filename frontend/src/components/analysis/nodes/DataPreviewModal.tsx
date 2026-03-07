@@ -193,6 +193,34 @@ export function CompactResultBar({ result, onExpand }: { result: NodeResultRespo
   const preview = result.ok ? result.preview : null;
   if (!preview) return null;
 
+  const kind = result.value_kind ?? 'dataframe';
+
+  // Generic (non-DataFrame) value display
+  if (kind !== 'dataframe') {
+    return (
+      <Box
+        style={{
+          padding: '6px 12px',
+          borderTop: '1px solid #f0f0f0',
+          background: '#f8f9fa',
+          maxHeight: 120,
+          overflow: 'auto',
+        }}
+      >
+        <Text size="xs" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {preview.display ?? (preview.sample != null ? JSON.stringify(preview.sample, null, 2) : JSON.stringify(result.generic_value, null, 2))}
+        </Text>
+        {preview.length != null && (
+          <Text size="xs" c="dimmed" mt={2}>Length: {preview.length.toLocaleString()}</Text>
+        )}
+        {preview.total_keys != null && (
+          <Text size="xs" c="dimmed" mt={2}>{preview.total_keys} keys</Text>
+        )}
+      </Box>
+    );
+  }
+
+  // DataFrame display
   const cols = (preview.columns ?? []).map((c: any) => (typeof c === 'string' ? c : c.label ?? c.key));
   const colPreview = cols.slice(0, 5).join(', ') + (cols.length > 5 ? `, +${cols.length - 5}` : '');
 

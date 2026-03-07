@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type NodeProps, NodeResizer } from 'reactflow';
 import { ActionIcon, Box, Select, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
 import { IconCode, IconDeviceFloppy, IconSparkles, IconTrash } from '@tabler/icons-react';
@@ -7,7 +7,7 @@ import type { NodeResultResponse } from '../../../lib/api';
 import type { RunScope, ZoomLevel } from '../AnalysisPage';
 import { StatsPanel } from './StatsPanel';
 import { RunMenu } from './RunMenu';
-import { useNodeHover, useZoomTransition, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
+import { useNodeHover, useZoomTransition, useNodeFocus, StatusDot, ShapeBadge, ColumnChips, ZoomControls, PortBadge, NodeHandles } from './nodeZoomHelpers';
 import { CompactResultBar, DataPreviewModal } from './DataPreviewModal';
 import './analysisNodes.css';
 
@@ -27,6 +27,9 @@ type CodeData = {
   onSaveComponent?: (name: string, code: string) => void;
   onDuplicate?: () => void;
   onAutoDescribe?: () => void;
+  onDeselect?: () => void;
+  onAddNode?: (type: import('../../../types/model').AnalysisNodeType) => void;
+  onEditorFocusChange?: (editing: boolean) => void;
   isAiDescribing?: boolean;
   result?: NodeResultResponse;
   isMockPreview?: boolean;
@@ -49,7 +52,26 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
   const zoomLevel = data.zoomLevel ?? 'full';
   const zoomClass = useZoomTransition(zoomLevel);
   const hover = useNodeHover();
+  const focus = useNodeFocus({
+    selected: data.selected,
+    onDelete: data.onDelete,
+    onDeselect: data.onDeselect,
+    onAddNode: data.onAddNode,
+  });
+  const mergedRef = useCallback((el: HTMLDivElement | null) => {
+    (hover.ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    focus.wrapperRef.current = el;
+  }, [hover.ref, focus.wrapperRef]);
   const disposeRef = useRef<{ dispose(): void } | null>(null);
+  const onRunScopeRef = useRef(data.onRunScope);
+  onRunScopeRef.current = data.onRunScope;
+  const exitEditorRef = useRef(focus.exitEditorFocus);
+  exitEditorRef.current = focus.exitEditorFocus;
+
+  // Notify parent of editor focus changes
+  useEffect(() => {
+    data.onEditorFocusChange?.(focus.focusMode === 'editor');
+  }, [focus.focusMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCodeChange = useCallback(
     (value: string | undefined) => {
@@ -58,9 +80,25 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
     [data],
   );
 
-  /** Register Monaco completion provider for df_in column names + pandas API. */
+  /** Register Monaco keybindings + completion provider. */
   const handleEditorMount = useCallback(
     (_editor: unknown, monaco: Monaco) => {
+      const editor = _editor as import('monaco-editor').editor.IStandaloneCodeEditor;
+
+      // Cmd+Enter / Ctrl+Enter → run cell and exit editor focus
+      // Use DOM-level listener — Monaco's addAction doesn't reliably override built-in Cmd+Enter
+      const domNode = editor.getDomNode();
+      if (domNode) {
+        domNode.addEventListener('keydown', (e: KeyboardEvent) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            onRunScopeRef.current?.('smart');
+            exitEditorRef.current();
+          }
+        });
+      }
+
       // Dispose previous provider if re-mounted
       disposeRef.current?.dispose();
 
@@ -185,7 +223,7 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
   const result = data.result;
   const preview = result?.ok ? result.preview : null;
   const showCode = viewMode === 'all' || viewMode === 'code';
-  const showResult = viewMode === 'all' || viewMode === 'result';
+  const showResult = viewMode === 'all' || viewMode === 'result' || viewMode === 'code';
   const showDesc = viewMode === 'desc';
   const showStats = viewMode === 'stats';
 
@@ -242,8 +280,9 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
   }
 
   // ── Full view ──
+  const focusClass = focus.focusMode === 'node' ? 'focus-node' : focus.focusMode === 'editor' ? 'focus-editor' : '';
   return (
-    <div ref={hover.ref} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass}`} style={{ width: '100%', height: '100%' }}>
+    <div ref={mergedRef} onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave} className={`analysis-node ${zoomClass} ${focusClass}`} style={{ width: '100%', height: '100%', outline: 'none' }} {...focus.nodeWrapperProps}>
       <PortBadge label={data.portLabel} />
       <NodeHandles />
       <NodeResizer minWidth={320} minHeight={250} isVisible={data.selected} />
@@ -366,7 +405,12 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
 
         {/* Code editor */}
         {showCode && (
-          <Box style={{ flex: 1, minHeight: 100 }}>
+          <Box
+            className={focus.editorWrapperClass}
+            style={{ flex: 1, minHeight: 100 }}
+            onClick={focus.enterEditorFocus}
+            onKeyDown={focus.editorKeyDown}
+          >
             <Editor
               height="100%"
               language="python"
@@ -396,8 +440,17 @@ export function CodeNode({ data }: NodeProps<CodeData>) {
           </Box>
         )}
 
-        {/* Result preview bar */}
-        {showResult && result?.ok && (
+        {/* Cell output — notebook-style last expression display */}
+        {showResult && result?.ok && result.display && (
+          <Box style={{ borderTop: '1px solid #e9ecef', background: '#f8f9fa', maxHeight: 160, overflow: 'auto', padding: '6px 12px' }}>
+            <Text size="xs" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#495057' }}>
+              {result.display}
+            </Text>
+          </Box>
+        )}
+
+        {/* Pipeline result bar */}
+        {showResult && result?.ok && result.value_kind === 'dataframe' && (
           <CompactResultBar result={result} onExpand={() => setDataModalOpen(true)} />
         )}
         {showResult && !result && (
